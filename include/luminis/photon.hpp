@@ -1,16 +1,18 @@
 #pragma once
-#include <array>
+#include "luminis/math.hpp"
 
 namespace luminis {
 
 struct Photon {
-  std::array<double, 3> position;
-  std::array<double, 3> direction;
-  double wavelength;
+  Vec3 pos{0, 0, 0};
+  Vec3 dir{1, 0, 0}; // must be normalized
+  double wavelength_nm{532.0};
+  bool alive{true};
 
-  Photon(std::array<double, 3> pos, std::array<double, 3> dir, double wl);
-
-  void move(double distance);
+  Photon() = default;
+  Photon(Vec3 p, Vec3 d, double wl)
+      : pos(p), dir(normalize(d)), wavelength_nm(wl) {}
+  void move(double s) { pos = pos + dir * s; }
 };
 
 } // namespace luminis

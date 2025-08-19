@@ -1,0 +1,26 @@
+[build-system]
+requires = ["scikit-build-core>=0.8", "pybind11>=2.11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "luminis-mc"
+version = "0.1.0"
+description = "Python bindings for the luminis-mc Monte Carlo C++ core"
+readme = "README.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "mypy>=1.10",
+    "ruff>=0.5",
+    "black>=24.4",
+    "pybind11-stubgen>=2.5",
+]
+
+[tool.scikit-build]
+wheel.packages = ["python/src/luminis_mc"]
+cmake.args = ["-GNinja"]
+
+# Optional: universal builds on macOS (if you need wheels for both arm64/x86_64)
+# [tool.scikit-build.cmake.define]
+# CMAKE_OSX_ARCHITECTURES = "arm64;x86_64"

@@ -1,11 +1,20 @@
-#include "luminis/photon.hpp"
-#include <iostream>
+#include "luminis/simulation.hpp"
+#include <print>
 
 int main() {
-  luminis::Photon p({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, 532.0);
-  p.move(10.0);
+  using namespace luminis;
 
-  std::println("Hello world");
-  std::printf("Photon Position: (%.2f, %.2f, %.2f)\n", p.position[0],
-              p.position[1], p.position[2]);
+  SimConfig cfg;
+  cfg.n_photons = 10000;
+  cfg.max_scatter = 1000;
+
+  Material mat(/*mean_free_path=*/5.0);
+  PlaneDetector det(/*z_plane=*/100.0, /*radius=*/10.0);
+
+  Simulation sim(cfg, mat, det);
+  auto stats = sim.run();
+
+  std::print("Final: hits={} emitted={} rate={:.6f}\n", stats.detected,
+             stats.emitted, stats.detection_rate());
+  return 0;
 }

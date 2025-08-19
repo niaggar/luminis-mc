@@ -3,6 +3,8 @@
 .cache/
 .vscode/
 .zed/
+.venv/
+.ropeproject/
 build/
 cmake-build-debug/
 cmake-build-release/
