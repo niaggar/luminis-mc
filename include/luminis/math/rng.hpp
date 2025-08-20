@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <random>
 
-namespace luminis {
+namespace luminis::math {
 
 struct Rng {
   std::mt19937_64 gen;
@@ -28,4 +28,4 @@ struct Rng {
   }
 };
 
-} // namespace luminis
+} // namespace luminis::math

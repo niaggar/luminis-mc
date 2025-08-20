@@ -1,8 +1,10 @@
 #pragma once
-#include "luminis/math.hpp"
-#include "luminis/rng.hpp"
+#include <luminis/math/rng.hpp>
+#include <luminis/math/vec.hpp>
 
-namespace luminis {
+using namespace luminis::math;
+
+namespace luminis::core {
 
 // Minimal material: single mean free path, isotropic scattering
 struct Material {
@@ -22,4 +24,4 @@ struct Material {
   }
 };
 
-} // namespace luminis
+} // namespace luminis::core

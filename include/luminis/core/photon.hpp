@@ -1,7 +1,9 @@
 #pragma once
-#include "luminis/math.hpp"
+#include <luminis/math/vec.hpp>
 
-namespace luminis {
+using namespace luminis::math;
+
+namespace luminis::core {
 
 struct Photon {
   Vec3 pos{0, 0, 0};
@@ -15,4 +17,4 @@ struct Photon {
   void move(double s) { pos = pos + dir * s; }
 };
 
-} // namespace luminis
+} // namespace luminis::core

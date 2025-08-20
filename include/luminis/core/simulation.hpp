@@ -1,12 +1,11 @@
 #pragma once
-#include "luminis/detector.hpp"
-#include "luminis/material.hpp"
-#include "luminis/photon.hpp"
-#include "luminis/rng.hpp"
 #include <cstdint>
+#include <luminis/core/detector.hpp>
+#include <luminis/core/material.hpp>
+#include <luminis/core/photon.hpp>
 #include <print>
 
-namespace luminis {
+namespace luminis::core {
 
 struct SimConfig {
   std::uint64_t seed = std::random_device{}();
@@ -40,8 +39,6 @@ public:
         ++st.detected;
     }
 
-    std::print("Detector hits: {}/{}  (rate = {:.6f})\n", st.detected,
-               st.emitted, st.detection_rate());
     return st;
   }
 
@@ -75,4 +72,4 @@ private:
   Rng rng_;
 };
 
-} // namespace luminis
+} // namespace luminis::core

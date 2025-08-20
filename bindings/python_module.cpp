@@ -1,9 +1,9 @@
-#include "luminis/simulation.hpp"
+#include <luminis/core/simulation.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
-using namespace luminis;
+using namespace luminis::core;
 
 PYBIND11_MODULE(luminis_mc, m) {
   m.doc() = "Python bindings for the luminis-mc Monte Carlo core";

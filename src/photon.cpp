@@ -1,6 +1,6 @@
-#include "luminis/photon.hpp"
+#include <luminis/core/photon.hpp>
 
-namespace luminis {
+namespace luminis::core {
 
 // Photon::Photon(std::array<double, 3> pos, std::array<double, 3> dir, double
 // wl)
@@ -12,4 +12,4 @@ namespace luminis {
 //   }
 // }
 
-} // namespace luminis
+} // namespace luminis::core

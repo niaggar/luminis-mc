@@ -1,7 +1,9 @@
 #pragma once
-#include "luminis/math.hpp"
+#include <luminis/math/vec.hpp>
 
-namespace luminis {
+using namespace luminis::math;
+
+namespace luminis::core {
 
 // A simple plane detector at z = z0 with circular aperture radius R.
 // If a photon crosses the plane (moving +z) within radius R, we count a hit.
@@ -36,4 +38,4 @@ struct PlaneDetector {
   }
 };
 
-} // namespace luminis
+} // namespace luminis::core

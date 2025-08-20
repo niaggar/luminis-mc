@@ -2,7 +2,7 @@
 #include <array>
 #include <cmath>
 
-namespace luminis {
+namespace luminis::math {
 using Vec3 = std::array<double, 3>;
 
 inline Vec3 operator+(const Vec3 &a, const Vec3 &b) {
@@ -30,4 +30,4 @@ inline Vec3 from_spherical(double theta, double phi) {
   const double s = std::sin(theta);
   return {s * std::cos(phi), s * std::sin(phi), std::cos(theta)};
 }
-} // namespace luminis
+} // namespace luminis::math

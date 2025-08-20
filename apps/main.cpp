@@ -1,20 +1,33 @@
-#include "luminis/simulation.hpp"
+#include <luminis/core/simulation.hpp>
+#include <luminis/log/logger.hpp>
+
 #include <print>
 
 int main() {
-  using namespace luminis;
+  using namespace luminis::core;
+  using luminis::log::Level;
+  using luminis::log::Logger;
+
+  Logger::instance().set_level(Level::debug);
+
+  LLOG_DEBUG("Log debug message");
+  LLOG_INFO("Log info message");
+  LLOG_WARN("Log warning message");
+  LLOG_ERROR("Log error message");
 
   SimConfig cfg;
   cfg.n_photons = 10000;
   cfg.max_scatter = 1000;
 
-  Material mat(/*mean_free_path=*/5.0);
-  PlaneDetector det(/*z_plane=*/100.0, /*radius=*/10.0);
+  Material mat(5.0);
+  PlaneDetector det(100.0, 10.0);
 
   Simulation sim(cfg, mat, det);
   auto stats = sim.run();
 
-  std::print("Final: hits={} emitted={} rate={:.6f}\n", stats.detected,
-             stats.emitted, stats.detection_rate());
+  auto line =
+      std::format("Simulation complete: hits={} emitted={} rate={:.6f}",
+                  stats.detected, stats.emitted, stats.detection_rate());
+  LLOG_INFO(line);
   return 0;
 }
