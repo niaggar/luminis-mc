@@ -20,9 +20,19 @@ PYBIND11_MODULE(luminis_mc, m) {
 
   py::class_<RayleighPhaseFunction, PhaseFunction>(m, "RayleighPhaseFunction")
       .def(py::init<int, double, double>(),
-           py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal") = 1.0)
+           py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
       .def("sample", &RayleighPhaseFunction::Sample, py::arg("x"))
       .def("pdf", &RayleighPhaseFunction::PDF, py::arg("x"));
+
+  py::class_<HenyeyGreensteinPhaseFunction, PhaseFunction>(m, "HenyeyGreensteinPhaseFunction")
+      .def(py::init<double>(), py::arg("g"))
+      .def("sample", &HenyeyGreensteinPhaseFunction::Sample, py::arg("x"));
+
+  py::class_<RayleighDebyePhaseFunction, PhaseFunction>(m, "RayleighDebyePhaseFunction")
+      .def(py::init<double, double, int, double, double>(),
+           py::arg("wavelength"), py::arg("radius"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
+      .def("sample", &RayleighDebyePhaseFunction::Sample, py::arg("x"))
+      .def("pdf", &RayleighDebyePhaseFunction::PDF, py::arg("x"));
 
 
 

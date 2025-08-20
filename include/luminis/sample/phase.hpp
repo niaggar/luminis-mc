@@ -31,4 +31,16 @@ private:
   double g; // Anisotropy factor
 };
 
+class RayleighDebyePhaseFunction : public PhaseFunction {
+public:
+  RayleighDebyePhaseFunction(double wavelenght, double radius, int nDiv, double minVal, double maxVal);
+  double Sample(double x) override;
+  double PDF(double x);
+private:
+  SamplingTable table;
+  double wavelength;
+  double radius;
+  double k;
+};
+
 } // namespace luminis::sample
