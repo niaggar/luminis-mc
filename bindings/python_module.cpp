@@ -1,12 +1,31 @@
 #include <luminis/core/simulation.hpp>
+#include <luminis/sample/phase.hpp>
+#include <luminis/log/logger.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
 using namespace luminis::core;
+using namespace luminis::sample;
+using namespace luminis::log;
 
 PYBIND11_MODULE(luminis_mc, m) {
   m.doc() = "Python bindings for the luminis-mc Monte Carlo core";
+
+  py::class_<PhaseFunction>(m, "PhaseFunction");
+
+  py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
+      .def(py::init<>())
+      .def("sample", &UniformPhaseFunction::Sample, py::arg("x"));
+
+  py::class_<RayleighPhaseFunction, PhaseFunction>(m, "RayleighPhaseFunction")
+      .def(py::init<int, double, double>(),
+           py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal") = 1.0)
+      .def("sample", &RayleighPhaseFunction::Sample, py::arg("x"))
+      .def("pdf", &RayleighPhaseFunction::PDF, py::arg("x"));
+
+
+
 
   py::class_<SimConfig>(m, "SimConfig")
       .def(py::init<>())

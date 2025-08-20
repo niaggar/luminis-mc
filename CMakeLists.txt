@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(luminis
     src/photon.cpp
+    src/table.cpp
+    src/phase.cpp
 )
 target_include_directories(luminis PUBLIC include)
 
