@@ -25,9 +25,7 @@ int main() {
   Simulation sim(cfg, mat, det);
   auto stats = sim.run();
 
-  auto line =
-      std::format("Simulation complete: hits={} emitted={} rate={:.6f}",
-                  stats.detected, stats.emitted, stats.detection_rate());
-  LLOG_INFO(line);
+  LLOG_INFO("Simulation complete: hits={} emitted={} rate={:.6f}",
+            stats.detected, stats.emitted, stats.detection_rate());
   return 0;
 }

@@ -36,13 +36,17 @@ public:
   void set_level(Level lv) { level_.store(lv, std::memory_order_relaxed); }
   Level level() const { return level_.load(std::memory_order_relaxed); }
 
-  void log(Level lv, std::string body) { log_impl(lv, body); }
+  template <class... Args>
+  void log(Level lv, std::string_view fmt, Args &&...args) {
+    log_impl(lv, fmt, std::forward<Args>(args)...);
+  }
 
 private:
   std::atomic<Level> level_{Level::info}; // default INFO
   std::mutex mu_;
 
-  void log_impl(Level lv, std::string body) {
+  template <class... Args>
+  void log_impl(Level lv, std::string_view fmt, Args &&...args) {
     if (lv < level())
       return;
 
@@ -58,6 +62,7 @@ private:
     char tbuf[20];
     std::strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", &tm);
 
+    std::string body = std::vformat(fmt, std::make_format_args(args...));
     std::string line =
         std::format("[{}] [{}] - {}\n", tbuf, to_string(lv), body);
 
