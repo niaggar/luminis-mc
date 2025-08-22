@@ -16,7 +16,7 @@ PYBIND11_MODULE(luminis_mc, m) {
 
   py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
       .def(py::init<>())
-      .def("sample", &UniformPhaseFunction::Sample, py::arg("x"));
+      .def("sample", &UniformPhaseFunction::Sample, py::arg("x"), "Sample the phase function");
 
   py::class_<RayleighPhaseFunction, PhaseFunction>(m, "RayleighPhaseFunction")
       .def(py::init<int, double, double>(),
