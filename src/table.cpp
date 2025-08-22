@@ -1,8 +1,21 @@
+#include "luminis/log/logger.hpp"
 #include <luminis/sample/table.hpp>
 
 namespace luminis::sample {
 
 SamplingTable::SamplingTable(PDFFunction pdfFunc, int nDiv, double minVal, double maxVal) {
+  LLOG_DEBUG("Creating SamplingTable with nDiv: {}, minVal: {}, maxVal: {}", nDiv, minVal, maxVal);
+
+  if (nDiv <= 0) {
+    LLOG_ERROR("nDiv must be greater than 0, got {}", nDiv);
+    throw std::invalid_argument("nDiv must be greater than 0");
+  }
+
+  if (minVal >= maxVal) {
+    LLOG_ERROR("minVal must be less than maxVal, got minVal: {}, maxVal: {}", minVal, maxVal);
+    throw std::invalid_argument("minVal must be less than maxVal");
+  }
+
   double step = (maxVal - minVal) / nDiv;
   values.resize(nDiv);
   cdf.resize(nDiv);

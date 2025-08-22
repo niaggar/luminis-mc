@@ -7,6 +7,7 @@ namespace luminis::math {
 using Vec3 = std::array<double, 3>;
 using Vec2 = std::array<double, 2>;
 
+
 inline Vec3 operator+(const Vec3 &a, const Vec3 &b) {
   return {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
 }
@@ -35,6 +36,9 @@ inline Vec3 normalize(const Vec3 &a) {
 inline Vec3 from_spherical(double theta, double phi) {
   const double s = std::sin(theta);
   return {s * std::cos(phi), s * std::sin(phi), std::cos(theta)};
+}
+inline Vec3 copy(const Vec3 &a) {
+  return {a[0], a[1], a[2]};
 }
 
 } // namespace luminis::math

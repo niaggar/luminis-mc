@@ -86,4 +86,21 @@ PYBIND11_MODULE(luminis_mc, m) {
       },
       py::arg("n_photons"), py::arg("mfp"), py::arg("z_plane"),
       py::arg("radius"), py::arg("seed") = 0);
+
+  // Logger bindings
+  py::enum_<Level>(m, "LogLevel")
+      .value("debug", Level::debug)
+      .value("info", Level::info)
+      .value("warn", Level::warn)
+      .value("error", Level::error)
+      .value("off", Level::off)
+      .export_values();
+
+  m.def(
+    "set_log_level",
+    [](Level level) {
+      Logger::instance().set_level(level);
+    },
+    py::arg("level"),
+    "Set the logging level for the luminis-mc module");
 }

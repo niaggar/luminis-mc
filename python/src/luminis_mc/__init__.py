@@ -1,8 +1,11 @@
 from .luminis_mc import (  # type: ignore[attr-defined]
-    SimConfig, SimStats, Material, PlaneDetector, Simulation, run_once
+    SimConfig, SimStats, Material, PlaneDetector, Simulation, run_once,
+    PhaseFunction, UniformPhaseFunction, RayleighPhaseFunction, HenyeyGreensteinPhaseFunction, RayleighDebyePhaseFunction
 )
 
 __all__ = [
     "SimConfig", "SimStats", "Material", "PlaneDetector",
-    "Simulation", "run_once",
+    "Simulation", "run_once", "PhaseFunction",
+    "UniformPhaseFunction", "RayleighPhaseFunction",
+    "HenyeyGreensteinPhaseFunction", "RayleighDebyePhaseFunction"
 ]

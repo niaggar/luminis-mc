@@ -6,9 +6,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(luminis
-    src/photon.cpp
-    src/table.cpp
+    src/laser.cpp
     src/phase.cpp
+    src/photon.cpp
+    src/rng.cpp
+    src/table.cpp
 )
 target_include_directories(luminis PUBLIC include)
 

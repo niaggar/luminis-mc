@@ -33,8 +33,13 @@ public:
     return L;
   }
 
-  void set_level(Level lv) { level_.store(lv, std::memory_order_relaxed); }
-  Level level() const { return level_.load(std::memory_order_relaxed); }
+  void set_level(Level lv) {
+    level_.store(lv, std::memory_order_relaxed);
+  }
+
+  Level level() const {
+    return level_.load(std::memory_order_relaxed);
+  }
 
   template <class... Args>
   void log(Level lv, std::string_view fmt, Args &&...args) {

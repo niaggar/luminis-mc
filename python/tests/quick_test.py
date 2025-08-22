@@ -1,3 +1,4 @@
+# %%
 import luminis_mc as lm
 
 cfg = lm.SimConfig()
