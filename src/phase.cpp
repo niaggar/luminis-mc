@@ -1,5 +1,6 @@
 #include <luminis/sample/phase.hpp>
 #include <luminis/log/logger.hpp>
+#include <cmath>
 
 namespace luminis::sample {
 

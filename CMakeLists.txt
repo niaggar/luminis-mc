@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.18)
 project(luminis_mc)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -13,7 +13,7 @@ add_library(luminis
     src/table.cpp
 )
 target_include_directories(luminis PUBLIC include)
-
+set_target_properties(luminis PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 
 # CLI app

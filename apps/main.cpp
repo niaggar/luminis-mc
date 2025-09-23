@@ -1,8 +1,6 @@
 #include <luminis/core/simulation.hpp>
 #include <luminis/log/logger.hpp>
 
-#include <print>
-
 int main() {
   using namespace luminis::core;
   using luminis::log::Level;

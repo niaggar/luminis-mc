@@ -3,7 +3,6 @@
 #include <luminis/core/detector.hpp>
 #include <luminis/core/material.hpp>
 #include <luminis/core/photon.hpp>
-#include <print>
 
 namespace luminis::core {
 
