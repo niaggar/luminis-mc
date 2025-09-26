@@ -1,106 +1,101 @@
 #include <luminis/core/simulation.hpp>
+#include <luminis/core/laser.hpp>
+#include <luminis/core/photon.hpp>
 #include <luminis/sample/phase.hpp>
+#include <luminis/math/rng.hpp>
+
 #include <luminis/log/logger.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/complex.h>
+#include <pybind11/functional.h>
+#include <pybind11/numpy.h>
 
 namespace py = pybind11;
 using namespace luminis::core;
 using namespace luminis::sample;
 using namespace luminis::log;
 
-PYBIND11_MODULE(luminis_mc, m) {
-  m.doc() = "Python bindings for the luminis-mc Monte Carlo core";
+PYBIND11_MODULE(luminis_mc, m)
+{
+    m.doc() = "Python bindings for the luminis-mc Monte Carlo core";
 
-  py::class_<PhaseFunction>(m, "PhaseFunction");
+    // Rng bindings
+    py::class_<Rng>(m, "Rng")
+        .def(py::init<uint64_t>(), py::arg("seed") = std::random_device{}(), "Initialize the RNG with an optional seed")
+        .def("uniform", &Rng::uniform, "Generate a uniform random number in [0, 1)")
+        .def("normal", &Rng::normal, py::arg("mean"), py::arg("stddev"), "Generate a normally distributed random number with given mean and stddev");
 
-  py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
-      .def(py::init<>())
-      .def("sample", &UniformPhaseFunction::Sample, py::arg("x"), "Sample the phase function");
+    // Phase function bindings
+    py::class_<PhaseFunction>(m, "PhaseFunction");
 
-  py::class_<RayleighPhaseFunction, PhaseFunction>(m, "RayleighPhaseFunction")
-      .def(py::init<int, double, double>(),
-           py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
-      .def("sample", &RayleighPhaseFunction::Sample, py::arg("x"))
-      .def("pdf", &RayleighPhaseFunction::PDF, py::arg("x"));
+    py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
+        .def(py::init<>())
+        .def("sample", &UniformPhaseFunction::Sample, py::arg("x"), "Sample the phase function");
 
-  py::class_<HenyeyGreensteinPhaseFunction, PhaseFunction>(m, "HenyeyGreensteinPhaseFunction")
-      .def(py::init<double>(), py::arg("g"))
-      .def("sample", &HenyeyGreensteinPhaseFunction::Sample, py::arg("x"));
+    py::class_<RayleighPhaseFunction, PhaseFunction>(m, "RayleighPhaseFunction")
+        .def(py::init<int, double, double>(),
+             py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
+        .def("sample", &RayleighPhaseFunction::Sample, py::arg("x"))
+        .def("pdf", &RayleighPhaseFunction::PDF, py::arg("x"));
 
-  py::class_<RayleighDebyePhaseFunction, PhaseFunction>(m, "RayleighDebyePhaseFunction")
-      .def(py::init<double, double, int, double, double>(),
-           py::arg("wavelength"), py::arg("radius"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
-      .def("sample", &RayleighDebyePhaseFunction::Sample, py::arg("x"))
-      .def("pdf", &RayleighDebyePhaseFunction::PDF, py::arg("x"));
+    py::class_<HenyeyGreensteinPhaseFunction, PhaseFunction>(m, "HenyeyGreensteinPhaseFunction")
+        .def(py::init<double>(), py::arg("g"))
+        .def("sample", &HenyeyGreensteinPhaseFunction::Sample, py::arg("x"));
 
+    py::class_<RayleighDebyePhaseFunction, PhaseFunction>(m, "RayleighDebyePhaseFunction")
+        .def(py::init<double, double, int, double, double>(),
+             py::arg("wavelength"), py::arg("radius"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
+        .def("sample", &RayleighDebyePhaseFunction::Sample, py::arg("x"))
+        .def("pdf", &RayleighDebyePhaseFunction::PDF, py::arg("x"));
 
+    // Photon bindings
+    py::class_<Photon>(m, "Photon")
+        .def(py::init<>())
+        .def(py::init<Vec3, Vec3, double>(), py::arg("position"), py::arg("direction"), py::arg("wavelength_nm"))
+        .def_readwrite("prev_pos", &Photon::prev_pos)
+        .def_readwrite("pos", &Photon::pos)
+        .def_readwrite("dir", &Photon::dir)
+        .def_readwrite("m", &Photon::m)
+        .def_readwrite("n", &Photon::n)
+        .def_readwrite("events", &Photon::events)
+        .def_readwrite("alive", &Photon::alive)
+        .def_readwrite("wavelength_nm", &Photon::wavelength_nm)
+        .def_readwrite("opticalpath", &Photon::opticalpath)
+        .def_readwrite("previous_step", &Photon::previous_step)
+        .def_readwrite("weight", &Photon::weight)
+        .def_readwrite("polarized", &Photon::polarized)
+        .def_readwrite("polarization", &Photon::polarization)
+        .def("get_stokes_parameters", &Photon::get_stokes_parameters, "Get the Stokes parameters of the photon");
 
+    // Laser Bindings
+    py::enum_<LaserSource>(m, "LaserSource")
+        .value("Point", LaserSource::Point)
+        .value("Uniform", LaserSource::Uniform)
+        .value("Gaussian", LaserSource::Gaussian)
+        .export_values();
 
-  py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<>())
-      .def_readwrite("seed", &SimConfig::seed)
-      .def_readwrite("n_photons", &SimConfig::n_photons)
-      .def_readwrite("max_scatter", &SimConfig::max_scatter)
-      .def_readwrite("world_z_min", &SimConfig::world_z_min)
-      .def_readwrite("world_z_max", &SimConfig::world_z_max);
+    py::class_<Laser>(m, "Laser")
+        .def(py::init<Vec3, Vec3, Vec2, double, double, LaserSource>(),
+             py::arg("position"), py::arg("direction"), py::arg("polarization"),
+             py::arg("wavelength"), py::arg("sigma"), py::arg("source_type"))
+        .def("emit_photon", &Laser::emit_photon, py::arg("rng"), "Emit a photon from the laser source");
 
-  py::class_<SimStats>(m, "SimStats")
-      .def_readonly("emitted", &SimStats::emitted)
-      .def_readonly("detected", &SimStats::detected)
-      .def_property_readonly("rate", &SimStats::detection_rate);
+    // Logger bindings
+    py::enum_<Level>(m, "LogLevel")
+        .value("debug", Level::debug)
+        .value("info", Level::info)
+        .value("warn", Level::warn)
+        .value("error", Level::error)
+        .value("off", Level::off)
+        .export_values();
 
-  py::class_<Material>(m, "Material")
-      .def(py::init<double>(), py::arg("mean_free_path"));
-
-  py::class_<PlaneDetector>(m, "PlaneDetector")
-      .def(py::init<double, double>(), py::arg("z_plane"), py::arg("radius"))
-      .def_readonly("hits", &PlaneDetector::hits);
-
-  py::class_<Simulation>(m, "Simulation")
-      .def(py::init<SimConfig, Material, PlaneDetector>())
-      .def(
-          "run",
-          [](Simulation &self) {
-            // Release the GIL while the C++ loop runs
-            py::gil_scoped_release release;
-            return self.run();
-          },
-          "Run the simulation and return SimStats")
-      .def_property_readonly("detector", &Simulation::detector,
-                             py::return_value_policy::reference_internal);
-
-  // Convenience one-shot function
-  m.def(
-      "run_once",
-      [](std::size_t n_photons, double mfp, double z_plane, double radius,
-         std::uint64_t seed) {
-        SimConfig cfg;
-        cfg.n_photons = n_photons;
-        cfg.seed = seed;
-        Material mat(mfp);
-        PlaneDetector det(z_plane, radius);
-        Simulation sim(cfg, mat, det);
-        py::gil_scoped_release release;
-        return sim.run();
-      },
-      py::arg("n_photons"), py::arg("mfp"), py::arg("z_plane"),
-      py::arg("radius"), py::arg("seed") = 0);
-
-  // Logger bindings
-  py::enum_<Level>(m, "LogLevel")
-      .value("debug", Level::debug)
-      .value("info", Level::info)
-      .value("warn", Level::warn)
-      .value("error", Level::error)
-      .value("off", Level::off)
-      .export_values();
-
-  m.def(
-    "set_log_level",
-    [](Level level) {
-      Logger::instance().set_level(level);
-    },
-    py::arg("level"),
-    "Set the logging level for the luminis-mc module");
+    m.def(
+        "set_log_level",
+        [](Level level)
+        {
+            Logger::instance().set_level(level);
+        },
+        py::arg("level"),
+        "Set the logging level for the luminis-mc module");
 }
