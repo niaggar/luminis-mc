@@ -12,8 +12,8 @@ struct SimConfig {
   std::size_t max_scatter = 1000;
 };
 
-struct SimStats {
+void run_simulation(const SimConfig &config, Medium &medium, Detector &detector);
 
-};
+void run_photon(Photon &photon, Medium &medium, Detector &detector);
 
 } // namespace luminis::core
