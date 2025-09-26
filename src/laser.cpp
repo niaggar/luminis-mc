@@ -6,7 +6,7 @@
 
 namespace luminis::core {
 
-  math::Vec3 uniform_distribution(Rng rng, const math::Vec3 center, const double sigma) {
+  math::Vec3 uniform_distribution(Rng &rng, const math::Vec3 &center, const double sigma) {
     const double theta = rng.uniform() * 2.0 * M_PI;
     const double r =std::sqrt(rng.uniform()) * sigma;
     return {
@@ -16,7 +16,7 @@ namespace luminis::core {
     };
   }
 
-  math::Vec3 gaussian_distribution(Rng rng, const math::Vec3 center, const double sigma) {
+  math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center, const double sigma) {
     return {
       rng.normal(center[0], sigma),
       rng.normal(center[1], sigma),
@@ -24,13 +24,14 @@ namespace luminis::core {
     };
   }
 
-  Laser::Laser(const luminis::math::Vec3 &position, const luminis::math::Vec3 &direction,
-               const luminis::math::Vec2 &polarization, double wavelength, double sigma,
-               LaserSource source_type, Rng rng)
-      : position(position), direction(luminis::math::normalize(direction)), polarization(polarization),
-        wavelength(wavelength), sigma(sigma), source_type(source_type), rng(rng) {}
+  Laser::Laser(Vec3 position, Vec3 direction,
+               Vec2 polarization, double wavelength, double sigma,
+               LaserSource source_type)
+      : position(position), direction(direction),
+        polarization(polarization), wavelength(wavelength), sigma(sigma),
+        source_type(source_type) {}
 
-  Photon Laser::emitPhoton() const {
+  Photon Laser::emit_photon(Rng &rng) const {
     Vec3 pos;
 
     switch (source_type) {
@@ -45,7 +46,9 @@ namespace luminis::core {
         break;
     }
 
-    Vec3 dir = luminis::math::copy(position);
+    Vec3 dir = luminis::math::copy(direction);
+
+    return Photon(pos, dir, wavelength);
 
   }
 

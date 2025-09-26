@@ -1,34 +1,34 @@
 #include <cmath>
 #include <luminis/core/simulation.hpp>
-#include <luminis/log/logger.hpp>
 
 namespace luminis::core
 {
 
-    void run_simulation(const SimConfig &config, Medium &medium, Detector &detector)
+    void run_simulation(const SimConfig &config, Medium &medium, Detector &detector, Laser &laser)
     {
         Rng rng(config.seed);
 
         for (std::size_t i = 0; i < config.n_photons; ++i)
         {
-            Photon photon;
-            run_photon(photon, medium, detector);
+            Photon photon = laser.emit_photon(rng);
+            run_photon(photon, medium, detector, rng);
         }
     }
 
-    void run_photon(Photon &photon, Medium &medium, Detector &detector)
+    void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng)
     {
-        Rng rng; // Local RNG for each photon
-
-        for (std::size_t scatter_count = 0; scatter_count < 1000; ++scatter_count)
+        while (photon.alive)
         {
             // Sample free step
             const double step = medium.sample_free_path(rng);
-            photon.pos = photon.pos + photon.dir * step;
+            photon.prev_pos = photon.pos;
+            photon.pos = photon.prev_pos + photon.dir * step;
 
             // Check for detector hit
-
-            // Absorption check
+            if (photon.events != 0) {
+                detector.record_hit(photon);
+            }
+            if (!photon.alive) break;
 
             // Scatter the photon
             const double theta = medium.sample_scattering_angle(rng);
@@ -77,7 +77,23 @@ namespace luminis::core
             photon.opticalpath += step;
             photon.previous_step = step;
             photon.events++;
+
+            // Russian roulette for photon termination
+            if (photon.weight < 1e-4)
+            {
+                if (rng.uniform() < 0.1)
+                {
+                    photon.weight /= 0.1;
+                }
+                else
+                {
+                    photon.alive = false;
+                    break;
+                }
+            }
         }
+
+        LLOG_INFO("Photon terminated after {} events, final weight: {}, optical path: {}", photon.events, photon.weight, photon.opticalpath);
     }
 
 }

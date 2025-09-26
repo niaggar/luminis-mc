@@ -4,17 +4,6 @@ namespace luminis::core {
 
     Photon::Photon(Vec3 p, Vec3 d, double wl) : pos(p), dir(normalize(d)), wavelength_nm(wl) {}
 
-    void Photon::move(double distance) {
-        pos = pos + dir * distance;
-        opticalpath += distance;
-        events += 1;
-    }
-
-    void Photon::set_polarization(const CVec2 &pol) {
-        polarization = pol;
-        polarized = true;
-    }
-
     std::array<double, 4> Photon::get_stokes_parameters() const {
         if (!polarized) {
             return {1.0, 0.0, 0.0, 0.0};

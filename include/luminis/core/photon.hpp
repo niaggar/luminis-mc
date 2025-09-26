@@ -9,6 +9,7 @@ using namespace luminis::math;
 namespace luminis::core {
 
 struct Photon {
+  Vec3 prev_pos{0, 0, 0};
   Vec3 pos{0, 0, 0};
   Vec3 dir{1, 0, 0};
   Vec3 m{0, 1, 0};
@@ -27,8 +28,6 @@ struct Photon {
   Photon() = default;
   Photon(Vec3 p, Vec3 d, double wl);
 
-  void move(double s);
-  void set_polarization(const CVec2 &pol);
   std::array<double, 4> get_stokes_parameters() const;
 };
 

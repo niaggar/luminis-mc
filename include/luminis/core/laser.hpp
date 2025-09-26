@@ -1,5 +1,5 @@
 #pragma once
-#include "luminis/math/rng.hpp"
+#include <luminis/math/rng.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/core/photon.hpp>
 
@@ -17,24 +17,20 @@ namespace luminis::core
 
   struct Laser
   {
-  public:
-    Laser(const Vec3 &position, const Vec3 &direction,
-          const Vec2 &polarization, double wavelength, double sigma,
-          LaserSource source_type, Rng rng);
-
-    Photon emitPhoton() const;
-
-  private:
     Vec3 position;
     Vec3 direction;
     Vec2 polarization;
     double wavelength;
     double sigma;
     LaserSource source_type;
-    Rng rng;
+
+    Laser(Vec3 position, Vec3 direction,
+          Vec2 polarization, double wavelength, double sigma,
+          LaserSource source_type);
+
+    Photon emit_photon(Rng &rng) const;
   };
 
-  Vec3 uniform_distribution(Rng rng, const Vec3 center, const double sigma);
-  Vec3 gaussian_distribution(Rng rng, const Vec3 center, const double sigma);
-
+  Vec3 uniform_distribution(Rng &rng, const Vec3 &center, const double sigma);
+  Vec3 gaussian_distribution(Rng &rng, const Vec3 &center, const double sigma);
 }

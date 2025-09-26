@@ -1,29 +1,33 @@
-#include <luminis/core/simulation.hpp>
 #include <luminis/log/logger.hpp>
+#include <luminis/core/simulation.hpp>
+#include <luminis/core/detector.hpp>
+#include <luminis/core/laser.hpp>
+#include <luminis/core/medium.hpp>
+#include <luminis/core/photon.hpp>
+#include <luminis/math/vec.hpp>
 
 int main() {
-  // using namespace luminis::core;
-  // using luminis::log::Level;
-  // using luminis::log::Logger;
+  using namespace luminis::core;
+  using luminis::log::Level;
+  using luminis::log::Logger;
 
-  // Logger::instance().set_level(Level::debug);
+  Logger::instance().set_level(Level::debug);
 
-  // LLOG_DEBUG("Log debug message");
-  // LLOG_INFO("Log info message");
-  // LLOG_WARN("Log warning message");
-  // LLOG_ERROR("Log error message");
+  LLOG_DEBUG("Log debug message");
+  LLOG_INFO("Log info message");
+  LLOG_WARN("Log warning message");
+  LLOG_ERROR("Log error message");
 
-  // SimConfig cfg;
-  // cfg.n_photons = 10000;
-  // cfg.max_scatter = 1000;
+  Laser laser({0, 0, 0}, {0, 0, 1}, {1, 0}, 532.0, 1.0, LaserSource::Gaussian);
+  Detector detector({0, 0, 0}, {0, 0, 1});
+  HenyeyGreensteinPhaseFunction phase_func(0.9);
+  SimpleMedium medium(0.01, 0.1, &phase_func, 1.33, 0.1);
 
-  // Material mat(5.0);
-  // PlaneDetector det(100.0, 10.0);
+  SimConfig config;
+  config.n_photons = 10;
+  config.seed = 3942;
 
-  // Simulation sim(cfg, mat, det);
-  // auto stats = sim.run();
-
-  // LLOG_INFO("Simulation complete: hits={} emitted={} rate={:.6f}",
-  //           stats.detected, stats.emitted, stats.detection_rate());
-  // return 0;
+  run_simulation(config, medium, detector, laser);
+  
+  return 0;
 }
