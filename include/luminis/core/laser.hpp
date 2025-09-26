@@ -3,33 +3,38 @@
 #include <luminis/math/vec.hpp>
 #include <luminis/core/photon.hpp>
 
-namespace luminis::core {
+using namespace luminis::math;
 
-enum class LaserSource {
-  Point = 0,
-  Uniform = 1,
-  Gaussian = 2,
-};
+namespace luminis::core
+{
 
-struct Laser {
-public:
-  Laser(const luminis::math::Vec3 &position, const luminis::math::Vec3 &direction,
-        const luminis::math::Vec2 &polarization, double wavelength, double sigma,
-        LaserSource source_type, Rng rng);
+  enum class LaserSource
+  {
+    Point = 0,
+    Uniform = 1,
+    Gaussian = 2,
+  };
 
-  Photon emitPhoton() const;
+  struct Laser
+  {
+  public:
+    Laser(const Vec3 &position, const Vec3 &direction,
+          const Vec2 &polarization, double wavelength, double sigma,
+          LaserSource source_type, Rng rng);
 
-private:
-  luminis::math::Vec3 position;
-  luminis::math::Vec3 direction;
-  luminis::math::Vec2 polarization;
-  double wavelength;
-  double sigma;
-  LaserSource source_type;
-  Rng rng;
-};
+    Photon emitPhoton() const;
 
-Vec3 uniform_distribution(Rng rng, const Vec3 center, const double sigma);
-Vec3 gaussian_distribution(Rng rng, const Vec3 center, const double sigma);
+  private:
+    Vec3 position;
+    Vec3 direction;
+    Vec2 polarization;
+    double wavelength;
+    double sigma;
+    LaserSource source_type;
+    Rng rng;
+  };
+
+  Vec3 uniform_distribution(Rng rng, const Vec3 center, const double sigma);
+  Vec3 gaussian_distribution(Rng rng, const Vec3 center, const double sigma);
 
 }
