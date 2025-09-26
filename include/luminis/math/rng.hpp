@@ -14,8 +14,6 @@ struct Rng {
 
   double uniform();
   double normal(const double mean, const double stddev);
-  double exp_path(const double mfp);
-  std::pair<double, double> isotropic_angles();
 };
 
 } // namespace luminis::math

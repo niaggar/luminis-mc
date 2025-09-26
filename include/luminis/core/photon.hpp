@@ -1,8 +1,10 @@
 #pragma once
 #include <luminis/math/vec.hpp>
 #include <sys/types.h>
+#include <complex>
 
 using namespace luminis::math;
+
 
 namespace luminis::core {
 
@@ -12,15 +14,18 @@ struct Photon {
   bool alive{true};
   uint events{0};
   double opticalpath{0.0};
+  double weight{1.0};
   double wavelength_nm;
 
-  Vec2 polarization{1, 0};
-
+  bool polarized{false};
+  CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
   Photon() = default;
-  Photon(Vec3 p, Vec3 d, double wl)
-      : pos(p), dir(normalize(d)), wavelength_nm(wl) {}
-  void move(double s) { pos = pos + dir * s; }
+  Photon(Vec3 p, Vec3 d, double wl);
+
+  void move(double s);
+  void set_polarization(const CVec2 &pol);
+  std::array<double, 4> get_stokes_parameters() const;
 };
 
 } // namespace luminis::core

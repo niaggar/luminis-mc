@@ -6,6 +6,7 @@ namespace luminis::math {
 
 using Vec3 = std::array<double, 3>;
 using Vec2 = std::array<double, 2>;
+using CVec2 = std::array<std::complex<double>, 2>;
 
 
 inline Vec3 operator+(const Vec3 &a, const Vec3 &b) {
