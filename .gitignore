@@ -6,5 +6,6 @@
 .venv/
 .ropeproject/
 build/
+build-app/
 cmake-build-debug/
 cmake-build-release/

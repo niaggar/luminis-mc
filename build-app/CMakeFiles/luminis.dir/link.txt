@@ -1,2 +1,0 @@
-/usr/bin/ar qc libluminis.a CMakeFiles/luminis.dir/src/detector.cpp.o CMakeFiles/luminis.dir/src/laser.cpp.o CMakeFiles/luminis.dir/src/medium.cpp.o CMakeFiles/luminis.dir/src/phase.cpp.o CMakeFiles/luminis.dir/src/photon.cpp.o CMakeFiles/luminis.dir/src/rng.cpp.o CMakeFiles/luminis.dir/src/simulation.cpp.o CMakeFiles/luminis.dir/src/table.cpp.o
-/usr/bin/ranlib libluminis.a
