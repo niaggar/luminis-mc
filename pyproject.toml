@@ -21,6 +21,10 @@ dev = [
 wheel.packages = ["python/src/luminis_mc"]
 cmake.args = ["-GNinja"]
 
+[tool.scikit-build.cmake.define]
+LUMINIS_BUILD_APP = "OFF"
+LUMINIS_BUILD_PY  = "ON"
+
 # Optional: universal builds on macOS (if you need wheels for both arm64/x86_64)
 # [tool.scikit-build.cmake.define]
 # CMAKE_OSX_ARCHITECTURES = "arm64;x86_64"

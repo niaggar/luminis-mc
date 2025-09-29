@@ -1,10 +1,12 @@
 #include <luminis/core/simulation.hpp>
 #include <luminis/core/laser.hpp>
 #include <luminis/core/photon.hpp>
+#include <luminis/core/detector.hpp>
+#include <luminis/core/medium.hpp>
 #include <luminis/sample/phase.hpp>
 #include <luminis/math/rng.hpp>
-
 #include <luminis/log/logger.hpp>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/complex.h>
@@ -27,26 +29,23 @@ PYBIND11_MODULE(luminis_mc, m)
         .def("normal", &Rng::normal, py::arg("mean"), py::arg("stddev"), "Generate a normally distributed random number with given mean and stddev");
 
     // Phase function bindings
-    py::class_<PhaseFunction>(m, "PhaseFunction");
+    py::class_<PhaseFunction>(m, "PhaseFunction")
+        .def("sample", &PhaseFunction::Sample, py::arg("x"), "Sample the phase function");
 
     py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
-        .def(py::init<>())
-        .def("sample", &UniformPhaseFunction::Sample, py::arg("x"), "Sample the phase function");
+        .def(py::init<>());
 
     py::class_<RayleighPhaseFunction, PhaseFunction>(m, "RayleighPhaseFunction")
         .def(py::init<int, double, double>(),
              py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
-        .def("sample", &RayleighPhaseFunction::Sample, py::arg("x"))
         .def("pdf", &RayleighPhaseFunction::PDF, py::arg("x"));
 
     py::class_<HenyeyGreensteinPhaseFunction, PhaseFunction>(m, "HenyeyGreensteinPhaseFunction")
-        .def(py::init<double>(), py::arg("g"))
-        .def("sample", &HenyeyGreensteinPhaseFunction::Sample, py::arg("x"));
+        .def(py::init<double>(), py::arg("g"));
 
     py::class_<RayleighDebyePhaseFunction, PhaseFunction>(m, "RayleighDebyePhaseFunction")
         .def(py::init<double, double, int, double, double>(),
              py::arg("wavelength"), py::arg("radius"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
-        .def("sample", &RayleighDebyePhaseFunction::Sample, py::arg("x"))
         .def("pdf", &RayleighDebyePhaseFunction::PDF, py::arg("x"));
 
     // Photon bindings
@@ -62,7 +61,6 @@ PYBIND11_MODULE(luminis_mc, m)
         .def_readwrite("alive", &Photon::alive)
         .def_readwrite("wavelength_nm", &Photon::wavelength_nm)
         .def_readwrite("opticalpath", &Photon::opticalpath)
-        .def_readwrite("previous_step", &Photon::previous_step)
         .def_readwrite("weight", &Photon::weight)
         .def_readwrite("polarized", &Photon::polarized)
         .def_readwrite("polarization", &Photon::polarization)
@@ -80,6 +78,44 @@ PYBIND11_MODULE(luminis_mc, m)
              py::arg("position"), py::arg("direction"), py::arg("polarization"),
              py::arg("wavelength"), py::arg("sigma"), py::arg("source_type"))
         .def("emit_photon", &Laser::emit_photon, py::arg("rng"), "Emit a photon from the laser source");
+
+    // Detector bindings
+    py::class_<Detector>(m, "Detector")
+        .def(py::init<Vec3, Vec3>(), py::arg("origin"), py::arg("normal"))
+        .def_readonly("hits", &Detector::hits)
+        .def_readonly("origin", &Detector::origin)
+        .def_readonly("normal", &Detector::normal)
+        .def_readonly("recorded_photons", &Detector::recorded_photons)
+        .def("record_hit", &Detector::record_hit, py::arg("photon"), "Record a photon hit on the detector");
+
+    // Medium bindings
+    py::class_<Medium>(m, "Medium")
+        .def_readonly("mu_a", &Medium::mu_a)
+        .def_readonly("mu_s", &Medium::mu_s)
+        .def_readonly("phase_function", &Medium::phase_function)
+        .def("sample_free_path", &Medium::sample_free_path, py::arg("rng"), "Sample the free path length in the medium")
+        .def("sample_scattering_angle", &Medium::sample_scattering_angle, py::arg("rng"), "Sample the scattering angle in the medium")
+        .def("sample_azimuthal_angle", &Medium::sample_azimuthal_angle, py::arg("rng"), "Sample the azimuthal angle in the medium")
+        .def("scattering_matrix", &Medium::scattering_matrix, py::arg("theta"), py::arg("phi"), py::arg("k"), "Get the scattering matrix for given angles and wavenumber");
+
+    py::class_<SimpleMedium, Medium>(m, "SimpleMedium")
+        .def(py::init<double, double, PhaseFunction*, double, double>(),
+             py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"), py::arg("mfp"), py::arg("radius"))
+        .def_readonly("mean_free_path", &SimpleMedium::mean_free_path)
+        .def_readonly("radius", &SimpleMedium::radius);
+
+    // Simulation bindings
+    py::class_<SimConfig>(m, "SimConfig")
+        .def(py::init<std::size_t>(), py::arg("n_photons"))
+        .def(py::init<std::uint64_t, std::size_t>(), py::arg("seed"), py::arg("n_photons"))
+        .def_readwrite("seed", &SimConfig::seed)
+        .def_readwrite("n_photons", &SimConfig::n_photons);
+
+    m.def("run_simulation", &run_simulation, py::arg("config"), py::arg("medium"), py::arg("detector"), py::arg("laser"), "Run the Monte Carlo simulation");
+    m.def("run_photon", &run_photon, py::arg("photon"), py::arg("medium"), py::arg("detector"), py::arg("rng"), "Run a single photon through the medium and detector");
+
+
+
 
     // Logger bindings
     py::enum_<Level>(m, "LogLevel")

@@ -14,11 +14,13 @@ namespace luminis::core
   struct SimConfig
   {
     std::uint64_t seed = std::random_device{}();
-    std::size_t n_photons = 10000;
-    std::size_t max_scatter = 1000;
+    std::size_t n_photons;
+
+    SimConfig(std::size_t n);
+    SimConfig(std::uint64_t s, std::size_t n);
   };
 
-  void run_simulation(const SimConfig &config, Medium &medium, Detector &detector, Laser &laser);
+  void run_simulation(SimConfig &config, Medium &medium, Detector &detector, Laser &laser);
 
   void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng);
 

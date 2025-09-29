@@ -18,8 +18,8 @@ struct Photon {
   uint events{0};
   bool alive{true};
   double wavelength_nm;
+  double k{2.0 * M_PI / wavelength_nm};
   double opticalpath{0.0};
-  double previous_step{0.0};
   double weight{1.0};
 
   bool polarized{false};

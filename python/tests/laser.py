@@ -6,8 +6,8 @@ import numpy as np
 
 set_log_level(LogLevel.debug)
 
-source = LaserSource.Uniform
-laser_source = Laser([0,0,0], [0,0,1], [1,0], 1.0, 5.0, source)
+source = LaserSource.Gaussian
+laser_source = Laser([0, 0, 0], [0, 0, 1], [1, 0], 1.0, 5.0, source)
 rng = Rng(seed=42)
 
 
@@ -25,11 +25,17 @@ for _ in range(num_samples):
 import matplotlib.pyplot as plt
 
 plt.figure(figsize=(10, 6))
-plt.plot(np.array(emited_positions)[:,0], np.array(emited_positions)[:,1], 'o', markersize=1, alpha=0.5)
-plt.title('Photon Emission Positions')
-plt.xlabel('X Position')
-plt.ylabel('Y Position')
-plt.axis('equal')
+plt.plot(
+    np.array(emited_positions)[:, 0],
+    np.array(emited_positions)[:, 1],
+    "o",
+    markersize=1,
+    alpha=0.5,
+)
+plt.title("Photon Emission Positions")
+plt.xlabel("X Position")
+plt.ylabel("Y Position")
+plt.axis("equal")
 plt.grid(True)
 plt.show()
 

@@ -1,9 +1,9 @@
-#include <luminis/log/logger.hpp>
-#include <luminis/core/simulation.hpp>
 #include <luminis/core/detector.hpp>
 #include <luminis/core/laser.hpp>
 #include <luminis/core/medium.hpp>
 #include <luminis/core/photon.hpp>
+#include <luminis/core/simulation.hpp>
+#include <luminis/log/logger.hpp>
 #include <luminis/math/vec.hpp>
 
 int main() {
@@ -28,6 +28,6 @@ int main() {
   config.seed = 3942;
 
   run_simulation(config, medium, detector, laser);
-  
+
   return 0;
 }

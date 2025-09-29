@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.18)
 project(luminis_mc)
 
+option(LUMINIS_BUILD_APP "Build CLI executable" ON)
+option(LUMINIS_BUILD_PY  "Build Python bindings" ON)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,15 +23,17 @@ set_target_properties(luminis PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 
 # CLI app
-add_executable(luminis_app apps/main.cpp)
-target_link_libraries(luminis_app PRIVATE luminis)
-
-
+if (LUMINIS_BUILD_APP)
+    add_executable(luminis_app apps/main.cpp)
+    target_link_libraries(luminis_app PRIVATE luminis)
+endif()
 
 # Python bindings
-set(PYBIND11_FINDPYTHON ON)
-find_package(pybind11 CONFIG REQUIRED)
-pybind11_add_module(luminis_mc bindings/python_module.cpp)
-target_link_libraries(luminis_mc PRIVATE luminis)
-target_compile_features(luminis_mc PRIVATE cxx_std_23)
-install(TARGETS luminis_mc LIBRARY DESTINATION .)
+if (LUMINIS_BUILD_PY)
+    set(PYBIND11_FINDPYTHON ON)
+    find_package(pybind11 CONFIG REQUIRED)
+    pybind11_add_module(luminis_mc bindings/python_module.cpp)
+    target_link_libraries(luminis_mc PRIVATE luminis)
+    target_compile_features(luminis_mc PRIVATE cxx_std_23)
+    install(TARGETS luminis_mc LIBRARY DESTINATION .)
+endif()

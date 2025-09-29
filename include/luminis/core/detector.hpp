@@ -1,10 +1,8 @@
 #pragma once
-#include <luminis/math/vec.hpp>
-#include <luminis/core/photon.hpp>
-#include <vector>
 #include <cstddef>
-
-
+#include <luminis/core/photon.hpp>
+#include <luminis/math/vec.hpp>
+#include <vector>
 
 using namespace luminis::math;
 
