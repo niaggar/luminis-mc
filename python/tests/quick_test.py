@@ -15,13 +15,11 @@ set_log_level(LogLevel.debug)
 
 # %%
 
-laser_source = Laser([0, 0, 0], [0, 0, 1], [1, 0], 1.0, 5.0, LaserSource.Gaussian)
+laser_source = Laser([0, 0, 0], [0, 0, 1], [1, 0], 532.0, 1.0, LaserSource.Gaussian)
 detector = Detector(origin=(0, 0, 0), normal=(0, 0, 1))
 phase_function = HenyeyGreensteinPhaseFunction(g=0.9)
-medium = SimpleMedium(
-    scattering=0.1, absorption=0.01, phase_func=phase_function, mfp=1, radius=10
-)
-config = SimConfig(seed=42, n_photons=10)
+medium = SimpleMedium(0.01, 0.1, phase_function, 1.33, 0.1)
+config = SimConfig(seed=42, n_photons=1000)
 
 # %%
 

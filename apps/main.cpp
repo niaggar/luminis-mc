@@ -22,10 +22,7 @@ int main() {
   Detector detector({0, 0, 0}, {0, 0, 1});
   HenyeyGreensteinPhaseFunction phase_func(0.9);
   SimpleMedium medium(0.01, 0.1, &phase_func, 1.33, 0.1);
-
-  SimConfig config;
-  config.n_photons = 10;
-  config.seed = 3942;
+  SimConfig config(42, 10);
 
   run_simulation(config, medium, detector, laser);
 

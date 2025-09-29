@@ -111,10 +111,14 @@ PYBIND11_MODULE(luminis_mc, m)
         .def_readwrite("seed", &SimConfig::seed)
         .def_readwrite("n_photons", &SimConfig::n_photons);
 
-    m.def("run_simulation", &run_simulation, py::arg("config"), py::arg("medium"), py::arg("detector"), py::arg("laser"), "Run the Monte Carlo simulation");
-    m.def("run_photon", &run_photon, py::arg("photon"), py::arg("medium"), py::arg("detector"), py::arg("rng"), "Run a single photon through the medium and detector");
-
-
+    m.def("run_simulation",
+        [](SimConfig &config, Medium &medium, Detector &detector, Laser &laser)
+        {
+          py::gil_scoped_release release;
+          run_simulation(config, medium, detector, laser);
+        },
+        py::arg("config"), py::arg("medium"), py::arg("detector"), py::arg("laser"),
+        "Run the Monte Carlo simulation with the given configuration, medium, detector, and laser");
 
 
     // Logger bindings

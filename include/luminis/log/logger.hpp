@@ -14,15 +14,15 @@ enum class Level : int { debug = 1, info = 2, warn = 3, error = 4, off = 6 };
 inline std::string_view to_string(Level lv) {
   switch (lv) {
   case Level::debug:
-    return "DEBUG";
+    return "D";
   case Level::info:
-    return "INFO";
+    return "I";
   case Level::warn:
-    return "WARN";
+    return "W";
   case Level::error:
-    return "ERROR";
+    return "E";
   default:
-    return "OFF";
+    return "O";
   }
 }
 
@@ -64,12 +64,11 @@ private:
 #else
     localtime_r(&tt, &tm);
 #endif
-    char tbuf[20];
-    std::strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", &tm);
+    char tbuf[9];
+    std::strftime(tbuf, sizeof(tbuf), "%H:%M:%S", &tm);
 
     std::string body = std::vformat(fmt, std::make_format_args(args...));
-    std::string line =
-        std::format("[{}] [{}] - {}\n", tbuf, to_string(lv), body);
+    std::string line = std::format("[{} {}] {}\n", tbuf, to_string(lv), body);
 
     std::scoped_lock lk(mu_);
     std::fwrite(line.data(), 1, line.size(), stderr);
