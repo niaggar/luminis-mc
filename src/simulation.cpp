@@ -1,3 +1,4 @@
+#include "luminis/log/logger.hpp"
 #include <cmath>
 #include <luminis/core/simulation.hpp>
 
@@ -94,7 +95,7 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng) {
     }
   }
 
-  LLOG_INFO(
+  LLOG_DEBUG(
       "Photon terminated after {} events, final weight: {}, optical path: {}",
       photon.events, photon.weight, photon.opticalpath);
 }

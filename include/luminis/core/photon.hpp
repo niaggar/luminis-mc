@@ -11,9 +11,9 @@ namespace luminis::core {
 struct Photon {
   Vec3 prev_pos{0, 0, 0};
   Vec3 pos{0, 0, 0};
-  Vec3 dir{1, 0, 0};
-  Vec3 m{0, 1, 0};
-  Vec3 n{0, 0, 1};
+  Vec3 dir{0, 0, 1};
+  Vec3 m{1, 0, 0};
+  Vec3 n{0, 1, 0};
 
   uint events{0};
   bool alive{true};
