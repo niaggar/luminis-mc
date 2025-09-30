@@ -12,7 +12,8 @@ public:
   std::vector<double> values;
   std::vector<double> cdf;
 
-  SamplingTable(PDFFunction pdfFunc, int nDiv, double minVal, double maxVal);
+  SamplingTable() = default;
+  void initialize(PDFFunction pdfFunc, int nDiv, double minVal, double maxVal);
 
   double Sample(double u);
 };

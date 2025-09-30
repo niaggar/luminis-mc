@@ -3,7 +3,7 @@
 
 namespace luminis::sample {
 
-SamplingTable::SamplingTable(PDFFunction pdfFunc, int nDiv, double minVal, double maxVal) {
+void SamplingTable::initialize(PDFFunction pdfFunc, int nDiv, double minVal, double maxVal) {
   LLOG_DEBUG("Creating SamplingTable with nDiv: {}, minVal: {}, maxVal: {}", nDiv, minVal, maxVal);
 
   if (nDiv <= 0) {
@@ -17,37 +17,42 @@ SamplingTable::SamplingTable(PDFFunction pdfFunc, int nDiv, double minVal, doubl
   }
 
   double step = (maxVal - minVal) / nDiv;
-  values.resize(nDiv);
-  cdf.resize(nDiv);
+  values.resize(nDiv + 1);
+  cdf.resize(nDiv + 1);
 
   std::vector<double> pdf(nDiv);
   double sum = 0.0;
 
   // Compute PDF values and sum for normalization
-  for (int i = 0; i < nDiv; i++) {
+  for (int i = 0; i < nDiv + 1; i++) {
     values[i] = minVal + i * step;
     pdf[i] = pdfFunc(values[i]);
     sum += pdf[i] * step;
   }
 
   // Normalize PDF
-  for (int i = 0; i < nDiv; i++) {
+  for (int i = 0; i < nDiv + 1; i++) {
     pdf[i] /= sum;
   }
 
   // Compute CDF
   cdf[0] = pdf[0] * step;
-  for (int i = 1; i < nDiv; i++) {
+  for (int i = 1; i < nDiv + 1; i++) {
     cdf[i] = cdf[i - 1] + pdf[i] * step;
   }
 
   // Normalize CDF
-  for (int i = 0; i < nDiv; i++) {
-    cdf[i] /= cdf[nDiv - 1];
+  for (int i = 0; i < nDiv + 1; i++) {
+    cdf[i] /= cdf[nDiv];
   }
 }
 
 double SamplingTable::Sample(double u) {
+  if (values.empty() || cdf.empty()) {
+    LLOG_ERROR("SamplingTable::Sample called on an uninitialized table");
+    throw std::runtime_error("SamplingTable is not initialized");
+  }
+
   auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
   int index = std::distance(cdf.begin(), it);
 

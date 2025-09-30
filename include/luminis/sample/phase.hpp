@@ -6,18 +6,21 @@ namespace luminis::sample {
 class PhaseFunction {
 public:
   virtual ~PhaseFunction() = default;
-  virtual double Sample(double x) = 0;
+  virtual double sample_cos(double x) = 0;
+  virtual double sample_theta(double x) = 0;
 };
 
 class UniformPhaseFunction : public PhaseFunction {
 public:
-  double Sample(double x) override;
+  double sample_cos(double x) override;
+  double sample_theta(double x) override;
 };
 
 class RayleighPhaseFunction : public PhaseFunction {
 public:
   RayleighPhaseFunction(int nDiv, double minVal, double maxVal);
-  double Sample(double x) override;
+  double sample_cos(double x) override;
+  double sample_theta(double x) override;
   double PDF(double x);
 private:
   SamplingTable table;
@@ -26,7 +29,8 @@ private:
 class HenyeyGreensteinPhaseFunction : public PhaseFunction {
 public:
   HenyeyGreensteinPhaseFunction(double g);
-  double Sample(double x) override;
+  double sample_cos(double x) override;
+  double sample_theta(double x) override;
 private:
   double g; // Anisotropy factor
 };
@@ -34,13 +38,26 @@ private:
 class RayleighDebyePhaseFunction : public PhaseFunction {
 public:
   RayleighDebyePhaseFunction(double wavelenght, double radius, int nDiv, double minVal, double maxVal);
-  double Sample(double x) override;
+  double sample_cos(double x) override;
+  double sample_theta(double x) override;
   double PDF(double x);
 private:
   SamplingTable table;
   double wavelength;
   double radius;
   double k;
+};
+
+class DrainePhaseFunction : public PhaseFunction {
+public:
+  DrainePhaseFunction(double g, double a, int nDiv, double minVal, double maxVal);
+  double sample_cos(double x) override;
+  double sample_theta(double x) override;
+  double PDF(double x);
+private:
+  SamplingTable table;
+  double g; // Anisotropy factor
+  double a; // Draine parameter
 };
 
 } // namespace luminis::sample

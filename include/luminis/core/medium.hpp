@@ -18,6 +18,7 @@ namespace luminis::core
     double mu_a{0.0}; // Absorption coefficient [1/mm]
     double mu_s{0.0}; // Scattering coefficient [1/mm]
 
+
     Medium(double absorption, double scattering, PhaseFunction *phase_func);
 
     virtual double sample_free_path(Rng &rng) const = 0;

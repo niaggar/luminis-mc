@@ -30,7 +30,8 @@ PYBIND11_MODULE(luminis_mc, m)
 
     // Phase function bindings
     py::class_<PhaseFunction>(m, "PhaseFunction")
-        .def("sample", &PhaseFunction::Sample, py::arg("x"), "Sample the phase function");
+        .def("sample", &PhaseFunction::sample_cos, py::arg("x"), "Sample the cosine of the scattering angle using a uniform random number x in [0, 1]")
+        .def("sample_theta", &PhaseFunction::sample_theta, py::arg("x"), "Sample the scattering angle theta using a uniform random number x in [0, 1]");
 
     py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
         .def(py::init<>());
@@ -47,6 +48,11 @@ PYBIND11_MODULE(luminis_mc, m)
         .def(py::init<double, double, int, double, double>(),
              py::arg("wavelength"), py::arg("radius"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
         .def("pdf", &RayleighDebyePhaseFunction::PDF, py::arg("x"));
+
+    py::class_<DrainePhaseFunction, PhaseFunction>(m, "DrainePhaseFunction")
+        .def(py::init<double, double, int, double, double>(),
+             py::arg("g"), py::arg("a"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
+        .def("pdf", &DrainePhaseFunction::PDF, py::arg("x"));
 
     // Photon bindings
     py::class_<Photon>(m, "Photon")

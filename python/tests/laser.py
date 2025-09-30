@@ -7,7 +7,7 @@ import numpy as np
 set_log_level(LogLevel.debug)
 
 source = LaserSource.Gaussian
-laser_source = Laser([0, 0, 0], [0, 0, 1], [1, 0], 1.0, 5.0, source)
+laser_source = Laser([0, 0, 0], [0, 0, 1], [1, 0], 532.0, 1.0, LaserSource.Gaussian)
 rng = Rng(seed=42)
 
 

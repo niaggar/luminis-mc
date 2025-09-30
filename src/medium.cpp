@@ -11,7 +11,7 @@ namespace luminis::core
     const double ks = 2.0 * k * std::sin(theta / 2.0) * radius;
     const double numerator = 3 * (std::sin(ks) - ks * std::cos(ks));
     const double denominator = std::pow(ks, 3);
-    
+
     return numerator / denominator;
   }
 
@@ -36,7 +36,7 @@ namespace luminis::core
   {
     if (phase_function)
     {
-      return phase_function->Sample(rng.uniform());
+      return phase_function->sample_theta(rng.uniform());
     }
 
     LLOG_ERROR("SimpleMedium::sample_scattering_angle: Phase function is not defined!");
@@ -52,7 +52,7 @@ namespace luminis::core
   {
     const double F = form_factor(theta, k, radius);
     const double kkk = std::pow(k, 3);
-    
+
     const std::complex<double> s2 = std::complex<double>(0, -1*kkk*F*std::cos(theta));
     const std::complex<double> s1 = std::complex<double>(0, -1*kkk*F);
 
