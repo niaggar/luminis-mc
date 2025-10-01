@@ -5,6 +5,7 @@ from luminis_mc import (
     HenyeyGreensteinPhaseFunction,
     RayleighDebyePhaseFunction,
     DrainePhaseFunction,
+    RayleighDebyeEMCPhaseFunction,
 )
 from luminis_mc import set_log_level
 from luminis_mc import LogLevel
@@ -27,17 +28,15 @@ anysotropy = 0.3
 radius = 0.1
 wavelength = 0.5
 
-print(f"cosMin: {cosMin}, cosMax: {cosMax}, thetaMin: {thetaMin}, thetaMax: {thetaMax}")
-print(
-    f"nDiv: {nDiv}, anysotropy: {anysotropy}, radius: {radius}, wavelength: {wavelength}"
-)
-
 # %%
 
 uniform = UniformPhaseFunction()
 rayleigh = RayleighPhaseFunction(nDiv, cosMin, cosMax)
 henyey_greenstein = HenyeyGreensteinPhaseFunction(anysotropy)
 rayleigh_debye = RayleighDebyePhaseFunction(
+    wavelength, radius, nDiv, thetaMin, thetaMax
+)
+rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(
     wavelength, radius, nDiv, thetaMin, thetaMax
 )
 draine = DrainePhaseFunction(0.2, 1, nDiv, cosMin, cosMax)
@@ -49,6 +48,7 @@ data = {
     "rayleigh": np.array([]),
     "henyey_greenstein": np.array([]),
     "rayleigh_debye": np.array([]),
+    "rayleigh_debye_emc": np.array([]),
     "draine": np.array([]),
 }
 
@@ -59,12 +59,16 @@ for i in range(nSamples):
     xRayleigh = rayleigh.sample(mu)
     xHenyeyGreenstein = henyey_greenstein.sample(mu)
     xRayleighDebye = rayleigh_debye.sample(mu)
+    xRayleighDebyeEMC = rayleigh_debye_emc.sample(mu)
     xDraine = draine.sample(mu)
 
     data["uniform"] = np.append(data["uniform"], xUniform)
     data["rayleigh"] = np.append(data["rayleigh"], xRayleigh)
     data["henyey_greenstein"] = np.append(data["henyey_greenstein"], xHenyeyGreenstein)
     data["rayleigh_debye"] = np.append(data["rayleigh_debye"], xRayleighDebye)
+    data["rayleigh_debye_emc"] = np.append(
+        data["rayleigh_debye_emc"], xRayleighDebyeEMC
+    )
     data["draine"] = np.append(data["draine"], xDraine)
 
 # %%
@@ -77,6 +81,7 @@ phase_functions = [
     "rayleigh",
     "henyey_greenstein",
     "rayleigh_debye",
+    "rayleigh_debye_emc",
     "draine",
 ]
 
@@ -94,3 +99,6 @@ plt.tight_layout()
 plt.show()
 
 # %%
+
+
+sample_phi =

@@ -16,13 +16,17 @@ enum class LaserSource {
 struct Laser {
   Vec3 position;
   Vec3 direction;
+  Vec3 local_m;
+  Vec3 local_n;
   Vec2 polarization;
+
   double wavelength;
   double sigma;
   LaserSource source_type;
 
-  Laser(Vec3 position, Vec3 direction, Vec2 polarization, double wavelength,
-        double sigma, LaserSource source_type);
+  Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
+        Vec2 polarization, double wavelength, double sigma,
+        LaserSource source_type);
 
   Photon emit_photon(Rng &rng) const;
 };

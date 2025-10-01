@@ -17,11 +17,13 @@ set_log_level(LogLevel.debug)
 # %%
 
 n_photons = 100000
-laser_source = Laser([0, 0, 0], [0, 0, 1], [1, 0], 532.0, 1.0, LaserSource.Point)
+laser_source = Laser(
+    [0, 0, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0], [1, 0], 532.0, 1.0, LaserSource.Gaussian
+)
 detector = Detector(origin=(0, 0, 0), normal=(0, 0, 1))
 phase_function = HenyeyGreensteinPhaseFunction(0.9)
 medium = SimpleMedium(0.01, 0.1, phase_function, 1.33, 0.1)
-config = SimConfig(seed=42, n_photons=n_photons)
+config = SimConfig(n_photons=n_photons)
 
 # %%
 

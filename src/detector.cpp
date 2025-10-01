@@ -28,13 +28,12 @@ void Detector::record_hit(Photon &photon) {
   const Vec3 hit_point = xn + d * t;
   const double correction_distance = norm(hit_point - photon.prev_pos);
   if (correction_distance > 0) {
-    photon.opticalpath -= correction_distance + 0.0;
+    photon.opticalpath -= correction_distance;
   }
 
   LLOG_DEBUG("Photon hit detector at position: {}", hit_point);
 
   hits += 1;
-  photon.events += 1;
   photon.alive = false;
   photon.pos = hit_point;
   recorded_photons.push_back(std::move(photon));

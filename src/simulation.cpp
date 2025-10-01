@@ -49,10 +49,10 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng) {
       const std::complex<double> Em = photon.polarization[0];
       const std::complex<double> En = photon.polarization[1];
 
-      const double Emm = std::pow(std::norm(Em), 2);
-      const double Enn = std::pow(std::norm(En), 2);
-      const double s22 = std::pow(std::norm(S[0]), 2);
-      const double s11 = std::pow(std::norm(S[1]), 2);
+      const double Emm = std::norm(Em);
+      const double Enn = std::norm(En);
+      const double s22 = std::norm(S[0]);
+      const double s11 = std::norm(S[1]);
 
       const double pow_cos_phi = std::pow(cos_phi, 2);
       const double pow_sin_phi = std::pow(sin_phi, 2);
@@ -81,7 +81,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng) {
     photon.n = old_n * cos_phi - old_m * sin_phi;
 
     // Update photon events
-    photon.weight = photon.weight - (medium.mu_a / medium.mu_s) * photon.weight;
+    const double albedo = medium.mu_s / (medium.mu_a + medium.mu_s);
+    photon.weight = photon.weight - albedo * photon.weight;
     photon.events++;
 
     // Russian roulette for photon termination
