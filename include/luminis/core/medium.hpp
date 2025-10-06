@@ -1,4 +1,5 @@
 #pragma once
+#include "luminis/core/absortion.hpp"
 #include <luminis/math/rng.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/sample/phase.hpp>
@@ -9,10 +10,12 @@ using namespace luminis::sample;
 namespace luminis::core {
 
 struct Medium {
+  Absorption *absorption{nullptr};
   PhaseFunction *phase_function{nullptr};
 
-  double mu_a{0.0}; // Absorption coefficient [1/mm]
-  double mu_s{0.0}; // Scattering coefficient [1/mm]
+  double mu_absorption{0.0}; // Absorption coefficient [1/mm]
+  double mu_scattering{0.0}; // Scattering coefficient [1/mm]
+  double mu_attenuation{0.0}; // Attenuation coefficient [1/mm]
 
   virtual ~Medium() = default;
   Medium(double absorption, double scattering, PhaseFunction *phase_func);
@@ -28,8 +31,7 @@ struct SimpleMedium : public Medium {
   double mean_free_path; // Mean free path [mm]
   double radius;         // Radius of the particles [mm]
 
-  SimpleMedium(double absorption, double scattering, PhaseFunction *phase_func,
-               double mfp, double r);
+  SimpleMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r);
 
   double sample_free_path(Rng &rng) const override;
   double sample_scattering_angle(Rng &rng) const override;

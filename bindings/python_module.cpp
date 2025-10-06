@@ -3,6 +3,7 @@
 #include <luminis/core/medium.hpp>
 #include <luminis/core/photon.hpp>
 #include <luminis/core/simulation.hpp>
+#include <luminis/core/absortion.hpp>
 #include <luminis/log/logger.hpp>
 #include <luminis/math/rng.hpp>
 #include <luminis/sample/phase.hpp>
@@ -127,9 +128,11 @@ PYBIND11_MODULE(luminis_mc, m) {
 
   // Medium bindings
   py::class_<Medium>(m, "Medium")
-      .def_readonly("mu_a", &Medium::mu_a)
-      .def_readonly("mu_s", &Medium::mu_s)
+      .def_readonly("mu_a", &Medium::mu_absorption)
+      .def_readonly("mu_s", &Medium::mu_scattering)
+      .def_readonly("mu_t", &Medium::mu_attenuation)
       .def_readonly("phase_function", &Medium::phase_function)
+      .def_readwrite("absorption", &Medium::absorption)
       .def("sample_free_path", &Medium::sample_free_path, py::arg("rng"),
            "Sample the free path length in the medium")
       .def("sample_scattering_angle", &Medium::sample_scattering_angle,
@@ -146,6 +149,20 @@ PYBIND11_MODULE(luminis_mc, m) {
            py::arg("mfp"), py::arg("radius"))
       .def_readonly("mean_free_path", &SimpleMedium::mean_free_path)
       .def_readonly("radius", &SimpleMedium::radius);
+
+  // Absorption bindings
+  py::class_<Absorption>(m, "Absorption")
+      .def(py::init<double, double, double, double>(), py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"))
+      .def_readonly("radius", &Absorption::radius)
+      .def_readonly("depth", &Absorption::depth)
+      .def_readonly("d_r", &Absorption::d_r)
+      .def_readonly("d_z", &Absorption::d_z)
+      .def_readonly("absorption_values", &Absorption::absorption_values)
+      .def("record_absorption", &Absorption::record_absorption,
+           py::arg("photon"), py::arg("d_weight"),
+           "Record absorption from a photon at its current position")
+      .def("get_absorption_image", &Absorption::get_absorption_image, py::arg("n_photons"),
+           "Get the 2D absorption image");
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")

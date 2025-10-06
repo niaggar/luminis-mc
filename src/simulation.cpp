@@ -8,8 +8,7 @@ SimConfig::SimConfig(std::size_t n) : n_photons(n) {}
 
 SimConfig::SimConfig(std::uint64_t s, std::size_t n) : seed(s), n_photons(n) {}
 
-void run_simulation(SimConfig &config, Medium &medium, Detector &detector,
-                    Laser &laser) {
+void run_simulation(SimConfig &config, Medium &medium, Detector &detector, Laser &laser) {
   Rng rng(config.seed);
 
   for (std::size_t i = 0; i < config.n_photons; ++i) {
@@ -74,16 +73,19 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng) {
     const Vec3 old_m = photon.m;
     const Vec3 old_n = photon.n;
 
-    photon.dir = old_m * sin_theta * cos_phi + old_n * sin_theta * sin_phi +
-                 old_dir * cos_theta;
-    photon.m = old_m * cos_theta * cos_phi + old_n * cos_theta * sin_phi -
-               old_dir * sin_theta;
+    photon.dir = old_m * sin_theta * cos_phi + old_n * sin_theta * sin_phi + old_dir * cos_theta;
+    photon.m = old_m * cos_theta * cos_phi + old_n * cos_theta * sin_phi - old_dir * sin_theta;
     photon.n = old_n * cos_phi - old_m * sin_phi;
 
     // Update photon events
-    const double albedo = medium.mu_s / (medium.mu_a + medium.mu_s);
-    photon.weight = photon.weight - albedo * photon.weight;
+    const double d_weight = photon.weight * (medium.mu_absorption / medium.mu_attenuation);
+    photon.weight = photon.weight - d_weight;
     photon.events++;
+
+    // Record absorption
+    if (medium.absorption) {
+      medium.absorption->record_absorption(photon, d_weight);
+    }
 
     // Russian roulette for photon termination
     if (photon.weight < 1e-4) {

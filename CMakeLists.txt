@@ -17,6 +17,7 @@ add_library(luminis
     src/rng.cpp
     src/simulation.cpp
     src/table.cpp
+    src/absortion.cpp
 )
 target_include_directories(luminis PUBLIC include)
 set_target_properties(luminis PROPERTIES POSITION_INDEPENDENT_CODE ON)
