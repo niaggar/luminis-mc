@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cmath>
+#include <complex>
 
 namespace luminis::math {
 
