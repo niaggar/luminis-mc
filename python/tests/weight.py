@@ -11,11 +11,11 @@ def weight_update_2(w, mus, mut):
 
 
 w = 1.0
-mua = 0.01
+mua = 0.03
 mus = 0.05
 mut = mua + mus
 
-n_steps = 10
+n_steps = 15
 weights_1 = np.zeros(n_steps)
 weights_2 = np.zeros(n_steps)
 weights_1[0] = w

@@ -26,7 +26,7 @@ light_speed = 299792458e-6
 
 # Medium parameters
 wavelength = 532.0
-mu_absortion = 0.07
+mu_absortion = 0.03
 mu_scattering = 0.05
 mean_free_path = 1 / (mu_absortion + mu_scattering)
 radius = 0.1 * mean_free_path
@@ -43,7 +43,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 4000000
+n_photons = 5000000
 
 # Laser parameters
 origin = [0, 0, 0]
@@ -57,7 +57,7 @@ laser_type = LaserSource.Point
 config = SimConfig(n_photons=n_photons)
 laser_source = Laser(origin, s_global, n_global, m_global, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(origin, s_global, n_global, m_global)
-phase_function = HenyeyGreensteinPhaseFunction(0.99)
+phase_function = HenyeyGreensteinPhaseFunction(0.1)
 # phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
 
@@ -69,16 +69,16 @@ run_simulation(config, medium, detector, laser_source)
 
 print("Recorded photons:", len(detector.recorded_photons))
 
-# emited_positions = []
-# for i in range(len(detector.recorded_photons)):
-#     photon = detector.recorded_photons[i]
-#     emited_positions.append((photon.pos[0], photon.pos[1], photon.pos[2]))
+min_hist_angle = 0
+max_hist_angle = 180
+hit_histogram_raw_data = detector.get_hit_histogram(min_hist_angle, max_hist_angle)
+event_counts = np.asarray(hit_histogram_raw_data, dtype=int)
 
-# emited_positions = np.array(emited_positions)
-# plt.figure(figsize=(8, 8))
-# plt.scatter(emited_positions[:, 0], emited_positions[:, 1], s=1, alpha=0.5)
-# plt.xlabel("X position")
-# plt.ylabel("Y position")
-# plt.title("Photon Emission Positions")
-# plt.grid(True)
-# plt.show()
+k = np.arange(len(event_counts))
+
+plt.figure(figsize=(7,4))
+plt.bar(k, event_counts, width=0.9)
+plt.xlabel("Número de eventos (scatterings) antes de llegar al detector")
+plt.ylabel("Conteo de fotones")
+plt.tight_layout()
+plt.show()

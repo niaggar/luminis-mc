@@ -126,7 +126,13 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readonly("normal", &Detector::normal)
       .def_readonly("recorded_photons", &Detector::recorded_photons)
       .def("record_hit", &Detector::record_hit, py::arg("photon"),
-           "Record a photon hit on the detector");
+           "Record a photon hit on the detector")
+      .def("get_hit_histogram", &Detector::get_hit_histogram, py::arg("min_theta"),
+           py::arg("max_theta"),
+           "Get a histogram of photon hits based on the number of scattering events")
+      .def("get_hit_angular_distribution",
+           &Detector::get_hit_angular_distribution,
+           "Get the angular distribution of photon hits on the detector");
 
   // Medium bindings
   py::class_<Medium>(m, "Medium")

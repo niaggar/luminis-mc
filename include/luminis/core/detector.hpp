@@ -21,7 +21,8 @@ struct Detector {
 
   void record_hit(Photon &photon);
 
-
+  std::vector<double> get_hit_histogram(const double min_theta, const double max_theta);
+  std::vector<std::vector<double>> get_hit_angular_distribution();
 };
 
 } // namespace luminis::core

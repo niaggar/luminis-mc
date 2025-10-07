@@ -2,6 +2,7 @@
 #include <luminis/core/photon.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/log/logger.hpp>
+#include <vector>
 
 namespace luminis::core {
 
@@ -37,6 +38,38 @@ void Detector::record_hit(Photon &photon) {
   photon.alive = false;
   photon.pos = hit_point;
   recorded_photons.push_back(std::move(photon));
+}
+
+std::vector<double> Detector::get_hit_histogram(const double min_theta, const double max_theta) {
+  const Vec3 backward_normal = -1 * normal;
+  int max_hit_number = 0;
+  for (const auto &photon : recorded_photons) {
+    if (photon.events > max_hit_number) {
+      max_hit_number = photon.events;
+    }
+  }
+
+  const int n_bins = max_hit_number + 1;
+  std::vector<double> histogram(n_bins, 0.0);
+
+  for (const auto &photon : recorded_photons) {
+    const double cos_theta = dot(photon.dir, backward_normal) / (norm(photon.dir) * norm(backward_normal));
+    const double theta = std::acos(cos_theta) * (180.0 / M_PI); // Convert to degrees
+
+    if (theta >= min_theta && theta <= max_theta) {
+      if (photon.events < n_bins) {
+        histogram[photon.events] += 1.0;
+      } else {
+        LLOG_WARN("Photon events {} exceed histogram bins {}", photon.events, n_bins);
+      }
+    }
+  }
+
+  return histogram;
+}
+
+std::vector<std::vector<double>> Detector::get_hit_angular_distribution() {
+  return std::vector<std::vector<double>>{};
 }
 
 } // namespace luminis::core
