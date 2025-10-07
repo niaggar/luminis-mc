@@ -1,6 +1,7 @@
 #include <luminis/sample/phase.hpp>
 #include <luminis/log/logger.hpp>
 #include <cmath>
+#include <vector>
 
 namespace luminis::sample {
 
@@ -40,6 +41,21 @@ double PhaseFunction::sample_phi_conditional(double theta, CVec2& S, CVec2& E, d
       const double Fclamped = std::max(F, 0.0);
       if (rng.uniform()*Fmax <= Fclamped) return phi;
     }
+}
+std::array<double, 2> PhaseFunction::get_anisotropy_factor(Rng& rng, std::size_t nSamples) {
+  double sum = 0.0;
+  double sum_sq = 0.0;
+  for (std::size_t i = 0; i < nSamples; ++i) {
+    const double mu = rng.uniform();
+    const double c  = this->sample_cos(mu);
+    sum += c;
+    sum_sq += c * c;
+  }
+
+  const double g = sum / static_cast<double>(nSamples);
+  const double variance = (sum_sq / static_cast<double>(nSamples)) - (g * g);
+  const double stddev = std::sqrt(variance / static_cast<double>(nSamples));
+  return {g, stddev};
 }
 
 

@@ -43,7 +43,10 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("sample_phi_conditional", &PhaseFunction::sample_phi_conditional,
            py::arg("theta"), py::arg("S"), py::arg("E"), py::arg("k"),
            py::arg("rng"),
-           "Sample the azimuthal angle phi conditioned on theta");
+           "Sample the azimuthal angle phi conditioned on theta")
+      .def("get_anisotropy_factor", &PhaseFunction::get_anisotropy_factor,
+           py::arg("rng"), py::arg("n_samples") = 200000,
+           "Estimate the anisotropy factor g using Monte Carlo sampling");
 
   py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
       .def(py::init<>());

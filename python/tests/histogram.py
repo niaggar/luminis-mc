@@ -70,7 +70,7 @@ run_simulation(config, medium, detector, laser_source)
 print("Recorded photons:", len(detector.recorded_photons))
 
 min_hist_angle = 0
-max_hist_angle = 180
+max_hist_angle = 0.2
 hit_histogram_raw_data = detector.get_hit_histogram(min_hist_angle, max_hist_angle)
 event_counts = np.asarray(hit_histogram_raw_data, dtype=int)
 

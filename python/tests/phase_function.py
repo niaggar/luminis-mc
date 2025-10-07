@@ -1,5 +1,6 @@
 # %%
 from luminis_mc import (
+    Rng,
     UniformPhaseFunction,
     RayleighPhaseFunction,
     HenyeyGreensteinPhaseFunction,
@@ -24,7 +25,7 @@ thetaMax = np.pi
 nDiv = 1000
 nSamples = 100000
 
-anysotropy = 0.3
+anysotropy = -0.4
 radius = 0.1
 wavelength = 0.5
 
@@ -33,43 +34,22 @@ wavelength = 0.5
 uniform = UniformPhaseFunction()
 rayleigh = RayleighPhaseFunction(nDiv, cosMin, cosMax)
 henyey_greenstein = HenyeyGreensteinPhaseFunction(anysotropy)
-rayleigh_debye = RayleighDebyePhaseFunction(
-    wavelength, radius, nDiv, thetaMin, thetaMax
-)
-rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(
-    wavelength, radius, nDiv, thetaMin, thetaMax
-)
+rayleigh_debye = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
+rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 draine = DrainePhaseFunction(0.2, 1, nDiv, cosMin, cosMax)
 
 # %%
 
+rng = np.random.default_rng()
+mus = rng.random(nSamples)
 data = {
-    "uniform": np.array([]),
-    "rayleigh": np.array([]),
-    "henyey_greenstein": np.array([]),
-    "rayleigh_debye": np.array([]),
-    "rayleigh_debye_emc": np.array([]),
-    "draine": np.array([]),
+    "uniform": np.array([uniform.sample(mu) for mu in mus]),
+    "rayleigh": np.array([rayleigh.sample(mu) for mu in mus]),
+    "henyey_greenstein": np.array([henyey_greenstein.sample(mu) for mu in mus]),
+    "rayleigh_debye": np.array([rayleigh_debye.sample(mu) for mu in mus]),
+    "rayleigh_debye_emc": np.array([rayleigh_debye_emc.sample(mu) for mu in mus]),
+    "draine": np.array([draine.sample(mu) for mu in mus]),
 }
-
-for i in range(nSamples):
-    mu = np.random.uniform(0, 1)
-
-    xUniform = uniform.sample(mu)
-    xRayleigh = rayleigh.sample(mu)
-    xHenyeyGreenstein = henyey_greenstein.sample(mu)
-    xRayleighDebye = rayleigh_debye.sample(mu)
-    xRayleighDebyeEMC = rayleigh_debye_emc.sample(mu)
-    xDraine = draine.sample(mu)
-
-    data["uniform"] = np.append(data["uniform"], xUniform)
-    data["rayleigh"] = np.append(data["rayleigh"], xRayleigh)
-    data["henyey_greenstein"] = np.append(data["henyey_greenstein"], xHenyeyGreenstein)
-    data["rayleigh_debye"] = np.append(data["rayleigh_debye"], xRayleighDebye)
-    data["rayleigh_debye_emc"] = np.append(
-        data["rayleigh_debye_emc"], xRayleighDebyeEMC
-    )
-    data["draine"] = np.append(data["draine"], xDraine)
 
 # %%
 
@@ -92,13 +72,22 @@ for i, phase_func in enumerate(phase_functions):
     axes[i].set_ylabel("Density")
     axes[i].grid(True, alpha=0.3)
 
-# Remove the empty subplot
 axes[5].remove()
-
 plt.tight_layout()
 plt.show()
 
 # %%
 
-
-sample_phi =
+rng = Rng()
+g_u_c = uniform.get_anisotropy_factor(rng)
+g_r_c = rayleigh.get_anisotropy_factor(rng)
+g_hg_c = henyey_greenstein.get_anisotropy_factor(rng)
+g_rd_c = rayleigh_debye.get_anisotropy_factor(rng)
+g_rde_c = rayleigh_debye_emc.get_anisotropy_factor(rng)
+g_dr_c = draine.get_anisotropy_factor(rng)
+print(f"Uniform (C++): g={g_u_c}")
+print(f"Rayleigh (C++): g={g_r_c}", f"(esperado ≈ 0)")
+print(f"HG (C++): g={g_hg_c}", f"(esperado ≈ {anysotropy})")
+print(f"Rayleigh-Debye (C++): g={g_rd_c}")
+print(f"Rayleigh-Debye EMC (C++): g={g_rde_c}")
+print(f"Draine (C++): g={g_dr_c}")
