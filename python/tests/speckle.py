@@ -14,10 +14,13 @@ from luminis_mc import LogLevel, LaserSource
 from luminis_mc import run_simulation, set_log_level
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 set_log_level(LogLevel.debug)
 
 # %%
+
+start_time = time.time()
 
 # Global frame of reference
 n_global = [1, 0, 0]
@@ -30,7 +33,7 @@ radius = 0.46 # in micrometers
 mean_free_path = 2.8 # in micrometers
 wavelength = 0.525  # in micrometers
 inv_mfp = 1 / mean_free_path
-mu_absortion = 0.003 * inv_mfp
+mu_absortion = 0.0003 * inv_mfp
 mu_scattering = inv_mfp - mu_absortion
 # mean_free_path = 1 / (mu_absortion + mu_scattering)
 
@@ -46,7 +49,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1000000
+n_photons = 10000
 
 # Laser parameters
 origin = [0, 0, 0]
@@ -69,6 +72,8 @@ print("Anysotropic factor g:", phase_function.get_anisotropy_factor(rng))
 # %%
 
 run_simulation(config, medium, detector, laser_source)
+end_time = time.time()
+print(f"Simulation time: {end_time - start_time:.2f} seconds")
 
 # %%
 

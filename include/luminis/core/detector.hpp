@@ -14,6 +14,22 @@ struct AngularSpeckle {
   double theta_max{0.5*M_PI}, phi_max{2.0*M_PI};
 };
 
+struct SpatialIntensity {
+  std::vector<std::vector<double>> Ix, Iy, I;
+  int N_x{1125}, N_y{1125};
+  double x_max{10.0}, y_max{10.0};
+  double dx{2.0 * x_max / N_x}, dy{2.0 * y_max / N_y};
+
+  SpatialIntensity(int nx, int ny, double xmax, double ymax)
+    : N_x(nx), N_y(ny), x_max(xmax), y_max(ymax) {
+      Ix.resize(N_x, std::vector<double>(N_y, 0.0));
+      Iy.resize(N_x, std::vector<double>(N_y, 0.0));
+      I.resize(N_x, std::vector<double>(N_y, 0.0));
+      dx = 2.0 * x_max / N_x;
+      dy = 2.0 * y_max / N_y;
+    }
+};
+
 struct Detector {
   std::size_t hits{0};
   Vec3 origin{0, 0, 0};
@@ -29,6 +45,7 @@ struct Detector {
 
   std::vector<double> compute_events_histogram(const double min_theta, const double max_theta);
   AngularSpeckle compute_speckle_maps(const int n_theta=1125, const int n_phi=360);
+  SpatialIntensity compute_spatial_intensity(const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0);
 };
 
 } // namespace luminis::core

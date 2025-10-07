@@ -105,7 +105,7 @@ AngularSpeckle Detector::compute_speckle_maps(const int n_theta, const int n_phi
       const Vec3 m_det = m_polarization;
       const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
       const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
-      const std::complex<double> Enorm = En * dot(backward_normal, n_det) + Em * dot(backward_normal, m_det);
+      const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
 
       Ebin[it][ip][0] += En;
       Ebin[it][ip][1] += Em;
@@ -133,5 +133,59 @@ AngularSpeckle Detector::compute_speckle_maps(const int n_theta, const int n_phi
   result.N_phi   = n_phi;
   return result;
 }
+
+
+SpatialIntensity Detector::compute_spatial_intensity(const int n_x, const int n_y, const double x_max, const double y_max) {
+  SpatialIntensity result(n_x, n_y, x_max, y_max);
+
+  std::vector<std::vector<CVec2>> Ebin(n_x, std::vector<CVec2>(n_y));
+  std::vector<std::vector<std::complex<double>>> Enormal(n_x, std::vector<std::complex<double>>(n_y));
+
+  const Vec3 backward_normal = -1 * normal;
+
+  for (auto &ph : recorded_photons) {
+      // 1) calcula (x,y) como arriba → (ix, iy)
+      Vec3 r = ph.pos - origin;
+      const double x = dot(r, n_polarization);
+      const double y = dot(r, m_polarization);
+
+      int ix = std::min(int((x + x_max) / (2.0 * x_max) * n_x), n_x-1);
+      int iy = std::min(int((y + y_max) / (2.0 * y_max) * n_y), n_y-1);
+
+      if (ix < 0 || ix >= n_x || iy < 0 || iy >= n_y) {
+        continue;
+      }
+
+      // 2) fase de propagación:
+      std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
+      std::complex<double> En_local_photon = ph.polarization[0] * phase * std::sqrt(ph.weight);
+      std::complex<double> Em_local_photon = ph.polarization[1] * phase * std::sqrt(ph.weight);
+
+      // 3) suma coherente en la celda (ix, iy)
+      const Vec3 n_pho = ph.n;
+      const Vec3 m_pho = ph.m;
+      const Vec3 n_det = n_polarization;
+      const Vec3 m_det = m_polarization;
+      const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
+      const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
+      const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
+
+      Ebin[ix][iy][0] += En;
+      Ebin[ix][iy][1] += Em;
+      Enormal[ix][iy] += Enorm;
+  }
+
+  for (int ix=0; ix<n_x; ++ix) {
+    for (int iy=0; iy<n_y; ++iy) {
+      auto &C = Ebin[ix][iy];
+      result.Ix[ix][iy] = std::norm(C[0]);
+      result.Iy[ix][iy] = std::norm(C[1]);
+      result.I [ix][iy] = result.Ix[ix][iy] + result.Iy[ix][iy] + std::norm(Enormal[ix][iy]);
+    }
+  }
+
+  return result;
+}
+
 
 } // namespace luminis::core

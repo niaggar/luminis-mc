@@ -136,7 +136,11 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("compute_speckle_maps",
            &Detector::compute_speckle_maps, py::arg("n_theta") = 1125,
            py::arg("n_phi") = 360,
-           "Get the angular speckle distribution of photon hits");
+           "Get the angular speckle distribution of photon hits")
+      .def("compute_spatial_intensity", &Detector::compute_spatial_intensity,
+           py::arg("n_x") = 1125, py::arg("n_y") = 1125,
+           py::arg("x_max") = 10.0, py::arg("y_max") = 10.0,
+           "Get the spatial intensity distribution of photon hits");
 
   py::class_<AngularSpeckle>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularSpeckle::Ix)
@@ -146,6 +150,17 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readonly("N_phi", &AngularSpeckle::N_phi)
       .def_readonly("theta_max", &AngularSpeckle::theta_max)
       .def_readonly("phi_max", &AngularSpeckle::phi_max);
+
+  py::class_<SpatialIntensity>(m, "SpatialIntensity")
+      .def_readonly("Ix", &SpatialIntensity::Ix)
+      .def_readonly("Iy", &SpatialIntensity::Iy)
+      .def_readonly("I", &SpatialIntensity::I)
+      .def_readonly("N_x", &SpatialIntensity::N_x)
+      .def_readonly("N_y", &SpatialIntensity::N_y)
+      .def_readonly("x_max", &SpatialIntensity::x_max)
+      .def_readonly("y_max", &SpatialIntensity::y_max)
+      .def_readonly("dx", &SpatialIntensity::dx)
+      .def_readonly("dy", &SpatialIntensity::dy);
 
   // Medium bindings
   py::class_<Medium>(m, "Medium")
