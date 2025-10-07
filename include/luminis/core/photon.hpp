@@ -23,7 +23,7 @@ struct Photon {
   double velocity{299792458e-6}; // Speed of light in medium [mm/ns]
   double weight{1.0};
 
-  bool polarized{false};
+  bool polarized{true};
   CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
   Photon() = default;

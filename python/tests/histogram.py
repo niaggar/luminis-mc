@@ -71,7 +71,7 @@ print("Recorded photons:", len(detector.recorded_photons))
 
 min_hist_angle = 0
 max_hist_angle = 0.2
-hit_histogram_raw_data = detector.get_hit_histogram(min_hist_angle, max_hist_angle)
+hit_histogram_raw_data = detector.compute_events_histogram(min_hist_angle, max_hist_angle)
 event_counts = np.asarray(hit_histogram_raw_data, dtype=int)
 
 k = np.arange(len(event_counts))

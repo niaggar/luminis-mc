@@ -8,6 +8,12 @@ using namespace luminis::math;
 
 namespace luminis::core {
 
+struct AngularSpeckle {
+  std::vector<std::vector<double>> Ix, Iy, I;
+  int N_theta{1125}, N_phi{360};
+  double theta_max{0.5*M_PI}, phi_max{2.0*M_PI};
+};
+
 struct Detector {
   std::size_t hits{0};
   Vec3 origin{0, 0, 0};
@@ -21,8 +27,8 @@ struct Detector {
 
   void record_hit(Photon &photon);
 
-  std::vector<double> get_hit_histogram(const double min_theta, const double max_theta);
-  std::vector<std::vector<double>> get_hit_angular_distribution();
+  std::vector<double> compute_events_histogram(const double min_theta, const double max_theta);
+  AngularSpeckle compute_speckle_maps(const int n_theta=1125, const int n_phi=360);
 };
 
 } // namespace luminis::core

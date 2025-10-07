@@ -1,3 +1,5 @@
+#include <cmath>
+#include <complex>
 #include <luminis/core/detector.hpp>
 #include <luminis/core/photon.hpp>
 #include <luminis/math/vec.hpp>
@@ -40,7 +42,7 @@ void Detector::record_hit(Photon &photon) {
   recorded_photons.push_back(std::move(photon));
 }
 
-std::vector<double> Detector::get_hit_histogram(const double min_theta, const double max_theta) {
+std::vector<double> Detector::compute_events_histogram(const double min_theta, const double max_theta) {
   const Vec3 backward_normal = -1 * normal;
   int max_hit_number = 0;
   for (const auto &photon : recorded_photons) {
@@ -68,8 +70,68 @@ std::vector<double> Detector::get_hit_histogram(const double min_theta, const do
   return histogram;
 }
 
-std::vector<std::vector<double>> Detector::get_hit_angular_distribution() {
-  return std::vector<std::vector<double>>{};
+AngularSpeckle Detector::compute_speckle_maps(const int n_theta, const int n_phi) {
+  std::vector<std::vector<CVec2>> Ebin(n_theta, std::vector<CVec2>(n_phi));
+  std::vector<std::vector<std::complex<double>>> Enormal(n_theta, std::vector<std::complex<double>>(n_phi));
+
+  const Vec3 backward_normal = -1 * normal;
+
+  for (auto &ph : recorded_photons) {
+      // 1) calcula (theta, phi) como arriba → (it, ip)
+      Vec3 u = normalize(ph.dir);
+      const double cos_theta = dot(u, backward_normal) / (norm(u) * norm(backward_normal));
+      const double theta = std::acos(cos_theta);           // [0, pi]
+
+      Vec3 u_par = u - dot(u, normal)*normal;        // componente en el plano
+      double un = dot(u_par, n_polarization);
+      double um = dot(u_par, m_polarization);
+      double phi = std::atan2(um, un);               // (-pi, pi]
+      if (phi < 0) phi += 2.0*M_PI;                  // [0, 2pi)
+
+      int it = std::min(int(theta / (0.5*M_PI) * n_theta), n_theta-1);
+      int ip = std::min(int(phi / (2.0*M_PI) * n_phi), n_phi-1);
+
+
+
+      // 2) fase de propagación:
+      std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
+      std::complex<double> En_local_photon = ph.polarization[0] * phase * std::sqrt(ph.weight);
+      std::complex<double> Em_local_photon = ph.polarization[1] * phase * std::sqrt(ph.weight);
+
+      // 3) suma coherente en la celda (it, ip)
+      const Vec3 n_pho = ph.n;
+      const Vec3 m_pho = ph.m;
+      const Vec3 n_det = n_polarization;
+      const Vec3 m_det = m_polarization;
+      const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
+      const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
+      const std::complex<double> Enorm = En * dot(backward_normal, n_det) + Em * dot(backward_normal, m_det);
+
+      Ebin[it][ip][0] += En;
+      Ebin[it][ip][1] += Em;
+      Enormal[it][ip] += Enorm;
+  }
+
+  std::vector<std::vector<double>> Ix(n_theta, std::vector<double>(n_phi, 0.0));
+  std::vector<std::vector<double>> Iy(n_theta, std::vector<double>(n_phi, 0.0));
+  std::vector<std::vector<double>> I (n_theta, std::vector<double>(n_phi, 0.0));
+
+  for (int it=0; it<n_theta; ++it) {
+    for (int ip=0; ip<n_phi; ++ip) {
+      auto &C = Ebin[it][ip];
+      Ix[it][ip] = std::norm(C[0]);
+      Iy[it][ip] = std::norm(C[1]);
+      I [it][ip] = Ix[it][ip] + Iy[it][ip] + std::norm(Enormal[it][ip]);
+    }
+  }
+
+  AngularSpeckle result;
+  result.Ix = std::move(Ix);
+  result.Iy = std::move(Iy);
+  result.I  = std::move(I);
+  result.N_theta = n_theta;
+  result.N_phi   = n_phi;
+  return result;
 }
 
 } // namespace luminis::core

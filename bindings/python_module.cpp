@@ -130,12 +130,22 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readonly("recorded_photons", &Detector::recorded_photons)
       .def("record_hit", &Detector::record_hit, py::arg("photon"),
            "Record a photon hit on the detector")
-      .def("get_hit_histogram", &Detector::get_hit_histogram, py::arg("min_theta"),
+      .def("compute_events_histogram", &Detector::compute_events_histogram, py::arg("min_theta"),
            py::arg("max_theta"),
            "Get a histogram of photon hits based on the number of scattering events")
-      .def("get_hit_angular_distribution",
-           &Detector::get_hit_angular_distribution,
-           "Get the angular distribution of photon hits on the detector");
+      .def("compute_speckle_maps",
+           &Detector::compute_speckle_maps, py::arg("n_theta") = 1125,
+           py::arg("n_phi") = 360,
+           "Get the angular speckle distribution of photon hits");
+
+  py::class_<AngularSpeckle>(m, "AngularSpeckle")
+      .def_readonly("Ix", &AngularSpeckle::Ix)
+      .def_readonly("Iy", &AngularSpeckle::Iy)
+      .def_readonly("I", &AngularSpeckle::I)
+      .def_readonly("N_theta", &AngularSpeckle::N_theta)
+      .def_readonly("N_phi", &AngularSpeckle::N_phi)
+      .def_readonly("theta_max", &AngularSpeckle::theta_max)
+      .def_readonly("phi_max", &AngularSpeckle::phi_max);
 
   // Medium bindings
   py::class_<Medium>(m, "Medium")
