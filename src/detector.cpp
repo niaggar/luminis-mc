@@ -5,8 +5,8 @@
 
 namespace luminis::core {
 
-Detector::Detector(const Vec3 &o, const Vec3 &n)
-    : origin(o), normal(normalize(n)) {}
+Detector::Detector(const Vec3 o, const Vec3 normal, const Vec3 n, const Vec3 m)
+    : origin(o), normal(normal), n_polarization(n), m_polarization(m) {}
 
 void Detector::record_hit(Photon &photon) {
   const Vec3 xn = photon.prev_pos;
@@ -31,7 +31,7 @@ void Detector::record_hit(Photon &photon) {
     photon.opticalpath -= correction_distance;
   }
 
-  LLOG_DEBUG("Photon hit detector at position: {}", hit_point);
+  // LLOG_DEBUG("Photon hit detector at position: {}", hit_point);
 
   hits += 1;
   photon.alive = false;

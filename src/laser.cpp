@@ -15,10 +15,8 @@ math::Vec3 uniform_distribution(Rng &rng, const math::Vec3 &center, const double
   };
 }
 
-math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center,
-                                 const double sigma) {
-  return {rng.normal(center[0], sigma), rng.normal(center[1], sigma),
-          center[2]};
+math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center, const double sigma) {
+  return {rng.normal(center[0], sigma), rng.normal(center[1], sigma), center[2]};
 }
 
 Laser::Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
@@ -28,6 +26,11 @@ Laser::Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
       local_m(normalize(local_m)), local_n(normalize(local_n)),
       polarization(polarization), wavelength(wavelength), sigma(sigma),
       source_type(source_type) {}
+
+// TODO: Implement time sampling based on pulse duration and repetition rate
+double Laser::sample_emission_time(Rng &rng) const {
+
+}
 
 Photon Laser::emit_photon(Rng &rng) const {
   Vec3 pos;

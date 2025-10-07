@@ -13,6 +13,8 @@ void run_simulation(SimConfig &config, Medium &medium, Detector &detector, Laser
 
   for (std::size_t i = 0; i < config.n_photons; ++i) {
     Photon photon = laser.emit_photon(rng);
+    photon.velocity = medium.light_speed_in_medium();
+
     run_photon(photon, medium, detector, rng);
   }
 }
@@ -98,9 +100,9 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng) {
     }
   }
 
-  LLOG_DEBUG(
-      "Photon terminated after {} events, final weight: {}, optical path: {}",
-      photon.events, photon.weight, photon.opticalpath);
+  // LLOG_DEBUG(
+  //     "Photon terminated after {} events, final weight: {}, optical path: {}",
+  //     photon.events, photon.weight, photon.opticalpath);
 }
 
 } // namespace luminis::core

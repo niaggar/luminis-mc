@@ -118,7 +118,9 @@ PYBIND11_MODULE(luminis_mc, m) {
 
   // Detector bindings
   py::class_<Detector>(m, "Detector")
-      .def(py::init<Vec3, Vec3>(), py::arg("origin"), py::arg("normal"))
+      .def(py::init<Vec3, Vec3, Vec3, Vec3>(), py::arg("origin"),
+           py::arg("normal"), py::arg("n_polarization"),
+           py::arg("m_polarization"))
       .def_readonly("hits", &Detector::hits)
       .def_readonly("origin", &Detector::origin)
       .def_readonly("normal", &Detector::normal)
@@ -163,6 +165,20 @@ PYBIND11_MODULE(luminis_mc, m) {
            "Record absorption from a photon at its current position")
       .def("get_absorption_image", &Absorption::get_absorption_image, py::arg("n_photons"),
            "Get the 2D absorption image");
+
+  py::class_<AbsorptionTimeDependent>(m, "AbsortionTimeDependent")
+      .def(py::init<double, double, double, double, double, double>(), py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"), py::arg("d_t"), py::arg("t_max"))
+      .def_readonly("radius", &AbsorptionTimeDependent::radius)
+      .def_readonly("depth", &AbsorptionTimeDependent::depth)
+      .def_readonly("d_r", &AbsorptionTimeDependent::d_r)
+      .def_readonly("d_z", &AbsorptionTimeDependent::d_z)
+      .def_readonly("d_t", &AbsorptionTimeDependent::d_t)
+      .def_readonly("time_slices", &AbsorptionTimeDependent::time_slices)
+      .def("record_absorption", &AbsorptionTimeDependent::record_absorption,
+           py::arg("photon"), py::arg("d_weight"),
+           "Record absorption from a photon at its current position and time")
+      .def("get_absorption_image", &AbsorptionTimeDependent::get_absorption_image, py::arg("n_photons"), py::arg("time_index"),
+           "Get the 2D absorption image for a specific time slice");
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")

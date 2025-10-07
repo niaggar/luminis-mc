@@ -19,14 +19,15 @@ struct Photon {
   double wavelength_nm{0.0};
   double k{0.0};
   double opticalpath{0.0};
+  double launch_time{0.0};
+  double velocity{299792458e-6}; // Speed of light in medium [mm/ns]
   double weight{1.0};
 
   bool polarized{false};
   CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
   Photon() = default;
-  Photon(const Vec3 &p, const Vec3 &d, const Vec3 &m, const Vec3 &n,
-         const double wl);
+  Photon(const Vec3 &p, const Vec3 &d, const Vec3 &m, const Vec3 &n, const double wl);
 
   void set_polarization(const CVec2 &pol);
   std::array<double, 4> get_stokes_parameters() const;

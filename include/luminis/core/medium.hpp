@@ -10,12 +10,15 @@ using namespace luminis::sample;
 namespace luminis::core {
 
 struct Medium {
-  Absorption *absorption{nullptr};
+  AbsorptionTimeDependent *absorption{nullptr};
   PhaseFunction *phase_function{nullptr};
 
   double mu_absorption{0.0}; // Absorption coefficient [1/mm]
   double mu_scattering{0.0}; // Scattering coefficient [1/mm]
   double mu_attenuation{0.0}; // Attenuation coefficient [1/mm]
+
+  const double light_speed{299792458e-6}; // Speed of light in medium [mm/ns]
+  double refractive_index{1.0};     // Refractive index of the medium
 
   virtual ~Medium() = default;
   Medium(double absorption, double scattering, PhaseFunction *phase_func);
@@ -23,8 +26,8 @@ struct Medium {
   virtual double sample_free_path(Rng &rng) const = 0;
   virtual double sample_azimuthal_angle(Rng &rng) const;
   virtual double sample_scattering_angle(Rng &rng) const = 0;
-  virtual CVec2 scattering_matrix(const double theta, const double phi,
-                                  const double k) const = 0;
+  virtual CVec2 scattering_matrix(const double theta, const double phi, const double k) const = 0;
+  double light_speed_in_medium() const;
 };
 
 struct SimpleMedium : public Medium {

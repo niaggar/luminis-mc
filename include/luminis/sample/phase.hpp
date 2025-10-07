@@ -17,6 +17,7 @@ public:
   virtual double sample_phi_conditional(double theta, CVec2& S, CVec2& E, double k, Rng& rng);
   virtual double sample_cos(double x) = 0;
   virtual double sample_theta(double x) = 0;
+  double get_g();
 };
 
 class UniformPhaseFunction : public PhaseFunction {

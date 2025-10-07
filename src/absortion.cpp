@@ -37,7 +37,6 @@ void Absorption::record_absorption(const Photon &photon, double d_weight) {
   // absorption_values[i_r][i_z] += 1.0;
   absorption_values[i_r][i_z] += d_weight;
 }
-
 std::vector<std::vector<double>> Absorption::get_absorption_image(const int n_photons) const {
   const int n_r = absorption_values.size();
   const int len_r = (n_r * 2);
@@ -58,6 +57,45 @@ std::vector<std::vector<double>> Absorption::get_absorption_image(const int n_ph
     }
   }
   return image;
+}
+
+AbsorptionTimeDependent::AbsorptionTimeDependent(double r, double z, double dr, double dz, double dt, double t_max) {
+  radius = r;
+  depth = z;
+  d_r = dr;
+  d_z = dz;
+  d_t = dt;
+
+  if (d_t <= 0.0) { // sin tiempo: un solo slice
+    time_slices.emplace_back(r, z, dr, dz);
+    return;
+  }
+  if (t_max > 0.0) {
+    const std::size_t n = static_cast<std::size_t>(std::floor(t_max/d_t)) + 1;
+    time_slices.assign(n, Absorption(r, z, dr, dz));
+  } else {
+    time_slices.clear();
+  }
+}
+void AbsorptionTimeDependent::record_absorption(const Photon &photon, double d_weight) {
+  if (d_t == 0) {
+    time_slices[0].record_absorption(photon, d_weight);
+    return;
+  }
+
+  const double time = photon.launch_time + (photon.opticalpath / photon.velocity); // in ns
+  const std::size_t k = static_cast<std::size_t>(std::floor(time / d_t));
+  if (k >= time_slices.size()) {
+    time_slices.resize(k + 1, Absorption(radius, depth, d_r, d_z));
+  }
+  time_slices[k].record_absorption(photon, d_weight);
+}
+std::vector<std::vector<double>> AbsorptionTimeDependent::get_absorption_image(const int n_photons, const int time_index) const {
+  if (time_index < 0 || time_index >= time_slices.size()) {
+    LLOG_ERROR("Time index out of bounds: {}", time_index);
+    return {};
+  }
+  return time_slices[time_index].get_absorption_image(n_photons);
 }
 
 } // namespace luminis::core
