@@ -25,6 +25,7 @@ struct Medium {
 
   virtual double sample_free_path(Rng &rng) const = 0;
   virtual double sample_azimuthal_angle(Rng &rng) const;
+  virtual double sample_conditional_azimuthal_angle(Rng &rng, CVec2& S, CVec2& E, double k, double theta) const;
   virtual double sample_scattering_angle(Rng &rng) const = 0;
   virtual CVec2 scattering_matrix(const double theta, const double phi, const double k) const = 0;
   double light_speed_in_medium() const;

@@ -18,6 +18,13 @@ double Medium::sample_azimuthal_angle(Rng &rng) const {
   LLOG_ERROR("SimpleMedium::sample_azimuthal_angle: Phase function is not defined!");
   std::exit(EXIT_FAILURE);
 }
+double Medium::sample_conditional_azimuthal_angle(Rng &rng, CVec2& S, CVec2& E, double k, double theta) const {
+  if (phase_function) {
+    return phase_function->sample_phi_conditional(theta, S, E, k, rng);
+  }
+  LLOG_ERROR("SimpleMedium::sample_conditional_azimuthal_angle: Phase function is not defined!");
+  std::exit(EXIT_FAILURE);
+}
 double Medium::light_speed_in_medium() const {
   return light_speed / refractive_index;
 }

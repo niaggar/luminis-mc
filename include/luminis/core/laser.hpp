@@ -27,7 +27,7 @@ struct Laser {
   Vec3 direction;
   Vec3 local_m;
   Vec3 local_n;
-  Vec2 polarization;
+  CVec2 polarization;
 
   double wavelength;
   double sigma;
@@ -40,7 +40,7 @@ struct Laser {
 
 
   Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
-        Vec2 polarization, double wavelength, double sigma,
+        CVec2 polarization, double wavelength, double sigma,
         LaserSource source_type);
 
   void set_temporal_profile(TemporalProfile profile, double pulse_duration = 0.0, double repetition_rate = 0.0, double time_offset = 0.0) {

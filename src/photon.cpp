@@ -23,10 +23,10 @@ namespace luminis::core {
       this->k = 2.0 * M_PI / wavelength_nm;
     }
 
-    void Photon::set_polarization(const CVec2 &pol) {
+    void Photon::set_polarization(std::complex<double> pol1, std::complex<double> pol2) {
       this->polarized = true;
-      this->polarization[0] = pol[0];
-      this->polarization[1] = pol[1];
+      this->polarization[0] = pol1;
+      this->polarization[1] = pol2;
     }
 
     std::array<double, 4> Photon::get_stokes_parameters() const {

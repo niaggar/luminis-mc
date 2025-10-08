@@ -29,7 +29,7 @@ struct Photon {
   Photon() = default;
   Photon(const Vec3 &p, const Vec3 &d, const Vec3 &m, const Vec3 &n, const double wl);
 
-  void set_polarization(const CVec2 &pol);
+  void set_polarization(std::complex<double> pol1, std::complex<double> pol2);
   std::array<double, 4> get_stokes_parameters() const;
 };
 

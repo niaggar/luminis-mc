@@ -55,7 +55,7 @@ n_photons = 10000
 origin = [0, 0, 0]
 polarization = [1, 0]
 laser_radius = 0.1 * mean_free_path
-laser_type = LaserSource.Point
+laser_type = LaserSource.Gaussian
 
 # %%
 

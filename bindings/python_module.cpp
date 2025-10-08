@@ -98,8 +98,8 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readwrite("polarized", &Photon::polarized)
       .def_readwrite("polarization", &Photon::polarization)
       .def_readonly("k", &Photon::k)
-      .def("set_polarization", &Photon::set_polarization, py::arg("pol"),
-           "Set the polarization state of the photon")
+      .def("set_polarization", &Photon::set_polarization, py::arg("pol1"),
+           py::arg("pol2"), "Set the polarization state of the photon")
       .def("get_stokes_parameters", &Photon::get_stokes_parameters,
            "Get the Stokes parameters of the photon");
 
@@ -112,7 +112,7 @@ PYBIND11_MODULE(luminis_mc, m) {
 
   py::class_<Laser>(m, "Laser")
       .def(
-          py::init<Vec3, Vec3, Vec3, Vec3, Vec2, double, double, LaserSource>(),
+          py::init<Vec3, Vec3, Vec3, Vec3, CVec2, double, double, LaserSource>(),
           py::arg("position"), py::arg("direction"), py::arg("local_m"),
           py::arg("local_n"), py::arg("polarization"), py::arg("wavelength"),
           py::arg("sigma"), py::arg("source_type"))
@@ -133,23 +133,27 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("compute_events_histogram", &Detector::compute_events_histogram, py::arg("min_theta"),
            py::arg("max_theta"),
            "Get a histogram of photon hits based on the number of scattering events")
-      .def("compute_speckle_maps",
-           &Detector::compute_speckle_maps, py::arg("n_theta") = 1125,
+      .def("compute_speckle",
+           &Detector::compute_speckle, py::arg("n_theta") = 1125,
            py::arg("n_phi") = 360,
            "Get the angular speckle distribution of photon hits")
-      .def("compute_spatial_intensity", &Detector::compute_spatial_intensity,
+      .def("compute_spatial_intensity", &Detector::compute_spatial_intensity, py::arg("max_theta"),
            py::arg("n_x") = 1125, py::arg("n_y") = 1125,
            py::arg("x_max") = 10.0, py::arg("y_max") = 10.0,
-           "Get the spatial intensity distribution of photon hits");
+           "Get the spatial intensity distribution of photon hits")
+      .def("compute_angular_intensity", &Detector::compute_angular_intensity, py::arg("max_theta"),
+           py::arg("max_phi"), py::arg("n_theta") = 360,
+           py::arg("n_phi") = 360,
+           "Get the angular intensity distribution of photon hits");
 
-  py::class_<AngularSpeckle>(m, "AngularSpeckle")
-      .def_readonly("Ix", &AngularSpeckle::Ix)
-      .def_readonly("Iy", &AngularSpeckle::Iy)
-      .def_readonly("I", &AngularSpeckle::I)
-      .def_readonly("N_theta", &AngularSpeckle::N_theta)
-      .def_readonly("N_phi", &AngularSpeckle::N_phi)
-      .def_readonly("theta_max", &AngularSpeckle::theta_max)
-      .def_readonly("phi_max", &AngularSpeckle::phi_max);
+  py::class_<AngularIntensity>(m, "AngularSpeckle")
+      .def_readonly("Ix", &AngularIntensity::Ix)
+      .def_readonly("Iy", &AngularIntensity::Iy)
+      .def_readonly("I", &AngularIntensity::I)
+      .def_readonly("N_theta", &AngularIntensity::N_theta)
+      .def_readonly("N_phi", &AngularIntensity::N_phi)
+      .def_readonly("theta_max", &AngularIntensity::theta_max)
+      .def_readonly("phi_max", &AngularIntensity::phi_max);
 
   py::class_<SpatialIntensity>(m, "SpatialIntensity")
       .def_readonly("Ix", &SpatialIntensity::Ix)

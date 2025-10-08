@@ -8,9 +8,9 @@ using namespace luminis::math;
 
 namespace luminis::core {
 
-struct AngularSpeckle {
+struct AngularIntensity {
   std::vector<std::vector<double>> Ix, Iy, I;
-  int N_theta{1125}, N_phi{360};
+  int N_theta{360}, N_phi{360};
   double theta_max{0.5*M_PI}, phi_max{2.0*M_PI};
 };
 
@@ -44,8 +44,9 @@ struct Detector {
   void record_hit(Photon &photon);
 
   std::vector<double> compute_events_histogram(const double min_theta, const double max_theta);
-  AngularSpeckle compute_speckle_maps(const int n_theta=1125, const int n_phi=360);
-  SpatialIntensity compute_spatial_intensity(const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0);
+  AngularIntensity compute_speckle(const int n_theta=1125, const int n_phi=360);
+  SpatialIntensity compute_spatial_intensity(const double max_theta, const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0);
+  AngularIntensity compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta=1125, const int n_phi=360);
 };
 
 } // namespace luminis::core

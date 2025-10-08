@@ -36,14 +36,18 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng) {
 
     // Scatter the photon
     const double theta = medium.sample_scattering_angle(rng);
-    const double phi = medium.sample_azimuthal_angle(rng);
+
+    // Get scattering matrix
+    CVec2 S = medium.scattering_matrix(theta, 0, photon.k);
+
+    // const double phi = medium.sample_azimuthal_angle(rng);
+    const double phi = medium.sample_conditional_azimuthal_angle(rng, S, photon.polarization, photon.k, theta);
     const double cos_theta = std::cos(theta);
     const double sin_theta = std::sin(theta);
     const double cos_phi = std::cos(phi);
     const double sin_phi = std::sin(phi);
 
-    // Get scattering matrix
-    CVec2 S = medium.scattering_matrix(theta, phi, photon.k);
+
 
     // Update photon polarization if needed
     if (photon.polarized) {

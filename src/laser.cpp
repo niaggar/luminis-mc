@@ -1,3 +1,4 @@
+#include "luminis/log/logger.hpp"
 #include <cmath>
 #include <luminis/core/laser.hpp>
 #include <luminis/math/rng.hpp>
@@ -20,16 +21,19 @@ math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center, const doubl
 }
 
 Laser::Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
-             Vec2 polarization, double wavelength, double sigma,
+             CVec2 polarization, double wavelength, double sigma,
              LaserSource source_type)
     : position(normalize(position)), direction(normalize(direction)),
       local_m(normalize(local_m)), local_n(normalize(local_n)),
       polarization(polarization), wavelength(wavelength), sigma(sigma),
-      source_type(source_type) {}
+      source_type(source_type) {
+        LLOG_DEBUG("Polarization1 real: {}, imag: {}", polarization[0].real(), polarization[0].imag());
+        LLOG_DEBUG("Polarization2 real: {}, imag: {}", polarization[1].real(), polarization[1].imag());
+      }
 
 // TODO: Implement time sampling based on pulse duration and repetition rate
 double Laser::sample_emission_time(Rng &rng) const {
-
+  return 0.0;
 }
 
 Photon Laser::emit_photon(Rng &rng) const {
@@ -46,8 +50,9 @@ Photon Laser::emit_photon(Rng &rng) const {
     pos = gaussian_distribution(rng, position, sigma);
     break;
   }
-
-  return Photon(pos, direction, local_m, local_n, wavelength);
+  Photon photon = Photon(pos, direction, local_m, local_n, wavelength);
+  photon.set_polarization(polarization[0], polarization[1]);
+  return photon;
 }
 
 } // namespace luminis::core
