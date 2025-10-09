@@ -1,0 +1,8 @@
+metropolis_hastings_test:
+    mkdir -p build && clang++ -std=c++17 -I include apps/metropolis_hastings_test.cpp src/meanfreepath.cpp src/rng.cpp -o build/metropolis_hastings_test
+
+clean:
+    rm -rf build
+
+.PHONY: 
+    clean

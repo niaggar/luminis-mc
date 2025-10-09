@@ -18,6 +18,7 @@ add_library(luminis
     src/simulation.cpp
     src/table.cpp
     src/absortion.cpp
+    src/meanfreepath.cpp
 )
 target_include_directories(luminis PUBLIC include)
 set_target_properties(luminis PROPERTIES POSITION_INDEPENDENT_CODE ON)

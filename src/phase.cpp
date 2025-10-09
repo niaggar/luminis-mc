@@ -108,7 +108,7 @@ RayleighDebyePhaseFunction::RayleighDebyePhaseFunction(double wavelength, double
   if (wavelength <= 0.0) {
     LLOG_WARN("RayleighDebyePhaseFunction: wavelength must be positive, got {}", wavelength);
   }
-
+  
   this->radius = radius;
   this->wavelength = wavelength;
   this->k = 2 * M_PI / wavelength;

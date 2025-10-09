@@ -2,6 +2,7 @@
 #include <complex>
 #include <luminis/core/medium.hpp>
 #include <luminis/log/logger.hpp>
+#include <luminis/sample/meanfreepath.hpp>
 
 namespace luminis::core {
 
@@ -42,6 +43,7 @@ SimpleMedium::SimpleMedium(double absorption, double scattering, PhaseFunction *
 double SimpleMedium::sample_free_path(Rng &rng) const {
   return -1 * mean_free_path * std::log(rng.uniform());
 }
+
 double SimpleMedium::sample_scattering_angle(Rng &rng) const {
   if (phase_function) {
     return phase_function->sample_theta(rng.uniform());

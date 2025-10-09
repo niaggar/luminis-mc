@@ -7,6 +7,7 @@
 #include <luminis/log/logger.hpp>
 #include <luminis/math/rng.hpp>
 #include <luminis/sample/phase.hpp>
+#include <luminis/sample/meanfreepath.hpp>
 
 #include <pybind11/complex.h>
 #include <pybind11/functional.h>
@@ -249,4 +250,36 @@ PYBIND11_MODULE(luminis_mc, m) {
   m.def(
       "set_log_level", [](Level level) { Logger::instance().set_level(level); },
       py::arg("level"), "Set the logging level for the luminis-mc module");
+  
+
+  // meanfreepath bindings
+
+  // Bind TargetDistribution base class
+    py::class_<TargetDistribution>(m, "TargetDistribution")
+        .def("evaluate", &TargetDistribution::evaluate, py::arg("x"),
+             "Evaluate the target distribution at x");
+             
+    py::class_<metropolis_hastings>(m, "MetropolisHastings")
+        .def(py::init<TargetDistribution *>(), py::arg("target_distribution"),
+             "Initialize with a target distribution function pointer")
+        .def("accept_reject", &metropolis_hastings::accept_reject,
+             py::arg("current_state"), py::arg("target_distribution_current_state"),
+             py::arg("proposal_stddev"),
+             "Perform the accept-reject step of the Metropolis-Hastings algorithm")
+        .def("sample", &metropolis_hastings::sample, py::arg("num_samples"),
+             py::arg("initial_value"), py::arg("proposal_stddev"),
+             "Generate samples using the Metropolis-Hastings algorithm")
+        .def_readonly("MCMC_samples", &metropolis_hastings::MCMC_samples,
+             "Get the generated MCMC samples");
+        
+        
+     py::class_<ExpDistribution, TargetDistribution>(m, "ExpDistribution")
+        .def(py::init<double>(), py::arg("lambda"),
+             "Initialize the exponential distribution with rate parameter lambda")
+        .def("evaluate", &ExpDistribution::evaluate, py::arg("x"),
+             "Evaluate the exponential distribution at x");
+
+        
+
+
 }

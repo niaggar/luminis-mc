@@ -3,6 +3,7 @@
 #include <luminis/math/rng.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/sample/phase.hpp>
+#include <luminis/sample/meanfreepath.hpp>
 
 using namespace luminis::math;
 using namespace luminis::sample;
