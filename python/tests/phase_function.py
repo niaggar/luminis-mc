@@ -22,72 +22,117 @@ cosMax = 1.0
 thetaMin = 0.00001
 thetaMax = np.pi
 
-nDiv = 1000
-nSamples = 100000
+nDiv = 10000
+nSamples = 1000000
 
 anysotropy = -0.4
-radius = 0.1
-wavelength = 0.5
+radius = np.array([0.1, 0.5, 0.7, 1.0, 1.5, 1.7, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 9, 15, 20])
+wavelength = 1
 
 # %%
 
-uniform = UniformPhaseFunction()
-rayleigh = RayleighPhaseFunction(nDiv, cosMin, cosMax)
-henyey_greenstein = HenyeyGreensteinPhaseFunction(anysotropy)
-rayleigh_debye = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
-rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
-draine = DrainePhaseFunction(0.2, 1, nDiv, cosMin, cosMax)
+# rayleigh_debye = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
+# rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 
 # %%
 
 rng = np.random.default_rng()
 mus = rng.random(nSamples)
-data = {
-    "uniform": np.array([uniform.sample(mu) for mu in mus]),
-    "rayleigh": np.array([rayleigh.sample(mu) for mu in mus]),
-    "henyey_greenstein": np.array([henyey_greenstein.sample(mu) for mu in mus]),
-    "rayleigh_debye": np.array([rayleigh_debye.sample(mu) for mu in mus]),
-    "rayleigh_debye_emc": np.array([rayleigh_debye_emc.sample(mu) for mu in mus]),
-    "draine": np.array([draine.sample(mu) for mu in mus]),
-}
 
-# %%
+# for r in radius:
+#     rayleigh_debye = RayleighDebyePhaseFunction(wavelength, r, nDiv, thetaMin, thetaMax)
+#     rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(wavelength, r, nDiv, thetaMin, thetaMax)
 
-fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-axes = axes.flatten()
+#     theta = np.array([rayleigh_debye.sample_theta(x) for x in mus])
+#     theta_emc = np.array([rayleigh_debye_emc.sample_theta(x) for x in mus])
 
-phase_functions = [
-    "uniform",
-    "rayleigh",
-    "henyey_greenstein",
-    "rayleigh_debye",
-    "rayleigh_debye_emc",
-    "draine",
-]
+#     plt.hist(theta, bins=100, density=True, alpha=0.5, label=f'RD', log=True)
+#     plt.hist(theta_emc, bins=100, density=True, alpha=0.5, label=f'RD Polarized', log=True)
+#     plt.xlabel('θ')
+#     plt.ylabel('Probability Density')
+#     plt.title(f'Phase Function Sampling (a={r})')
+#     plt.legend()
+#     plt.grid()
+#     plt.show()
 
-for i, phase_func in enumerate(phase_functions):
-    axes[i].hist(data[phase_func], bins=50, alpha=0.7, density=True)
-    axes[i].set_title(f"{phase_func.replace('_', ' ').title()} Phase Function")
-    axes[i].set_xlabel("Sampled Value")
-    axes[i].set_ylabel("Density")
-    axes[i].grid(True, alpha=0.3)
 
-axes[5].remove()
-plt.tight_layout()
+
+
+
+
+
+
+
+
+def kl_divergence_from_samples(theta_P, theta_Q, nbins=720, tmin=1e-6, tmax=np.pi):
+    """
+    Compute D_KL(P||Q) from samples of theta for two phase functions.
+    Histograms are built on the same bins over [tmin, tmax].
+    """
+    bins = np.linspace(tmin, tmax, nbins + 1)
+    p, _ = np.histogram(theta_P, bins=bins, density=True)
+    q, _ = np.histogram(theta_Q, bins=bins, density=True)
+
+    # convert density -> discrete probs over bins (density * bin_width) and renormalize
+    bw = np.diff(bins)
+    p = p * bw
+    q = q * bw
+    p = p / p.sum()
+    q = q / q.sum()
+
+    # epsilon to avoid log(0) / division by zero
+    eps = 1e-12
+    p = np.clip(p, eps, 1.0)
+    q = np.clip(q, eps, 1.0)
+
+    return float(np.sum(p * np.log(p / q)))
+
+def js_divergence_from_samples(theta_P, theta_Q, nbins=720, tmin=1e-6, tmax=np.pi):
+    """Optional: symmetric Jensen–Shannon divergence for reference."""
+    bins = np.linspace(tmin, tmax, nbins + 1)
+    bw = np.diff(bins)
+    p, _ = np.histogram(theta_P, bins=bins, density=True); p = p * bw; p /= p.sum()
+    q, _ = np.histogram(theta_Q, bins=bins, density=True); q = q * bw; q /= q.sum()
+    eps = 1e-12
+    p = np.clip(p, eps, 1.0)
+    q = np.clip(q, eps, 1.0)
+    m = 0.5 * (p + q)
+    return 0.5 * (np.sum(p * np.log(p / m)) + np.sum(q * np.log(q / m)))
+
+# Reusa los mismos números uniformes para reducir la varianza
+rng = np.random.default_rng(12345)
+mus = rng.random(nSamples)
+
+results = []
+for r in radius:
+    rd = RayleighDebyePhaseFunction(wavelength, r, nDiv, thetaMin, thetaMax)
+    rdemc = RayleighDebyeEMCPhaseFunction(wavelength, r, nDiv, thetaMin, thetaMax)
+
+    theta_rd    = np.array([rd.sample_theta(x)    for x in mus])
+    theta_rdemc = np.array([rdemc.sample_theta(x) for x in mus])
+
+    dkl = kl_divergence_from_samples(theta_rd, theta_rdemc, nbins=720,
+                                     tmin=thetaMin, tmax=thetaMax)
+    # opcional: también el inverso y el JS
+    dkl_rev = kl_divergence_from_samples(theta_rdemc, theta_rd, nbins=720,
+                                         tmin=thetaMin, tmax=thetaMax)
+    djs = js_divergence_from_samples(theta_rd, theta_rdemc, nbins=720,
+                                     tmin=thetaMin, tmax=thetaMax)
+
+    results.append((r, dkl, dkl_rev, djs))
+    print(f"a={r:>4.1f}:  D_KL(RD || RD-EMC) = {dkl:.6e}   "
+          f"D_KL(RD-EMC || RD) = {dkl_rev:.6e}   JS = {djs:.6e}")
+
+
+import matplotlib.pyplot as plt
+
+a_vals, dkl, dkl_rev, djs = np.array(results).T
+plt.semilogy(a_vals, dkl, 'o-', label=r'D$_{KL}$(RD‖RD–P)')
+plt.semilogy(a_vals, dkl_rev, 's--', label=r'D$_{KL}$(RD–P‖RD)')
+# plt.semilogy(a_vals, djs, 'd-.', label='Jensen–Shannon')
+plt.xlabel('Parameter x')
+plt.ylabel('Divergence')
+# plt.title('Divergence between Rayleigh–Debye and RD–P phase functions')
+plt.legend()
+plt.grid(True, which='both', ls=':')
 plt.show()
-
-# %%
-
-rng = Rng()
-g_u_c = uniform.get_anisotropy_factor(rng)
-g_r_c = rayleigh.get_anisotropy_factor(rng)
-g_hg_c = henyey_greenstein.get_anisotropy_factor(rng)
-g_rd_c = rayleigh_debye.get_anisotropy_factor(rng)
-g_rde_c = rayleigh_debye_emc.get_anisotropy_factor(rng)
-g_dr_c = draine.get_anisotropy_factor(rng)
-print(f"Uniform (C++): g={g_u_c}")
-print(f"Rayleigh (C++): g={g_r_c}", f"(esperado ≈ 0)")
-print(f"HG (C++): g={g_hg_c}", f"(esperado ≈ {anysotropy})")
-print(f"Rayleigh-Debye (C++): g={g_rd_c}")
-print(f"Rayleigh-Debye EMC (C++): g={g_rde_c}")
-print(f"Draine (C++): g={g_dr_c}")

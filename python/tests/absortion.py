@@ -30,7 +30,7 @@ radius = 1 # in micrometers
 mean_free_path = 2.8 # in micrometers
 wavelength = 1  # in micrometers
 inv_mfp = 1 / mean_free_path
-mu_absortion = 0.003 * inv_mfp
+mu_absortion = 0.2 * inv_mfp
 mu_scattering = inv_mfp - mu_absortion
 
 print(f"Mean free path: {mean_free_path}")
@@ -51,13 +51,14 @@ dz = mean_free_path / 5
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1000000
+n_photons = 100000
 
 # Laser parameters
 origin = [0, 0, 0]
 polarization = [1, 0]
 laser_radius = 0.1 * mean_free_path
 laser_type = LaserSource.Point
+
 # %%
 
 # Initialize components
@@ -65,9 +66,13 @@ config = SimConfig(n_photons=n_photons)
 laser_source = Laser(origin, s_global, n_global, m_global, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(origin, s_global, n_global, m_global)
 phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
+absorption = AbsortionTimeDependent(r_size, z_size, dr, dz, dt, max_time)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
+medium.absorption = absorption
+
 rng = Rng()
 print("Anystropy g:", phase_function.get_anisotropy_factor(rng))
+
 # %%
 
 run_simulation(config, medium, detector, laser_source)
@@ -76,18 +81,17 @@ run_simulation(config, medium, detector, laser_source)
 
 print("Recorded photons:", len(detector.recorded_photons))
 
-min_hist_angle = 0
-max_hist_angle_list = [0.2, 1, 10, 30, 45, 180]
+x_min, x_max = 0.0, r_size
+y_min, y_max = 0.0, z_size
 
-for max_hist_angle in max_hist_angle_list:
-    hit_histogram_raw_data = detector.compute_events_histogram(min_hist_angle, max_hist_angle)
-    event_counts = np.asarray(hit_histogram_raw_data, dtype=int)
-    k = np.arange(len(event_counts))
-    plt.figure(figsize=(7,4))
-    plt.bar(k, event_counts, width=0.9)
-    plt.title(f"Histogram of detected photons (0 to {max_hist_angle} degrees)")
-    plt.xlabel("Event bin")
-    plt.ylabel("Number of photons")
-    plt.xlim(0, 1000)
+for i in range(len(medium.absorption.time_slices)):
+    abs_image = medium.absorption.get_absorption_image(n_photons, i)
+    extent = [0, z_size / mean_free_path, -r_size / mean_free_path, r_size / mean_free_path]
+    plt.figure(figsize=(7, 7))
+    plt.imshow(abs_image, cmap="viridis", origin="lower", extent=extent, aspect='equal')
+    cbar = plt.colorbar(label="Absorption Values")
+    plt.xlabel("z  [1/l]")
+    plt.ylabel("x  [1/l]")
+    # plt.title(f"Absorption Values Grid - Time Slice {i}")
     plt.tight_layout()
     plt.show()
