@@ -9,3 +9,4 @@ build/
 build-app/
 cmake-build-debug/
 cmake-build-release/
+EMC_env/
