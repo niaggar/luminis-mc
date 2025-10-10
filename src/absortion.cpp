@@ -5,12 +5,8 @@
 
 namespace luminis::core {
 
-Absorption::Absorption(double r, double z, double dr, double dz) {
-  radius = r;
-  depth = z;
-  d_r = dr;
-  d_z = dz;
-
+Absorption::Absorption(double r, double z, double dr, double dz)
+  : radius(r), depth(z), d_r(dr), d_z(dz) {
   const std::size_t n_r = static_cast<std::size_t>(radius / d_r) + 1;
   const std::size_t n_z = static_cast<std::size_t>(depth / d_z) + 1;
 
@@ -59,22 +55,16 @@ std::vector<std::vector<double>> Absorption::get_absorption_image(const int n_ph
   return image;
 }
 
-AbsorptionTimeDependent::AbsorptionTimeDependent(double r, double z, double dr, double dz, double dt, double t_max) {
-  radius = r;
-  depth = z;
-  d_r = dr;
-  d_z = dz;
-  d_t = dt;
-
+AbsorptionTimeDependent::AbsorptionTimeDependent(double r, double z, double dr, double dz, double dt, double t_max)
+  : radius(r), depth(z), d_r(dr), d_z(dz), d_t(dt), n_t_slices(static_cast<int>(std::ceil(t_max / dt))) {
   if (d_t <= 0.0) { // sin tiempo: un solo slice
-    time_slices.emplace_back(r, z, dr, dz);
-    return;
-  }
-  if (t_max > 0.0) {
-    const std::size_t n = static_cast<std::size_t>(std::floor(t_max/d_t)) + 1;
-    time_slices.assign(n, Absorption(r, z, dr, dz));
+    time_slices.reserve(1);
+    time_slices.push_back(Absorption(radius, depth, d_r, d_z));
   } else {
-    time_slices.clear();
+    time_slices.reserve(n_t_slices);
+    for (int i = 0; i < n_t_slices; ++i) {
+      time_slices.push_back(Absorption(radius, depth, d_r, d_z));
+    }
   }
 }
 void AbsorptionTimeDependent::record_absorption(const Photon &photon, double d_weight) {
@@ -86,7 +76,8 @@ void AbsorptionTimeDependent::record_absorption(const Photon &photon, double d_w
   const double time = photon.launch_time + (photon.opticalpath / photon.velocity); // in ns
   const std::size_t k = static_cast<std::size_t>(std::floor(time / d_t));
   if (k >= time_slices.size()) {
-    time_slices.resize(k + 1, Absorption(radius, depth, d_r, d_z));
+    LLOG_WARN("Photon time {} ns exceeds max time {} ns, skipping absorption recording.", time, n_t_slices * d_t);
+    return;
   }
   time_slices[k].record_absorption(photon, d_weight);
 }

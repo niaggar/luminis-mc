@@ -58,7 +58,7 @@ void Detector::record_hit(Photon &photon) {
   recorded_photons.push_back(std::move(photon));
 }
 
-std::vector<double> Detector::compute_events_histogram(const double min_theta, const double max_theta) {
+std::vector<double> Detector::compute_events_histogram(const double min_theta, const double max_theta) const {
   const Vec3 backward_normal{
       -1 * normal.x,
       -1 * normal.y,
@@ -90,7 +90,7 @@ std::vector<double> Detector::compute_events_histogram(const double min_theta, c
   return histogram;
 }
 
-AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) {
+AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) const {
   std::vector<std::vector<CVec2>> Ebin(n_theta, std::vector<CVec2>(n_phi));
   std::vector<std::vector<std::complex<double>>> Enormal(n_theta, std::vector<std::complex<double>>(n_phi));
 
@@ -160,7 +160,7 @@ AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) {
   return result;
 }
 
-SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, const int n_x, const int n_y, const double x_max, const double y_max) {
+SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, const int n_x, const int n_y, const double x_max, const double y_max) const {
   SpatialIntensity result(n_x, n_y, x_max, y_max);
 
   std::vector<std::vector<CVec2>> Ebin(n_x, std::vector<CVec2>(n_y));
@@ -227,7 +227,7 @@ SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, con
   return result;
 }
 
-AngularIntensity Detector::compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta, const int n_phi) {
+AngularIntensity Detector::compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta, const int n_phi) const {
   std::vector<std::vector<CVec2>> Ebin(n_theta, std::vector<CVec2>(n_phi));
   std::vector<std::vector<std::complex<double>>> Enormal(n_theta, std::vector<std::complex<double>>(n_phi));
 

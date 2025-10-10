@@ -8,6 +8,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# find_package(OpenMP REQUIRED)
+
 add_library(luminis
     src/detector.cpp
     src/laser.cpp
@@ -23,6 +25,8 @@ add_library(luminis
 )
 target_include_directories(luminis PUBLIC include)
 set_target_properties(luminis PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# target_link_libraries(luminis PUBLIC OpenMP::OpenMP_CXX)
 
 
 # CLI app

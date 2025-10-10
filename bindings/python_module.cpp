@@ -226,13 +226,14 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("get_absorption_image", &Absorption::get_absorption_image, py::arg("n_photons"),
            "Get the 2D absorption image");
 
-  py::class_<AbsorptionTimeDependent>(m, "AbsortionTimeDependent")
+  py::class_<AbsorptionTimeDependent>(m, "AbsorptionTimeDependent")
       .def(py::init<double, double, double, double, double, double>(), py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"), py::arg("d_t"), py::arg("t_max"))
       .def_readonly("radius", &AbsorptionTimeDependent::radius)
       .def_readonly("depth", &AbsorptionTimeDependent::depth)
       .def_readonly("d_r", &AbsorptionTimeDependent::d_r)
       .def_readonly("d_z", &AbsorptionTimeDependent::d_z)
       .def_readonly("d_t", &AbsorptionTimeDependent::d_t)
+      .def_readonly("n_t_slices", &AbsorptionTimeDependent::n_t_slices)
       .def_readonly("time_slices", &AbsorptionTimeDependent::time_slices)
       .def("record_absorption", &AbsorptionTimeDependent::record_absorption,
            py::arg("photon"), py::arg("d_weight"),
