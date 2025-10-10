@@ -20,12 +20,12 @@ double PhaseFunction::sample_phi(double x) {
   return 2.0 * M_PI * x; // Uniformly sample phi in [0, 2pi)
 }
 double PhaseFunction::sample_phi_conditional(double theta, CVec2& S, CVec2& E, double k, Rng& rng) {
-    const double s2sq = std::norm(S[0]); // |S2|^2
-    const double s1sq = std::norm(S[1]); // |S1|^2
+    const double s2sq = std::norm(S.m); // |S2|^2
+    const double s1sq = std::norm(S.n); // |S1|^2
 
-    const double e1sq = std::norm(E[0]);
-    const double e2sq = std::norm(E[1]);
-    const double e12  = std::real(E[0] * std::conj(E[1]));
+    const double e1sq = std::norm(E.m);
+    const double e2sq = std::norm(E.n);
+    const double e12  = std::real(E.m * std::conj(E.n));
 
     const double a = s2sq*e1sq + s1sq*e2sq;
     const double b = s1sq*e1sq + s2sq*e2sq;
@@ -108,7 +108,7 @@ RayleighDebyePhaseFunction::RayleighDebyePhaseFunction(double wavelength, double
   if (wavelength <= 0.0) {
     LLOG_WARN("RayleighDebyePhaseFunction: wavelength must be positive, got {}", wavelength);
   }
-  
+
   this->radius = radius;
   this->wavelength = wavelength;
   this->k = 2 * M_PI / wavelength;

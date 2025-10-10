@@ -19,8 +19,8 @@ Absorption::Absorption(double r, double z, double dr, double dz) {
 
 void Absorption::record_absorption(const Photon &photon, double d_weight) {
   const Vec3 &pos = photon.pos;
-  const double r = std::sqrt(pos[0] * pos[0] + pos[1] * pos[1]);
-  const double z = pos[2];
+  const double r = std::sqrt(pos.x * pos.x + pos.y * pos.y);
+  const double z = pos.z;
 
   if (r < 0 || r > radius || z < 0 || z > depth) {
     return;

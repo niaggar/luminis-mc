@@ -33,6 +33,27 @@ PYBIND11_MODULE(luminis_mc, m) {
            "Generate a normally distributed random number with given mean and "
            "stddev");
 
+  // Math
+  py::class_<Vec3>(m, "Vec3")
+      .def(py::init<>())
+      .def(py::init<double, double, double>(), py::arg("x"), py::arg("y"),
+           py::arg("z"))
+      .def_readwrite("x", &Vec3::x)
+      .def_readwrite("y", &Vec3::y)
+      .def_readwrite("z", &Vec3::z);
+
+  py::class_<Vec2>(m, "Vec2")
+      .def(py::init<>())
+      .def(py::init<double, double>(), py::arg("x"), py::arg("y"))
+      .def_readwrite("x", &Vec2::x)
+      .def_readwrite("y", &Vec2::y);
+
+  py::class_<CVec2>(m, "CVec2")
+      .def(py::init<>())
+      .def(py::init<std::complex<double>, std::complex<double>>(), py::arg("m"), py::arg("n"))
+      .def_readwrite("m", &CVec2::m)
+      .def_readwrite("n", &CVec2::n);
+
   // Phase function bindings
   py::class_<PhaseFunction>(m, "PhaseFunction")
       .def("sample", &PhaseFunction::sample_cos, py::arg("x"),
@@ -99,8 +120,8 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readwrite("polarized", &Photon::polarized)
       .def_readwrite("polarization", &Photon::polarization)
       .def_readonly("k", &Photon::k)
-      .def("set_polarization", &Photon::set_polarization, py::arg("pol1"),
-           py::arg("pol2"), "Set the polarization state of the photon")
+      .def("set_polarization", &Photon::set_polarization, py::arg("polarization"),
+           "Set the polarization state of the photon")
       .def("get_stokes_parameters", &Photon::get_stokes_parameters,
            "Get the Stokes parameters of the photon");
 
@@ -250,7 +271,7 @@ PYBIND11_MODULE(luminis_mc, m) {
   m.def(
       "set_log_level", [](Level level) { Logger::instance().set_level(level); },
       py::arg("level"), "Set the logging level for the luminis-mc module");
-  
+
 
   // meanfreepath bindings
 
@@ -258,7 +279,7 @@ PYBIND11_MODULE(luminis_mc, m) {
     py::class_<TargetDistribution>(m, "TargetDistribution")
         .def("evaluate", &TargetDistribution::evaluate, py::arg("x"),
              "Evaluate the target distribution at x");
-             
+
     py::class_<metropolis_hastings>(m, "MetropolisHastings")
         .def(py::init<TargetDistribution *>(), py::arg("target_distribution"),
              "Initialize with a target distribution function pointer")
@@ -271,15 +292,15 @@ PYBIND11_MODULE(luminis_mc, m) {
              "Generate samples using the Metropolis-Hastings algorithm")
         .def_readonly("MCMC_samples", &metropolis_hastings::MCMC_samples,
              "Get the generated MCMC samples");
-        
-        
+
+
      py::class_<ExpDistribution, TargetDistribution>(m, "ExpDistribution")
         .def(py::init<double>(), py::arg("lambda"),
              "Initialize the exponential distribution with rate parameter lambda")
         .def("evaluate", &ExpDistribution::evaluate, py::arg("x"),
              "Evaluate the exponential distribution at x");
 
-        
+
 
 
 }

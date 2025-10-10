@@ -1,3 +1,4 @@
+#include "luminis/math/vec.hpp"
 #include <cmath>
 #include <complex>
 #include <luminis/core/medium.hpp>
@@ -58,7 +59,7 @@ CVec2 SimpleMedium::scattering_matrix(const double theta, const double phi, cons
   const std::complex<double> s2 = std::complex<double>(0, -1 * kkk * F * std::cos(theta));
   const std::complex<double> s1 = std::complex<double>(0, -1 * kkk * F);
 
-  return {s1, s2};
+  return CVec2(s2, s1);
 }
 
 } // namespace luminis::core

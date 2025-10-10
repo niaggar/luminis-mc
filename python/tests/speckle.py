@@ -9,6 +9,8 @@ from luminis_mc import (
     AbsortionTimeDependent,
     RayleighDebyePhaseFunction,
     Rng,
+    CVec2,
+    Vec3,
 )
 from luminis_mc import LogLevel, LaserSource
 from luminis_mc import run_simulation, set_log_level
@@ -23,9 +25,9 @@ set_log_level(LogLevel.debug)
 start_time = time.time()
 
 # Global frame of reference
-n_global = [1, 0, 0]
-m_global = [0, 1, 0]
-s_global = [0, 0, 1]
+m_global = Vec3(1, 0, 0)
+n_global = Vec3(0, 1, 0)
+s_global = Vec3(0, 0, 1)
 light_speed = 299792458e-6
 
 # Medium parameters
@@ -49,13 +51,15 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 10000
+n_photons = 1000000
 
 # Laser parameters
-origin = [0, 0, 0]
-polarization = [1, 0]
+origin = Vec3(0, 0, 0)
+polarization = CVec2(1, 0)
 laser_radius = 0.1 * mean_free_path
 laser_type = LaserSource.Gaussian
+
+print(polarization)
 
 # %%
 
@@ -64,7 +68,6 @@ rng = Rng()
 config = SimConfig(n_photons=n_photons)
 laser_source = Laser(origin, s_global, n_global, m_global, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(origin, s_global, n_global, m_global)
-# phase_function = HenyeyGreensteinPhaseFunction(0.8)
 phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
 print("Anysotropic factor g:", phase_function.get_anisotropy_factor(rng))
@@ -94,7 +97,7 @@ plt.tight_layout()
 plt.show()
 
 
-speckle = detector.compute_speckle_maps()
+speckle = detector.compute_speckle()
 plt.figure(figsize=(8, 8))
 plt.imshow(np.log10(np.array(speckle.I) + 1e-20), cmap="gray", origin="lower")
 plt.colorbar(label="Absorption Values")

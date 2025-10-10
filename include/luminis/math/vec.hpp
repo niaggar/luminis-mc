@@ -2,45 +2,58 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <sys/types.h>
 
 namespace luminis::math {
 
-using Vec3 = std::array<double, 3>;
-using Vec2 = std::array<double, 2>;
-using CVec2 = std::array<std::complex<double>, 2>;
+struct Vec3 {
+  double x{0.0};
+  double y{0.0};
+  double z{0.0};
 
+  Vec3() = default;
+  Vec3(double x, double y, double z) : x(x), y(y), z(z) {}
+};
 
-inline Vec3 operator+(const Vec3 &a, const Vec3 &b) {
-  return {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
-}
-inline Vec3 operator-(const Vec3 &a, const Vec3 &b) {
-  return {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
-}
-inline Vec3 operator*(const Vec3 &a, double s) {
-  return {a[0] * s, a[1] * s, a[2] * s};
-}
-inline Vec3 operator*(double s, const Vec3 &a) {
-  return a * s;
-}
-inline double dot(const Vec3 &a, const Vec3 &b) {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-inline double norm2(const Vec3 &a) {
-  return dot(a, a);
-}
-inline double norm(const Vec3 &a) {
-  return std::sqrt(norm2(a));
-}
-inline Vec3 normalize(const Vec3 &a) {
-  const double n = norm(a);
-  return (n > 0) ? (a * (1.0 / n)) : Vec3{0, 0, 0};
-}
-inline Vec3 from_spherical(double theta, double phi) {
-  const double s = std::sin(theta);
-  return {s * std::cos(phi), s * std::sin(phi), std::cos(theta)};
-}
-inline Vec3 copy(const Vec3 &a) {
-  return {a[0], a[1], a[2]};
-}
+struct Vec2 {
+  double x{0.0};
+  double y{0.0};
+
+  Vec2() = default;
+  Vec2(double x, double y) : x(x), y(y) {}
+};
+
+struct CVec2 {
+  std::complex<double> n{0.0, 0.0};
+  std::complex<double> m{0.0, 0.0};
+
+  CVec2() = default;
+  CVec2(std::complex<double> m, std::complex<double> n) : n(n), m(m) {}
+};
+
+struct Matrix {
+  const uint32_t rows;
+  const uint32_t cols;
+  double* data;
+
+  Matrix(uint32_t rows, uint32_t cols) : rows(rows), cols(cols) {
+    data = new double[rows * cols]();
+  }
+
+  ~Matrix() {
+    delete[] data;
+  }
+
+  double& operator()(uint32_t i, uint32_t j) {
+    return data[i * cols + j];
+  }
+
+  const double& operator()(uint32_t i, uint32_t j) const {
+    return data[i * cols + j];
+  }
+};
+
+double dot(const Vec3 &a, const Vec3 &b);
+double norm(const Vec3 &v);
 
 } // namespace luminis::math
