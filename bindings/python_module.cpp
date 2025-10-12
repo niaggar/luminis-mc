@@ -264,22 +264,28 @@ PYBIND11_MODULE(luminis_mc, m) {
              "Initialize with a target distribution function pointer")
         .def("accept_reject", &metropolis_hastings::accept_reject,
              py::arg("current_state"), py::arg("target_distribution_current_state"),
-             py::arg("proposal_stddev"),
+             py::arg("proposal_stddev"),py::arg("positive_support"),
              "Perform the accept-reject step of the Metropolis-Hastings algorithm")
         .def("sample", &metropolis_hastings::sample, py::arg("num_samples"),
-             py::arg("initial_value"), py::arg("proposal_stddev"),
+             py::arg("initial_value"), py::arg("proposal_stddev"),py::arg("positive_support"),
              "Generate samples using the Metropolis-Hastings algorithm")
         .def_readonly("MCMC_samples", &metropolis_hastings::MCMC_samples,
              "Get the generated MCMC samples");
-        
-        
-     py::class_<ExpDistribution, TargetDistribution>(m, "ExpDistribution")
+
+
+     py::class_<Exponential, TargetDistribution>(m, "Exponential")
         .def(py::init<double>(), py::arg("lambda"),
              "Initialize the exponential distribution with rate parameter lambda")
-        .def("evaluate", &ExpDistribution::evaluate, py::arg("x"),
+        .def("evaluate", &Exponential::evaluate, py::arg("x"),
              "Evaluate the exponential distribution at x");
 
-        
 
+     py::class_<HardSpheres, TargetDistribution>(m, "HardSpheres")
+        .def(py::init<double, double>(), py::arg("radius"), py::arg("density"),
+             "Initialize the hard sphere distribution with given radius and density")
+        .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
+             "Evaluate the hard sphere distribution at x");
+
+     
 
 }

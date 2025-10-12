@@ -8,25 +8,36 @@ using luminis::math::Rng;
 namespace luminis::sample {
 
 
-double metropolis_hastings::proposal_distribution(double x, double stddev){ 
-    luminis::math::Rng rng;
-    return rng.normal(x, stddev);
-}
-
-void metropolis_hastings::accept_reject(double &current, double &target_dist_current, double proposal_stddev) {
+void metropolis_hastings::accept_reject(double &current, double &target_dist_current, double proposal_stddev, bool positive_support) {
 
     luminis::math::Rng rng;
 
-    double proposed = proposal_distribution(current, proposal_stddev);
-    double current_deprecated = current;
+    double acceptance_ratio = 0.0;
+    double proposed = 0.0;
+    double target_dist_proposed = 0.0;
 
-    double target_dist_proposed = target_dist->evaluate(proposed);
+    if (positive_support == true) { 
 
-    double acceptance_ratio = target_dist_proposed / target_dist_current;
+        double log_proposed = std::log(current) + rng.normal(0.0, proposal_stddev); // Log-normal proposal distribution for positive support
 
-    double acceptance_prob = std::min(1.0, acceptance_ratio);
+        proposed = std::exp(log_proposed);
+        target_dist_proposed = target_dist->evaluate(proposed);
 
-    if (rng.uniform() < acceptance_prob) {
+        double log_acceptance_ratio = std::log(target_dist_proposed) - std::log(target_dist_current) + (log_proposed - std::log(current));
+
+        acceptance_ratio = std::exp(log_acceptance_ratio);
+
+    } else if (positive_support == false) {
+
+        proposed = current + rng.normal(0.0, proposal_stddev);
+        target_dist_proposed = target_dist->evaluate(proposed);
+        acceptance_ratio = target_dist_proposed / target_dist_current;
+    } else {
+        throw std::invalid_argument("positive_support must be true or false");
+    }
+
+
+    if (rng.uniform() < acceptance_ratio) {
         current = proposed;
         target_dist_current = target_dist_proposed;
         acceptance_count++;
@@ -34,7 +45,7 @@ void metropolis_hastings::accept_reject(double &current, double &target_dist_cur
 
 }
 
-void metropolis_hastings::sample(int num_samples, double initial_value, double proposal_stddev)
+void metropolis_hastings::sample(int num_samples, double initial_value, double proposal_stddev, bool positive_support)
 {
 
     std::vector<double> samples;
@@ -47,7 +58,7 @@ void metropolis_hastings::sample(int num_samples, double initial_value, double p
 
     for (int i = 0; i < num_samples; i++) {
 
-        metropolis_hastings::accept_reject(current, target_dist_current, proposal_stddev);
+        metropolis_hastings::accept_reject(current, target_dist_current, proposal_stddev, positive_support);
         samples.push_back(current);
     }
 
@@ -57,14 +68,34 @@ void metropolis_hastings::sample(int num_samples, double initial_value, double p
     MCMC_samples = samples;
 }
 
+//========================================
+// Mean free path target distributions
+//========================================
 
-ExpDistribution::ExpDistribution(double lambda) {
+
+Exponential::Exponential(double lambda) {
     this->lambda = lambda;
 }
 
-double ExpDistribution::evaluate(double x) {
+double Exponential::evaluate(double x) {
     if (x < 0.0) return 0.0; // Exponential distribution is defined for x >= 0
     return  std::exp(-lambda * x);
 
 } 
+
+HardSpheres::HardSpheres(double radius, double density) {
+    this->radius = radius;
+    this->density = density;
+}
+
+double HardSpheres::evaluate(double x) {
+    if (x < 0.0) return 0.0; // Hard sphere distribution is defined for x >= 0
+
+    if (x < radius && x >= 0.0) {
+        return 1.0; 
+    } else if (x >= radius) {
+        return std::exp(-4.0*(M_PI/3.0) * density * std::pow(x, 3));
+    } 
+}
+
 } // namespace luminis::sample
