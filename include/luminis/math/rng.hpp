@@ -6,6 +6,8 @@
 
 namespace luminis::math {
 
+std::uint64_t mix_seed(std::uint64_t base, std::uint64_t tid);
+
 struct Rng {
   std::mt19937_64 gen;
   std::uniform_real_distribution<double> uni{0.0, 1.0};

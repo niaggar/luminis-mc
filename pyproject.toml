@@ -24,6 +24,9 @@ cmake.args = ["-GNinja"]
 [tool.scikit-build.cmake.define]
 LUMINIS_BUILD_APP = "OFF"
 LUMINIS_BUILD_PY  = "ON"
+# CMAKE_C_COMPILER  = "/opt/homebrew/opt/llvm/bin/clang"
+# CMAKE_CXX_COMPILER= "/opt/homebrew/opt/llvm/bin/clang++"
+# CMAKE_PREFIX_PATH = "/opt/homebrew/opt/llvm"
 
 # Optional: universal builds on macOS (if you need wheels for both arm64/x86_64)
 # [tool.scikit-build.cmake.define]

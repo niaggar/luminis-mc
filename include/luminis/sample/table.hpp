@@ -15,7 +15,7 @@ public:
   SamplingTable() = default;
   void initialize(PDFFunction pdfFunc, int nDiv, double minVal, double maxVal);
 
-  double Sample(double u);
+  double Sample(double u) const ;
 };
 
 } // namespace luminis::sample

@@ -61,12 +61,32 @@ AbsorptionTimeDependent::AbsorptionTimeDependent(double r, double z, double dr, 
     time_slices.reserve(1);
     time_slices.push_back(Absorption(radius, depth, d_r, d_z));
   } else {
-    time_slices.reserve(n_t_slices);
+    time_slices.reserve(n_t_slices + 1);
     for (int i = 0; i < n_t_slices; ++i) {
       time_slices.push_back(Absorption(radius, depth, d_r, d_z));
     }
   }
 }
+
+AbsorptionTimeDependent AbsorptionTimeDependent::copy_start() const {
+  return AbsorptionTimeDependent(radius, depth, d_r, d_z, d_t, n_t_slices * d_t);
+}
+
+void AbsorptionTimeDependent::merge_from(const AbsorptionTimeDependent &other) {
+  if (radius != other.radius || depth != other.depth || d_r != other.d_r || d_z != other.d_z || d_t != other.d_t || n_t_slices != other.n_t_slices) {
+    LLOG_ERROR("Inconsistent absorption configurations during merge.");
+    return;
+  }
+
+  for (int k = 0; k < n_t_slices; ++k) {
+    for (std::size_t i = 0; i < time_slices[k].absorption_values.size(); ++i) {
+      for (std::size_t j = 0; j < time_slices[k].absorption_values[0].size(); ++j) {
+        time_slices[k].absorption_values[i][j] += other.time_slices[k].absorption_values[i][j];
+      }
+    }
+  }
+}
+
 void AbsorptionTimeDependent::record_absorption(const Photon &photon, double d_weight) {
   if (d_t == 0) {
     time_slices[0].record_absorption(photon, d_weight);
@@ -87,6 +107,41 @@ std::vector<std::vector<double>> AbsorptionTimeDependent::get_absorption_image(c
     return {};
   }
   return time_slices[time_index].get_absorption_image(n_photons);
+}
+
+
+AbsorptionTimeDependent* combine_absorptions(const std::vector<AbsorptionTimeDependent> &absorptions) {
+  if (absorptions.empty()) {
+    LLOG_ERROR("No absorption data to combine.");
+    return nullptr;
+  }
+
+  const double radius = absorptions[0].radius;
+  const double depth = absorptions[0].depth;
+  const double d_r = absorptions[0].d_r;
+  const double d_z = absorptions[0].d_z;
+  const double d_t = absorptions[0].d_t;
+  const int n_t_slices = absorptions[0].n_t_slices;
+
+  AbsorptionTimeDependent* combined = new AbsorptionTimeDependent(radius, depth, d_r, d_z, d_t, n_t_slices * d_t);
+
+  for (const auto& abs : absorptions) {
+    if (abs.radius != radius || abs.depth != depth || abs.d_r != d_r || abs.d_z != d_z || abs.d_t != d_t || abs.n_t_slices != n_t_slices) {
+      LLOG_ERROR("Inconsistent absorption configurations found during combination.");
+      delete combined;
+      return nullptr;
+    }
+
+    for (int k = 0; k < n_t_slices; ++k) {
+      for (std::size_t i = 0; i < combined->time_slices[k].absorption_values.size(); ++i) {
+        for (std::size_t j = 0; j < combined->time_slices[k].absorption_values[0].size(); ++j) {
+          combined->time_slices[k].absorption_values[i][j] += abs.time_slices[k].absorption_values[i][j];
+        }
+      }
+    }
+  }
+
+  return combined;
 }
 
 } // namespace luminis::core

@@ -194,7 +194,6 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readonly("mu_s", &Medium::mu_scattering)
       .def_readonly("mu_t", &Medium::mu_attenuation)
       .def_readonly("phase_function", &Medium::phase_function)
-      .def_readwrite("absorption", &Medium::absorption)
       .def("sample_free_path", &Medium::sample_free_path, py::arg("rng"),
            "Sample the free path length in the medium")
       .def("sample_scattering_angle", &Medium::sample_scattering_angle,
@@ -241,23 +240,47 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("get_absorption_image", &AbsorptionTimeDependent::get_absorption_image, py::arg("n_photons"), py::arg("time_index"),
            "Get the 2D absorption image for a specific time slice");
 
+  m.def("combine_absorptions", &combine_absorptions, py::arg("absorptions"),
+        "Combine multiple AbsorptionTimeDependent instances into one");
+
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t>(), py::arg("n_photons"))
-      .def(py::init<std::uint64_t, std::size_t>(), py::arg("seed"),
-           py::arg("n_photons"))
+      .def(py::init<std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *>(),
+           py::arg("n_photons"), py::arg("medium") = nullptr,
+           py::arg("laser") = nullptr, py::arg("detector") = nullptr,
+           py::arg("absorption") = nullptr,
+           "Initialize simulation config with number of photons, medium, laser, detector, and optional seed")
+      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *>(),
+           py::arg("seed"), py::arg("n_photons"), py::arg("medium") = nullptr,
+           py::arg("laser") = nullptr, py::arg("detector") = nullptr,
+           py::arg("absorption") = nullptr,
+           "Initialize simulation config with seed, number of photons, medium, laser, detector")
       .def_readwrite("seed", &SimConfig::seed)
-      .def_readwrite("n_photons", &SimConfig::n_photons);
+      .def_readwrite("n_photons", &SimConfig::n_photons)
+      .def_readwrite("n_threads", &SimConfig::n_threads)
+      .def_readwrite("medium", &SimConfig::medium)
+      .def_readwrite("laser", &SimConfig::laser)
+      .def_readwrite("detector", &SimConfig::detector)
+      .def_readwrite("absorption", &SimConfig::absorption);
 
   m.def(
       "run_simulation",
-      [](SimConfig &config, Medium &medium, Detector &detector, Laser &laser) {
+      [](SimConfig &config) {
         py::gil_scoped_release release;
-        run_simulation(config, medium, detector, laser);
+        run_simulation(config);
       },
-      py::arg("config"), py::arg("medium"), py::arg("detector"),
-      py::arg("laser"),
+      py::arg("config"),
       "Run the Monte Carlo simulation with the given configuration, medium, "
+      "detector, and laser");
+
+  m.def(
+      "run_simulation_parallel",
+      [](SimConfig &config) {
+        py::gil_scoped_release release;
+        run_simulation_parallel(config);
+      },
+      py::arg("config"),
+      "Run the Monte Carlo simulation in parallel with the given configuration, medium, "
       "detector, and laser");
 
   // Logger bindings

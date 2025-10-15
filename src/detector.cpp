@@ -11,6 +11,18 @@ namespace luminis::core {
 Detector::Detector(const Vec3 o, const Vec3 normal, const Vec3 n, const Vec3 m)
     : origin(o), normal(normal), n_polarization(n), m_polarization(m) {}
 
+Detector Detector::copy_start() const {
+  Detector det(origin, normal, n_polarization, m_polarization);
+  return det;
+}
+
+void Detector::merge_from(const Detector &other) {
+  hits += other.hits;
+  recorded_photons.insert(recorded_photons.end(),
+                          other.recorded_photons.begin(),
+                          other.recorded_photons.end());
+}
+
 void Detector::record_hit(Photon &photon) {
   const Vec3 xn = photon.prev_pos;
   const Vec3 xf = photon.pos;
@@ -314,6 +326,31 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
   result.phi_max   = max_phi;
 
   return result;
+}
+
+
+Detector* combine_detectors(const std::vector<Detector> &detectors) {
+  if (detectors.empty()) {
+    LLOG_ERROR("No detectors to combine");
+    return nullptr;
+  }
+
+  Detector* combined = new Detector(detectors[0].origin, detectors[0].normal, detectors[0].n_polarization, detectors[0].m_polarization);
+
+  for (const auto &det : detectors) {
+    if (dot(det.normal, combined->normal) < 1.0 - 1e-6 ||
+        dot(det.n_polarization, combined->n_polarization) < 1.0 - 1e-6 ||
+        dot(det.m_polarization, combined->m_polarization) < 1.0 - 1e-6) {
+      LLOG_ERROR("Detectors have different orientations or positions");
+      delete combined;
+      return nullptr;
+    }
+
+    combined->hits += det.hits;
+    combined->recorded_photons.insert(combined->recorded_photons.end(), det.recorded_photons.begin(), det.recorded_photons.end());
+  }
+
+  return combined;
 }
 
 

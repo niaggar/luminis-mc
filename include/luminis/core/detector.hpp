@@ -42,10 +42,15 @@ struct Detector {
 
   void record_hit(Photon &photon);
 
+  Detector copy_start() const;
+  void merge_from(const Detector &other);
+
   std::vector<double> compute_events_histogram(const double min_theta, const double max_theta) const;
   AngularIntensity compute_speckle(const int n_theta=1125, const int n_phi=360) const;
   SpatialIntensity compute_spatial_intensity(const double max_theta, const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0) const;
   AngularIntensity compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta=1125, const int n_phi=360) const;
 };
+
+Detector* combine_detectors(const std::vector<Detector> &detectors);
 
 } // namespace luminis::core

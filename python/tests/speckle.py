@@ -5,15 +5,13 @@ from luminis_mc import (
     SimpleMedium,
     Detector,
     SimConfig,
-    HenyeyGreensteinPhaseFunction,
-    AbsortionTimeDependent,
     RayleighDebyePhaseFunction,
     Rng,
     CVec2,
     Vec3,
 )
 from luminis_mc import LogLevel, LaserSource
-from luminis_mc import run_simulation, set_log_level
+from luminis_mc import run_simulation, run_simulation_parallel, set_log_level
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -51,7 +49,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1000000
+n_photons = 1_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -59,22 +57,27 @@ polarization = CVec2(1, 0)
 laser_radius = 0.1 * mean_free_path
 laser_type = LaserSource.Gaussian
 
-print(polarization)
-
 # %%
 
 # Initialize components
 rng = Rng()
-config = SimConfig(n_photons=n_photons)
 laser_source = Laser(origin, s_global, n_global, m_global, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(origin, s_global, n_global, m_global)
 phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
 print("Anysotropic factor g:", phase_function.get_anisotropy_factor(rng))
 
+config = SimConfig(
+    n_photons=n_photons,
+    medium=medium,
+    detector=detector,
+    laser=laser_source,
+)
+config.n_threads = 8
+
 # %%
 
-run_simulation(config, medium, detector, laser_source)
+run_simulation_parallel(config)
 end_time = time.time()
 print(f"Simulation time: {end_time - start_time:.2f} seconds")
 

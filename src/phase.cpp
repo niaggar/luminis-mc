@@ -5,8 +5,7 @@
 
 namespace luminis::sample {
 
-double form_factor(const double theta, const double k, const double radius)
-{
+double form_factor(const double theta, const double k, const double radius) {
   const double ks = 2.0 * k * std::sin(theta / 2.0);
   const double numerator = 3 * (std::sin(ks * radius) - ks * radius * std::cos(ks * radius));
   const double denominator = std::pow(ks * radius, 3);
@@ -16,10 +15,10 @@ double form_factor(const double theta, const double k, const double radius)
 
 
 
-double PhaseFunction::sample_phi(double x) {
+double PhaseFunction::sample_phi(double x) const {
   return 2.0 * M_PI * x; // Uniformly sample phi in [0, 2pi)
 }
-double PhaseFunction::sample_phi_conditional(double theta, CVec2& S, CVec2& E, double k, Rng& rng) {
+double PhaseFunction::sample_phi_conditional(double theta, CVec2& S, CVec2& E, double k, Rng& rng) const {
     const double s2sq = std::norm(S.m); // |S2|^2
     const double s1sq = std::norm(S.n); // |S1|^2
 
@@ -42,7 +41,7 @@ double PhaseFunction::sample_phi_conditional(double theta, CVec2& S, CVec2& E, d
       if (rng.uniform()*Fmax <= Fclamped) return phi;
     }
 }
-std::array<double, 2> PhaseFunction::get_anisotropy_factor(Rng& rng, std::size_t nSamples) {
+std::array<double, 2> PhaseFunction::get_anisotropy_factor(Rng& rng, std::size_t nSamples) const {
   double sum = 0.0;
   double sum_sq = 0.0;
   for (std::size_t i = 0; i < nSamples; ++i) {
@@ -60,10 +59,10 @@ std::array<double, 2> PhaseFunction::get_anisotropy_factor(Rng& rng, std::size_t
 
 
 
-double UniformPhaseFunction::sample_cos(double x) {
+double UniformPhaseFunction::sample_cos(double x) const {
   return 2.0*x - 1.0; // Return cos(theta)
 }
-double UniformPhaseFunction::sample_theta(double x) {
+double UniformPhaseFunction::sample_theta(double x) const {
   return acos(sample_cos(x));
 }
 
@@ -72,10 +71,10 @@ double UniformPhaseFunction::sample_theta(double x) {
 RayleighPhaseFunction::RayleighPhaseFunction(int nDiv, double minVal, double maxVal) {
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
-double RayleighPhaseFunction::sample_cos(double x) {
+double RayleighPhaseFunction::sample_cos(double x) const {
   return table.Sample(x); // Return cos(theta)
 }
-double RayleighPhaseFunction::sample_theta(double x) {
+double RayleighPhaseFunction::sample_theta(double x) const {
   return acos(sample_cos(x));
 }
 double RayleighPhaseFunction::PDF(double x) {
@@ -90,12 +89,12 @@ HenyeyGreensteinPhaseFunction::HenyeyGreensteinPhaseFunction(double g) {
   }
   this->g = g;
 }
-double HenyeyGreensteinPhaseFunction::sample_cos(double x) {
+double HenyeyGreensteinPhaseFunction::sample_cos(double x) const {
   const double gg = g * g;
 	const double frac = (1.0 - gg) / (1.0 - g + 2.0 * g * x);
 	return (1.0 + gg - frac * frac) / (2.0 * g); // Return cos(theta)
 }
-double HenyeyGreensteinPhaseFunction::sample_theta(double x) {
+double HenyeyGreensteinPhaseFunction::sample_theta(double x) const {
   return acos(sample_cos(x));
 }
 
@@ -114,10 +113,10 @@ RayleighDebyePhaseFunction::RayleighDebyePhaseFunction(double wavelength, double
   this->k = 2 * M_PI / wavelength;
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
-double RayleighDebyePhaseFunction::sample_cos(double x) {
+double RayleighDebyePhaseFunction::sample_cos(double x) const {
   return cos(table.Sample(x));
 }
-double RayleighDebyePhaseFunction::sample_theta(double x) {
+double RayleighDebyePhaseFunction::sample_theta(double x) const {
   return table.Sample(x); // Return theta
 }
 double RayleighDebyePhaseFunction::PDF(double x) {
@@ -141,10 +140,10 @@ RayleighDebyeEMCPhaseFunction::RayleighDebyeEMCPhaseFunction(double wavelength, 
   this->k = 2 * M_PI / wavelength;
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
-double RayleighDebyeEMCPhaseFunction::sample_cos(double x) {
+double RayleighDebyeEMCPhaseFunction::sample_cos(double x) const {
   return cos(table.Sample(x));
 }
-double RayleighDebyeEMCPhaseFunction::sample_theta(double x) {
+double RayleighDebyeEMCPhaseFunction::sample_theta(double x) const {
   return table.Sample(x); // Return theta
 }
 double RayleighDebyeEMCPhaseFunction::PDF(double x) {
@@ -167,10 +166,10 @@ DrainePhaseFunction::DrainePhaseFunction(double g, double a, int nDiv, double mi
   this->a = a;
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
-double DrainePhaseFunction::sample_cos(double x) {
+double DrainePhaseFunction::sample_cos(double x) const {
   return table.Sample(x); // Return cos(theta)
 }
-double DrainePhaseFunction::sample_theta(double x) {
+double DrainePhaseFunction::sample_theta(double x) const {
   return acos(sample_cos(x));
 }
 double DrainePhaseFunction::PDF(double x) {
