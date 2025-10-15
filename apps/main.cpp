@@ -1,30 +1,18 @@
-#include <luminis/core/detector.hpp>
-#include <luminis/core/laser.hpp>
-#include <luminis/core/medium.hpp>
-#include <luminis/core/photon.hpp>
-#include <luminis/core/simulation.hpp>
-#include <luminis/log/logger.hpp>
-#include <luminis/math/vec.hpp>
+#include <cstdio>
+#include <sstream>
+#include <thread>
 
-int main() {
-  using namespace luminis::core;
-  using luminis::log::Level;
-  using luminis::log::Logger;
+int main(void) {
+  const uint8_t max_threads = std::thread::hardware_concurrency();
+  printf("Max threads: %d\n", max_threads);
 
-  Logger::instance().set_level(Level::debug);
 
-  LLOG_DEBUG("Log debug message");
-  LLOG_INFO("Log info message");
-  LLOG_WARN("Log warning message");
-  LLOG_ERROR("Log error message");
-
-  Laser laser({0, 0, 0}, {0, 0, 1}, {1, 0}, 532.0, 1.0, LaserSource::Gaussian);
-  Detector detector({0, 0, 0}, {0, 0, 1});
-  HenyeyGreensteinPhaseFunction phase_func(0.9);
-  SimpleMedium medium(0.01, 0.1, &phase_func, 1.33, 0.1);
-  SimConfig config(42, 10);
-
-  run_simulation(config, medium, detector, laser);
+#pragma omp parallel
+  {
+    std::stringstream ss;
+    ss << std::this_thread::get_id();
+    printf("%s, Hello, world.\n", ss.str().c_str());
+  }
 
   return 0;
 }

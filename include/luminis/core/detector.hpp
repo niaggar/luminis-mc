@@ -31,22 +31,26 @@ struct SpatialIntensity {
 };
 
 struct Detector {
-  std::size_t hits{0};
-  Vec3 origin{0, 0, 0};
-  Vec3 normal{0, 0, 1};
-  Vec3 n_polarization{1, 0, 0};
-  Vec3 m_polarization{0, 1, 0};
+  const Vec3 origin;
+  const Vec3 normal;
+  const Vec3 n_polarization;
+  const Vec3 m_polarization;
   std::vector<Photon> recorded_photons;
+  std::size_t hits{0};
 
-  Detector() = default;
   Detector(const Vec3 o, const Vec3 normal, const Vec3 n, const Vec3 m);
 
   void record_hit(Photon &photon);
 
-  std::vector<double> compute_events_histogram(const double min_theta, const double max_theta);
-  AngularIntensity compute_speckle(const int n_theta=1125, const int n_phi=360);
-  SpatialIntensity compute_spatial_intensity(const double max_theta, const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0);
-  AngularIntensity compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta=1125, const int n_phi=360);
+  Detector copy_start() const;
+  void merge_from(const Detector &other);
+
+  std::vector<double> compute_events_histogram(const double min_theta, const double max_theta) const;
+  AngularIntensity compute_speckle(const int n_theta=1125, const int n_phi=360) const;
+  SpatialIntensity compute_spatial_intensity(const double max_theta, const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0) const;
+  AngularIntensity compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta=1125, const int n_phi=360) const;
 };
+
+Detector* combine_detectors(const std::vector<Detector> &detectors);
 
 } // namespace luminis::core

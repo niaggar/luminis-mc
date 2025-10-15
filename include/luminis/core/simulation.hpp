@@ -1,4 +1,5 @@
 #pragma once
+#include <luminis/core/absortion.hpp>
 #include <cstdint>
 #include <luminis/core/simulation.hpp>
 #include <luminis/core/medium.hpp>
@@ -14,14 +15,22 @@ namespace luminis::core
   struct SimConfig
   {
     std::uint64_t seed = std::random_device{}();
+    std::size_t n_threads = 1;
     std::size_t n_photons;
 
-    SimConfig(std::size_t n);
-    SimConfig(std::uint64_t s, std::size_t n);
+    Medium *medium{nullptr};
+    Laser *laser{nullptr};
+    Detector *detector{nullptr};
+    AbsorptionTimeDependent *absorption{nullptr};
+
+    SimConfig(std::size_t n, Medium *m = nullptr, Laser *l = nullptr, Detector *d = nullptr, AbsorptionTimeDependent *a = nullptr);
+    SimConfig(std::uint64_t s, std::size_t n, Medium *m = nullptr, Laser *l = nullptr, Detector *d = nullptr, AbsorptionTimeDependent *a = nullptr);
   };
 
-  void run_simulation(SimConfig &config, Medium &medium, Detector &detector, Laser &laser);
+  void run_simulation(const SimConfig &config);
 
-  void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng);
+  void run_simulation_parallel(const SimConfig &config);
+
+  void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, AbsorptionTimeDependent *absorption);
 
 } // namespace luminis::core

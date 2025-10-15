@@ -8,11 +8,12 @@ using namespace luminis::math;
 
 namespace luminis::core {
 
+
 struct Absorption {
-  double radius{0.0};
-  double depth{0.0};
-  double d_r{0.0};
-  double d_z{0.0};
+  const double radius;
+  const double depth;
+  const double d_r;
+  const double d_z;
   std::vector<std::vector<double>> absorption_values;
 
   Absorption(double r, double z, double dr, double dz);
@@ -21,16 +22,23 @@ struct Absorption {
 };
 
 struct AbsorptionTimeDependent {
-  double radius{0.0};
-  double depth{0.0};
-  double d_r{0.0};
-  double d_z{0.0};
-  double d_t{0.0};
+  const double radius;
+  const double depth;
+  const double d_r;
+  const double d_z;
+  const double d_t;
+  const int n_t_slices;
   std::vector<Absorption> time_slices;
 
   AbsorptionTimeDependent(double r, double z, double dr, double dz, double dt, double t_max);
+
+  AbsorptionTimeDependent copy_start() const;
+  void merge_from(const AbsorptionTimeDependent &other);
+
   void record_absorption(const Photon &photon, double d_weight);
   std::vector<std::vector<double>> get_absorption_image(const int n_photons, const int time_index) const;
 };
+
+AbsorptionTimeDependent* combine_absorptions(const std::vector<AbsorptionTimeDependent> &absorptions);
 
 } // namespace luminis::core

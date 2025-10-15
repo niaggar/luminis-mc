@@ -33,6 +33,27 @@ PYBIND11_MODULE(luminis_mc, m) {
            "Generate a normally distributed random number with given mean and "
            "stddev");
 
+  // Math
+  py::class_<Vec3>(m, "Vec3")
+      .def(py::init<>())
+      .def(py::init<double, double, double>(), py::arg("x"), py::arg("y"),
+           py::arg("z"))
+      .def_readwrite("x", &Vec3::x)
+      .def_readwrite("y", &Vec3::y)
+      .def_readwrite("z", &Vec3::z);
+
+  py::class_<Vec2>(m, "Vec2")
+      .def(py::init<>())
+      .def(py::init<double, double>(), py::arg("x"), py::arg("y"))
+      .def_readwrite("x", &Vec2::x)
+      .def_readwrite("y", &Vec2::y);
+
+  py::class_<CVec2>(m, "CVec2")
+      .def(py::init<>())
+      .def(py::init<std::complex<double>, std::complex<double>>(), py::arg("m"), py::arg("n"))
+      .def_readwrite("m", &CVec2::m)
+      .def_readwrite("n", &CVec2::n);
+
   // Phase function bindings
   py::class_<PhaseFunction>(m, "PhaseFunction")
       .def("sample", &PhaseFunction::sample_cos, py::arg("x"),
@@ -99,8 +120,8 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readwrite("polarized", &Photon::polarized)
       .def_readwrite("polarization", &Photon::polarization)
       .def_readonly("k", &Photon::k)
-      .def("set_polarization", &Photon::set_polarization, py::arg("pol1"),
-           py::arg("pol2"), "Set the polarization state of the photon")
+      .def("set_polarization", &Photon::set_polarization, py::arg("polarization"),
+           "Set the polarization state of the photon")
       .def("get_stokes_parameters", &Photon::get_stokes_parameters,
            "Get the Stokes parameters of the photon");
 
@@ -173,7 +194,6 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def_readonly("mu_s", &Medium::mu_scattering)
       .def_readonly("mu_t", &Medium::mu_attenuation)
       .def_readonly("phase_function", &Medium::phase_function)
-      .def_readwrite("absorption", &Medium::absorption)
       .def("sample_free_path", &Medium::sample_free_path, py::arg("rng"),
            "Sample the free path length in the medium")
       .def("sample_scattering_angle", &Medium::sample_scattering_angle,
@@ -205,13 +225,14 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("get_absorption_image", &Absorption::get_absorption_image, py::arg("n_photons"),
            "Get the 2D absorption image");
 
-  py::class_<AbsorptionTimeDependent>(m, "AbsortionTimeDependent")
+  py::class_<AbsorptionTimeDependent>(m, "AbsorptionTimeDependent")
       .def(py::init<double, double, double, double, double, double>(), py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"), py::arg("d_t"), py::arg("t_max"))
       .def_readonly("radius", &AbsorptionTimeDependent::radius)
       .def_readonly("depth", &AbsorptionTimeDependent::depth)
       .def_readonly("d_r", &AbsorptionTimeDependent::d_r)
       .def_readonly("d_z", &AbsorptionTimeDependent::d_z)
       .def_readonly("d_t", &AbsorptionTimeDependent::d_t)
+      .def_readonly("n_t_slices", &AbsorptionTimeDependent::n_t_slices)
       .def_readonly("time_slices", &AbsorptionTimeDependent::time_slices)
       .def("record_absorption", &AbsorptionTimeDependent::record_absorption,
            py::arg("photon"), py::arg("d_weight"),
@@ -219,23 +240,47 @@ PYBIND11_MODULE(luminis_mc, m) {
       .def("get_absorption_image", &AbsorptionTimeDependent::get_absorption_image, py::arg("n_photons"), py::arg("time_index"),
            "Get the 2D absorption image for a specific time slice");
 
+  m.def("combine_absorptions", &combine_absorptions, py::arg("absorptions"),
+        "Combine multiple AbsorptionTimeDependent instances into one");
+
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t>(), py::arg("n_photons"))
-      .def(py::init<std::uint64_t, std::size_t>(), py::arg("seed"),
-           py::arg("n_photons"))
+      .def(py::init<std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *>(),
+           py::arg("n_photons"), py::arg("medium") = nullptr,
+           py::arg("laser") = nullptr, py::arg("detector") = nullptr,
+           py::arg("absorption") = nullptr,
+           "Initialize simulation config with number of photons, medium, laser, detector, and optional seed")
+      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *>(),
+           py::arg("seed"), py::arg("n_photons"), py::arg("medium") = nullptr,
+           py::arg("laser") = nullptr, py::arg("detector") = nullptr,
+           py::arg("absorption") = nullptr,
+           "Initialize simulation config with seed, number of photons, medium, laser, detector")
       .def_readwrite("seed", &SimConfig::seed)
-      .def_readwrite("n_photons", &SimConfig::n_photons);
+      .def_readwrite("n_photons", &SimConfig::n_photons)
+      .def_readwrite("n_threads", &SimConfig::n_threads)
+      .def_readwrite("medium", &SimConfig::medium)
+      .def_readwrite("laser", &SimConfig::laser)
+      .def_readwrite("detector", &SimConfig::detector)
+      .def_readwrite("absorption", &SimConfig::absorption);
 
   m.def(
       "run_simulation",
-      [](SimConfig &config, Medium &medium, Detector &detector, Laser &laser) {
+      [](SimConfig &config) {
         py::gil_scoped_release release;
-        run_simulation(config, medium, detector, laser);
+        run_simulation(config);
       },
-      py::arg("config"), py::arg("medium"), py::arg("detector"),
-      py::arg("laser"),
+      py::arg("config"),
       "Run the Monte Carlo simulation with the given configuration, medium, "
+      "detector, and laser");
+
+  m.def(
+      "run_simulation_parallel",
+      [](SimConfig &config) {
+        py::gil_scoped_release release;
+        run_simulation_parallel(config);
+      },
+      py::arg("config"),
+      "Run the Monte Carlo simulation in parallel with the given configuration, medium, "
       "detector, and laser");
 
   // Logger bindings
@@ -250,7 +295,7 @@ PYBIND11_MODULE(luminis_mc, m) {
   m.def(
       "set_log_level", [](Level level) { Logger::instance().set_level(level); },
       py::arg("level"), "Set the logging level for the luminis-mc module");
-  
+
 
   // meanfreepath bindings
 
@@ -258,7 +303,7 @@ PYBIND11_MODULE(luminis_mc, m) {
     py::class_<TargetDistribution>(m, "TargetDistribution")
         .def("evaluate", &TargetDistribution::evaluate, py::arg("x"),
              "Evaluate the target distribution at x");
-             
+
     py::class_<metropolis_hastings>(m, "MetropolisHastings")
         .def(py::init<TargetDistribution *>(), py::arg("target_distribution"),
              "Initialize with a target distribution function pointer")
@@ -286,6 +331,7 @@ PYBIND11_MODULE(luminis_mc, m) {
         .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
              "Evaluate the hard sphere distribution at x");
 
-     
+
+
 
 }

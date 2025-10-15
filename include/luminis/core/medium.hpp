@@ -1,5 +1,4 @@
 #pragma once
-#include "luminis/core/absortion.hpp"
 #include <luminis/math/rng.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/sample/phase.hpp>
@@ -11,15 +10,14 @@ using namespace luminis::sample;
 namespace luminis::core {
 
 struct Medium {
-  AbsorptionTimeDependent *absorption{nullptr};
-  PhaseFunction *phase_function{nullptr};
+  const PhaseFunction *phase_function{nullptr};
 
-  double mu_absorption{0.0}; // Absorption coefficient [1/mm]
-  double mu_scattering{0.0}; // Scattering coefficient [1/mm]
-  double mu_attenuation{0.0}; // Attenuation coefficient [1/mm]
+  const double mu_absorption{0.0}; // Absorption coefficient [1/mm]
+  const double mu_scattering{0.0}; // Scattering coefficient [1/mm]
+  const double mu_attenuation{0.0}; // Attenuation coefficient [1/mm]
 
   const double light_speed{299792458e-6}; // Speed of light in medium [mm/ns]
-  double refractive_index{1.0};     // Refractive index of the medium
+  const double refractive_index{1.0};     // Refractive index of the medium
 
   virtual ~Medium() = default;
   Medium(double absorption, double scattering, PhaseFunction *phase_func);

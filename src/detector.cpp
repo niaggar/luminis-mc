@@ -11,10 +11,26 @@ namespace luminis::core {
 Detector::Detector(const Vec3 o, const Vec3 normal, const Vec3 n, const Vec3 m)
     : origin(o), normal(normal), n_polarization(n), m_polarization(m) {}
 
+Detector Detector::copy_start() const {
+  Detector det(origin, normal, n_polarization, m_polarization);
+  return det;
+}
+
+void Detector::merge_from(const Detector &other) {
+  hits += other.hits;
+  recorded_photons.insert(recorded_photons.end(),
+                          other.recorded_photons.begin(),
+                          other.recorded_photons.end());
+}
+
 void Detector::record_hit(Photon &photon) {
   const Vec3 xn = photon.prev_pos;
   const Vec3 xf = photon.pos;
-  const Vec3 d = xf - xn;
+  const Vec3 d{
+    xf.x - xn.x,
+    xf.y - xn.y,
+    xf.z - xn.z
+  };
 
   const double denom = dot(d, normal);
 
@@ -22,14 +38,26 @@ void Detector::record_hit(Photon &photon) {
   if (std::abs(denom) < 1e-6)
     return;
 
-  const double t = dot(origin - xn, normal) / denom;
+  const double t = dot({
+    origin.x - xn.x,
+    origin.y - xn.y,
+    origin.z - xn.z
+  }, normal) / denom;
 
   // Intersection point is not between xn and xf
   if (t < 0 || t > 1)
     return;
 
-  const Vec3 hit_point = xn + d * t;
-  const double correction_distance = norm(hit_point - photon.prev_pos);
+  const Vec3 hit_point{
+    xn.x + t * d.x,
+    xn.y + t * d.y,
+    xn.z + t * d.z
+  };
+  const double correction_distance = luminis::math::norm({
+    hit_point.x - xf.x,
+    hit_point.y - xf.y,
+    hit_point.z - xf.z
+  });
   if (correction_distance > 0) {
     photon.opticalpath -= correction_distance;
   }
@@ -42,8 +70,12 @@ void Detector::record_hit(Photon &photon) {
   recorded_photons.push_back(std::move(photon));
 }
 
-std::vector<double> Detector::compute_events_histogram(const double min_theta, const double max_theta) {
-  const Vec3 backward_normal = -1 * normal;
+std::vector<double> Detector::compute_events_histogram(const double min_theta, const double max_theta) const {
+  const Vec3 backward_normal{
+      -1 * normal.x,
+      -1 * normal.y,
+      -1 * normal.z
+  };
   int max_hit_number = 0;
   for (const auto &photon : recorded_photons) {
     if (photon.events > max_hit_number) {
@@ -55,7 +87,7 @@ std::vector<double> Detector::compute_events_histogram(const double min_theta, c
   std::vector<double> histogram(n_bins, 0.0);
 
   for (const auto &photon : recorded_photons) {
-    const double cos_theta = dot(photon.dir, backward_normal) / (norm(photon.dir) * norm(backward_normal));
+    const double cos_theta = dot(photon.dir, backward_normal) / (luminis::math::norm(photon.dir) * luminis::math::norm(backward_normal));
     const double theta = std::acos(cos_theta) * (180.0 / M_PI); // Convert to degrees
 
     if (theta >= min_theta && theta <= max_theta) {
@@ -70,44 +102,52 @@ std::vector<double> Detector::compute_events_histogram(const double min_theta, c
   return histogram;
 }
 
-AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) {
+AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) const {
   std::vector<std::vector<CVec2>> Ebin(n_theta, std::vector<CVec2>(n_phi));
   std::vector<std::vector<std::complex<double>>> Enormal(n_theta, std::vector<std::complex<double>>(n_phi));
 
-  const Vec3 backward_normal = -1 * normal;
+  const Vec3 backward_normal{
+    -1 * normal.x,
+    -1 * normal.y,
+    -1 * normal.z
+  };
 
   for (auto &ph : recorded_photons) {
-      // 1) calcula (theta, phi) como arriba → (it, ip)
-      Vec3 u = normalize(ph.dir);
-      const double cos_theta = dot(u, backward_normal) / (norm(u) * norm(backward_normal));
-      const double theta = std::acos(cos_theta);           // [0, pi]
+    // 1) calcula (theta, phi) como arriba → (it, ip)
+    Vec3 u = ph.dir;
+    const double cos_theta = dot(u, backward_normal) / (luminis::math::norm(u) * luminis::math::norm(backward_normal));
+    const double theta = std::acos(cos_theta);           // [0, pi]
 
-      Vec3 u_par = u - dot(u, normal)*normal;        // componente en el plano
-      double un = dot(u_par, n_polarization);
-      double um = dot(u_par, m_polarization);
-      double phi = std::atan2(um, un);               // (-pi, pi]
-      if (phi < 0) phi += 2.0*M_PI;                  // [0, 2pi)
+    Vec3 u_par{
+      u.x - dot(u, normal) * normal.x,
+      u.y - dot(u, normal) * normal.y,
+      u.z - dot(u, normal) * normal.z
+    };
+    double un = dot(u_par, n_polarization);
+    double um = dot(u_par, m_polarization);
+    double phi = std::atan2(um, un);               // (-pi, pi]
+    if (phi < 0) phi += 2.0*M_PI;                  // [0, 2pi)
 
-      int it = std::min(int(theta / (0.5*M_PI) * n_theta), n_theta-1);
-      int ip = std::min(int(phi / (2.0*M_PI) * n_phi), n_phi-1);
+    int it = std::min(int(theta / (0.5*M_PI) * n_theta), n_theta-1);
+    int ip = std::min(int(phi / (2.0*M_PI) * n_phi), n_phi-1);
 
-      // 2) fase de propagación:
-      std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
-      std::complex<double> En_local_photon = ph.polarization[0] * phase * std::sqrt(ph.weight);
-      std::complex<double> Em_local_photon = ph.polarization[1] * phase * std::sqrt(ph.weight);
+    // 2) fase de propagación:
+    std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
+    std::complex<double> Em_local_photon = ph.polarization.m * phase * std::sqrt(ph.weight);
+    std::complex<double> En_local_photon = ph.polarization.n * phase * std::sqrt(ph.weight);
 
-      // 3) suma coherente en la celda (it, ip)
-      const Vec3 n_pho = ph.n;
-      const Vec3 m_pho = ph.m;
-      const Vec3 n_det = n_polarization;
-      const Vec3 m_det = m_polarization;
-      const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
-      const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
-      const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
+    // 3) suma coherente en la celda (it, ip)
+    const Vec3 m_pho = ph.m;
+    const Vec3 n_pho = ph.n;
+    const Vec3 m_det = m_polarization;
+    const Vec3 n_det = n_polarization;
+    const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
+    const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
+    const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
 
-      Ebin[it][ip][0] += En;
-      Ebin[it][ip][1] += Em;
-      Enormal[it][ip] += Enorm;
+    Ebin[it][ip].m += Em;
+    Ebin[it][ip].n += En;
+    Enormal[it][ip] += Enorm;
   }
 
   std::vector<std::vector<double>> Ix(n_theta, std::vector<double>(n_phi, 0.0));
@@ -117,8 +157,8 @@ AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) {
   for (int it=0; it<n_theta; ++it) {
     for (int ip=0; ip<n_phi; ++ip) {
       auto &C = Ebin[it][ip];
-      Ix[it][ip] = std::norm(C[0]);
-      Iy[it][ip] = std::norm(C[1]);
+      Ix[it][ip] = std::norm(C.m);
+      Iy[it][ip] = std::norm(C.n);
       I [it][ip] = Ix[it][ip] + Iy[it][ip] + std::norm(Enormal[it][ip]);
     }
   }
@@ -132,24 +172,32 @@ AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) {
   return result;
 }
 
-SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, const int n_x, const int n_y, const double x_max, const double y_max) {
+SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, const int n_x, const int n_y, const double x_max, const double y_max) const {
   SpatialIntensity result(n_x, n_y, x_max, y_max);
 
   std::vector<std::vector<CVec2>> Ebin(n_x, std::vector<CVec2>(n_y));
   std::vector<std::vector<std::complex<double>>> Enormal(n_x, std::vector<std::complex<double>>(n_y));
 
-  const Vec3 backward_normal = -1 * normal;
+  const Vec3 backward_normal{
+    -1 * normal.x,
+    -1 * normal.y,
+    -1 * normal.z
+  };
 
   for (auto &ph : recorded_photons) {
     // Filtra por ángulo de incidencia
-    const double cos_theta = dot(ph.dir, backward_normal) / (norm(ph.dir) * norm(backward_normal));
+    const double cos_theta = dot(ph.dir, backward_normal) / (luminis::math::norm(ph.dir) * luminis::math::norm(backward_normal));
     const double theta = std::acos(cos_theta) * (180.0 / M_PI); // Convert to degrees
     if (theta > max_theta) {
       continue;
     }
 
     // 1) calcula (x,y) como arriba → (ix, iy)
-    Vec3 r = ph.pos - origin;
+    Vec3 r{
+      ph.pos.x - origin.x,
+      ph.pos.y - origin.y,
+      ph.pos.z - origin.z
+    };
     const double x = dot(r, n_polarization);
     const double y = dot(r, m_polarization);
 
@@ -162,8 +210,8 @@ SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, con
 
     // 2) fase de propagación:
     std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
-    std::complex<double> En_local_photon = ph.polarization[0] * phase * std::sqrt(ph.weight);
-    std::complex<double> Em_local_photon = ph.polarization[1] * phase * std::sqrt(ph.weight);
+    std::complex<double> En_local_photon = ph.polarization.n * phase * std::sqrt(ph.weight);
+    std::complex<double> Em_local_photon = ph.polarization.m * phase * std::sqrt(ph.weight);
 
     // 3) suma coherente en la celda (ix, iy)
     const Vec3 n_pho = ph.n;
@@ -174,16 +222,16 @@ SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, con
     const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
     const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
 
-    Ebin[ix][iy][0] += En;
-    Ebin[ix][iy][1] += Em;
+    Ebin[ix][iy].n += En;
+    Ebin[ix][iy].m += Em;
     Enormal[ix][iy] += Enorm;
   }
 
   for (int ix=0; ix<n_x; ++ix) {
     for (int iy=0; iy<n_y; ++iy) {
       auto &C = Ebin[ix][iy];
-      result.Ix[ix][iy] = std::norm(C[0]);
-      result.Iy[ix][iy] = std::norm(C[1]);
+      result.Ix[ix][iy] = std::norm(C.m);
+      result.Iy[ix][iy] = std::norm(C.n);
       result.I [ix][iy] = result.Ix[ix][iy] + result.Iy[ix][iy] + std::norm(Enormal[ix][iy]);
     }
   }
@@ -191,19 +239,27 @@ SpatialIntensity Detector::compute_spatial_intensity(const double max_theta, con
   return result;
 }
 
-AngularIntensity Detector::compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta, const int n_phi) {
+AngularIntensity Detector::compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta, const int n_phi) const {
   std::vector<std::vector<CVec2>> Ebin(n_theta, std::vector<CVec2>(n_phi));
   std::vector<std::vector<std::complex<double>>> Enormal(n_theta, std::vector<std::complex<double>>(n_phi));
 
-  const Vec3 backward_normal = -1 * normal;
+  const Vec3 backward_normal{
+    -1 * normal.x,
+    -1 * normal.y,
+    -1 * normal.z
+  };
 
   for (auto &ph : recorded_photons) {
     // 1) calcula (theta, phi) como arriba → (it, ip)
-    Vec3 u = normalize(ph.dir);
-    const double cos_theta = dot(u, backward_normal) / (norm(u) * norm(backward_normal));
+    Vec3 u = ph.dir;
+    const double cos_theta = dot(u, backward_normal) / (luminis::math::norm(u) * luminis::math::norm(backward_normal));
     const double theta = std::acos(cos_theta);           // [0, pi]
 
-    Vec3 u_par = u - dot(u, normal)*normal;        // componente en el plano
+    Vec3 u_par{
+      u.x - dot(u, normal) * normal.x,
+      u.y - dot(u, normal) * normal.y,
+      u.z - dot(u, normal) * normal.z
+    };
     double un = dot(u_par, n_polarization);
     double um = dot(u_par, m_polarization);
     double phi = std::atan2(um, un);               // (-pi, pi]
@@ -218,8 +274,8 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
 
     // 2) fase de propagación:
     std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
-    std::complex<double> En_local_photon = ph.polarization[0] * phase * std::sqrt(ph.weight);
-    std::complex<double> Em_local_photon = ph.polarization[1] * phase * std::sqrt(ph.weight);
+    std::complex<double> En_local_photon = ph.polarization.n * phase * std::sqrt(ph.weight);
+    std::complex<double> Em_local_photon = ph.polarization.m * phase * std::sqrt(ph.weight);
 
     // 3) suma coherente en la celda (it, ip)
     const Vec3 n_pho = ph.n;
@@ -229,8 +285,8 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
     const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
     const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
     const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
-    Ebin[it][ip][0] += En;
-    Ebin[it][ip][1] += Em;
+    Ebin[it][ip].n += En;
+    Ebin[it][ip].m += Em;
     Enormal[it][ip] += Enorm;
   }
 
@@ -254,8 +310,8 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
       const double domega = dcos * dphi;
 
       auto &C = Ebin[it][ip];
-      Ix[it][ip] = std::norm(C[0]) / domega;
-      Iy[it][ip] = std::norm(C[1]) / domega;
+      Ix[it][ip] = std::norm(C.m) / domega;
+      Iy[it][ip] = std::norm(C.n) / domega;
       I [it][ip] = Ix[it][ip] + Iy[it][ip] + (std::norm(Enormal[it][ip]) / domega);
     }
   }
@@ -270,6 +326,31 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
   result.phi_max   = max_phi;
 
   return result;
+}
+
+
+Detector* combine_detectors(const std::vector<Detector> &detectors) {
+  if (detectors.empty()) {
+    LLOG_ERROR("No detectors to combine");
+    return nullptr;
+  }
+
+  Detector* combined = new Detector(detectors[0].origin, detectors[0].normal, detectors[0].n_polarization, detectors[0].m_polarization);
+
+  for (const auto &det : detectors) {
+    if (dot(det.normal, combined->normal) < 1.0 - 1e-6 ||
+        dot(det.n_polarization, combined->n_polarization) < 1.0 - 1e-6 ||
+        dot(det.m_polarization, combined->m_polarization) < 1.0 - 1e-6) {
+      LLOG_ERROR("Detectors have different orientations or positions");
+      delete combined;
+      return nullptr;
+    }
+
+    combined->hits += det.hits;
+    combined->recorded_photons.insert(combined->recorded_photons.end(), det.recorded_photons.begin(), det.recorded_photons.end());
+  }
+
+  return combined;
 }
 
 

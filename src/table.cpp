@@ -47,7 +47,7 @@ void SamplingTable::initialize(PDFFunction pdfFunc, int nDiv, double minVal, dou
   }
 }
 
-double SamplingTable::Sample(double u) {
+double SamplingTable::Sample(double u) const {
   if (values.empty() || cdf.empty()) {
     LLOG_ERROR("SamplingTable::Sample called on an uninitialized table");
     throw std::runtime_error("SamplingTable is not initialized");

@@ -1,3 +1,4 @@
+#include "luminis/math/vec.hpp"
 #include <cmath>
 #include <complex>
 #include <luminis/core/medium.hpp>
@@ -6,12 +7,8 @@
 
 namespace luminis::core {
 
-Medium::Medium(double absorption, double scattering, PhaseFunction *phase_func) {
-  mu_absorption = absorption;
-  mu_scattering = scattering;
-  mu_attenuation = mu_absorption + mu_scattering;
-  phase_function = phase_func;
-}
+Medium::Medium(double absorption, double scattering, PhaseFunction *phase_func)
+    : mu_absorption(absorption), mu_scattering(scattering), mu_attenuation(absorption + scattering), phase_function(phase_func) {}
 double Medium::sample_azimuthal_angle(Rng &rng) const {
   if (phase_function) {
     return phase_function->sample_phi(rng.uniform());
@@ -58,7 +55,7 @@ CVec2 SimpleMedium::scattering_matrix(const double theta, const double phi, cons
   const std::complex<double> s2 = std::complex<double>(0, -1 * kkk * F * std::cos(theta));
   const std::complex<double> s1 = std::complex<double>(0, -1 * kkk * F);
 
-  return {s1, s2};
+  return CVec2(s2, s1);
 }
 
 } // namespace luminis::core
