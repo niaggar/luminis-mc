@@ -2,6 +2,7 @@
 #include <complex>
 #include <luminis/math/vec.hpp>
 #include <sys/types.h>
+#include <array>
 
 using namespace luminis::math;
 

@@ -1,5 +1,4 @@
 #pragma once
-#include <array>
 #include <cmath>
 #include <complex>
 #include <sys/types.h>
@@ -32,11 +31,11 @@ struct CVec2 {
 };
 
 struct Matrix {
-  const uint32_t rows;
-  const uint32_t cols;
+  const uint rows;
+  const uint cols;
   double* data;
 
-  Matrix(uint32_t rows, uint32_t cols) : rows(rows), cols(cols) {
+  Matrix(uint rows, uint cols) : rows(rows), cols(cols) {
     data = new double[rows * cols]();
   }
 
@@ -44,11 +43,11 @@ struct Matrix {
     delete[] data;
   }
 
-  double& operator()(uint32_t i, uint32_t j) {
+  double& operator()(uint i, uint j) {
     return data[i * cols + j];
   }
 
-  const double& operator()(uint32_t i, uint32_t j) const {
+  const double& operator()(uint i, uint j) const {
     return data[i * cols + j];
   }
 };
