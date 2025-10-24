@@ -1,14 +1,24 @@
-cmake_minimum_required(VERSION 3.18)
-project(luminis_mc)
+cmake_minimum_required(VERSION 3.15...4.0)
 
-option(LUMINIS_BUILD_APP "Build CLI executable" ON)
-option(LUMINIS_BUILD_PY  "Build Python bindings" ON)
+
+project(
+  ${SKBUILD_PROJECT_NAME}
+  VERSION ${SKBUILD_PROJECT_VERSION}
+  LANGUAGES CXX)
+
 
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_library(luminis
+
+# Core headers
+add_library(_core_headers INTERFACE)
+target_include_directories(_core_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+
+# Core library
+add_library(_core_c
     src/detector.cpp
     src/laser.cpp
     src/medium.cpp
@@ -21,23 +31,16 @@ add_library(luminis
     src/meanfreepath.cpp
     src/vec.cpp
 )
+target_link_libraries(_core_c PRIVATE _core_headers)
+set_target_properties(_core_c PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(luminis PUBLIC include)
-set_target_properties(luminis PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-
-# CLI app
-if (LUMINIS_BUILD_APP)
-    add_executable(luminis_app apps/main.cpp)
-    target_link_libraries(luminis_app PRIVATE luminis)
-endif()
 
 # Python bindings
-if (LUMINIS_BUILD_PY)
-    set(PYBIND11_FINDPYTHON ON)
-    find_package(pybind11 CONFIG REQUIRED)
-    pybind11_add_module(luminis_mc bindings/python_module.cpp)
-    target_link_libraries(luminis_mc PRIVATE luminis)
-    target_compile_features(luminis_mc PRIVATE cxx_std_23)
-    install(TARGETS luminis_mc LIBRARY DESTINATION .)
-endif()
+find_package(pybind11 CONFIG REQUIRED)
+python_add_library(_core python/python_module.cpp)
+target_link_libraries(_core PRIVATE pybind11::headers _core_headers _core_c)
+set_target_properties(_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+
+# Install targets
+install(TARGETS _core DESTINATION luminis_mc)
