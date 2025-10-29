@@ -166,7 +166,12 @@ PYBIND11_MODULE(_core, m) {
       .def("compute_angular_intensity", &Detector::compute_angular_intensity, py::arg("max_theta"),
            py::arg("max_phi"), py::arg("n_theta") = 360,
            py::arg("n_phi") = 360,
-           "Get the angular intensity distribution of photon hits");
+           "Get the angular intensity distribution of photon hits")
+     .def("compute_time_resolved_spatial_intensity", &Detector::compute_time_resolved_spatial_intensity, py::arg("max_theta"),
+           py::arg("max_phi"), py::arg("dt"), py::arg("t_max"),
+           py::arg("n_x") = 1125, py::arg("n_y") = 1125,
+           py::arg("x_max") = 10.0, py::arg("y_max") = 10.0,
+           "Get the time-resolved spatial intensity distribution of photon hits");
 
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
