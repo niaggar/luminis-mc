@@ -49,6 +49,7 @@ struct Detector {
   AngularIntensity compute_speckle(const int n_theta=1125, const int n_phi=360) const;
   SpatialIntensity compute_spatial_intensity(const double max_theta, const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0) const;
   AngularIntensity compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta=1125, const int n_phi=360) const;
+  std::vector<SpatialIntensity> compute_time_resolved_spatial_intensity(const double max_theta, const double max_phi, const double dt, const double t_max, const int n_x=1125, const int n_y=1125, const double x_max=10.0, const double y_max=10.0) const;
 };
 
 Detector* combine_detectors(const std::vector<Detector> &detectors);

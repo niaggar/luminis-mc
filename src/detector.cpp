@@ -328,6 +328,85 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
   return result;
 }
 
+std::vector<SpatialIntensity> Detector::compute_time_resolved_spatial_intensity(const double max_theta, const double max_phi, const double dt, const double t_max, const int n_x, const int n_y, const double x_max, const double y_max) const {
+  const int n_t_slices = static_cast<int>(std::ceil(t_max / dt));
+  std::vector<SpatialIntensity> time_slices;
+  time_slices.reserve(n_t_slices);
+  for (int i = 0; i < n_t_slices; ++i) {
+    time_slices.emplace_back(n_x, n_y, x_max, y_max);
+  }
+
+  std::vector<std::vector<std::vector<CVec2>>> Ebin_time(n_t_slices, std::vector<std::vector<CVec2>>(n_x, std::vector<CVec2>(n_y)));
+  std::vector<std::vector<std::vector<std::complex<double>>>> Enormal_time(n_t_slices, std::vector<std::vector<std::complex<double>>>(n_x, std::vector<std::complex<double>>(n_y)));
+
+  const Vec3 backward_normal{
+    -1 * normal.x,
+    -1 * normal.y,
+    -1 * normal.z
+  };
+
+  for (auto &ph : recorded_photons) {
+    const double time = ph.launch_time + (ph.opticalpath / ph.velocity); // in ns
+    const int time_index = static_cast<int>(std::floor(time / dt));
+    if (time_index < 0 || time_index >= n_t_slices) {
+      continue;
+    }
+
+    // Filtra por ángulo de incidencia
+    const double cos_theta = dot(ph.dir, backward_normal) / (luminis::math::norm(ph.dir) * luminis::math::norm(backward_normal));
+    const double theta = std::acos(cos_theta); // [0, pi]
+    if (theta > max_theta) {
+      continue;
+    }
+
+    // 1) calcula (x,y) como arriba → (ix, iy)
+    Vec3 r{
+      ph.pos.x - origin.x,
+      ph.pos.y - origin.y,
+      ph.pos.z - origin.z
+    };
+    const double x = dot(r, n_polarization);
+    const double y = dot(r, m_polarization);
+
+    int ix = std::min(int((x + x_max) / (2.0 * x_max) * n_x), n_x-1);
+    int iy = std::min(int((y + y_max) / (2.0 * y_max) * n_y), n_y-1);
+
+    if (ix < 0 || ix >= n_x || iy < 0 || iy >= n_y) {
+      continue;
+    }
+
+    // 2) fase de propagación:
+    std::complex<double> phase = std::exp(std::complex<double>(0, ph.k * ph.opticalpath));
+    std::complex<double> En_local_photon = ph.polarization.n * phase * std::sqrt(ph.weight);
+    std::complex<double> Em_local_photon = ph.polarization.m * phase * std::sqrt(ph.weight);
+    // 3) suma coherente en la celda (ix, iy)
+    const Vec3 n_pho = ph.n;
+    const Vec3 m_pho = ph.m;
+    const Vec3 n_det = n_polarization;
+    const Vec3 m_det = m_polarization;
+    const std::complex<double> En = En_local_photon * dot(n_det, n_pho) + Em_local_photon * dot(n_det, m_pho);
+    const std::complex<double> Em = En_local_photon * dot(m_det, n_pho) + Em_local_photon * dot(m_det, m_pho);
+    const std::complex<double> Enorm = En_local_photon * dot(backward_normal, n_det) + Em_local_photon * dot(backward_normal, m_det);
+
+    Ebin_time[time_index][ix][iy].n += En;
+    Ebin_time[time_index][ix][iy].m += Em;
+    Enormal_time[time_index][ix][iy] += Enorm;
+  }
+
+  for (int t_idx = 0; t_idx < n_t_slices; ++t_idx) {
+    for (int ix = 0; ix < n_x; ++ix) {
+      for (int iy = 0; iy < n_y; ++iy) {
+        auto &C = Ebin_time[t_idx][ix][iy];
+        time_slices[t_idx].Ix[ix][iy] = std::norm(C.m);
+        time_slices[t_idx].Iy[ix][iy] = std::norm(C.n);
+        time_slices[t_idx].I [ix][iy] = time_slices[t_idx].Ix[ix][iy] + time_slices[t_idx].Iy[ix][iy] + std::norm(Enormal_time[t_idx][ix][iy]);
+      }
+    }
+  }
+
+  return time_slices;
+}
+
 
 Detector* combine_detectors(const std::vector<Detector> &detectors) {
   if (detectors.empty()) {
@@ -352,6 +431,9 @@ Detector* combine_detectors(const std::vector<Detector> &detectors) {
 
   return combined;
 }
+
+
+
 
 
 } // namespace luminis::core
