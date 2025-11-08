@@ -52,6 +52,28 @@ struct Matrix {
   }
 };
 
+struct CMatrix {
+  const uint rows;
+  const uint cols;
+  std::complex<double>* data;
+
+  CMatrix(uint rows, uint cols) : rows(rows), cols(cols) {
+    data = new std::complex<double>[rows * cols]();
+  }
+
+  ~CMatrix() {
+    delete[] data;
+  }
+
+  std::complex<double>& operator()(uint i, uint j) {
+    return data[i * cols + j];
+  }
+
+  const std::complex<double>& operator()(uint i, uint j) const {
+    return data[i * cols + j];
+  }
+};
+
 double dot(const Vec3 &a, const Vec3 &b);
 double norm(const Vec3 &v);
 

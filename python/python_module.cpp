@@ -20,7 +20,8 @@ using namespace luminis::core;
 using namespace luminis::sample;
 using namespace luminis::log;
 
-PYBIND11_MODULE(_core, m) {
+PYBIND11_MODULE(_core, m)
+{
   m.doc() = "Python bindings for the luminis-mc Monte Carlo core";
 
   // Rng bindings
@@ -53,6 +54,47 @@ PYBIND11_MODULE(_core, m) {
       .def(py::init<std::complex<double>, std::complex<double>>(), py::arg("m"), py::arg("n"))
       .def_readwrite("m", &CVec2::m)
       .def_readwrite("n", &CVec2::n);
+
+  // Matrix bindings
+  py::class_<Matrix>(m, "Matrix")
+      .def(py::init<uint, uint>(), py::arg("rows"), py::arg("cols"),
+           "Initialize a Matrix with given number of rows and columns")
+      .def("get", [](const Matrix &mat, uint i, uint j)
+           { return mat(i, j); }, py::arg("i"), py::arg("j"), "Get the element at row i and column j")
+      .def("set", [](Matrix &mat, uint i, uint j, double value)
+           { mat(i, j) = value; }, py::arg("i"), py::arg("j"), py::arg("value"), "Set the element at row i and column j to value")
+      .def("get_numpy_matrix", [](const Matrix &mat)
+           {
+             return py::array_t<double>(
+                 {mat.rows, mat.cols},       // shape
+                 {sizeof(double) * mat.cols, // strides
+                  sizeof(double)},
+                 mat.data                    // data pointer
+             );
+           },
+           "Get the matrix as a NumPy array")
+      .def_property_readonly("rows", &Matrix::rows, "Get the number of rows in the matrix")
+      .def_property_readonly("cols", &Matrix::cols, "Get the number of columns in the matrix");
+
+  py::class_<CMatrix>(m, "CMatrix")
+      .def(py::init<uint, uint>(), py::arg("rows"), py::arg("cols"),
+           "Initialize a CMatrix with given number of rows and columns")
+      .def("get", [](const CMatrix &mat, uint i, uint j)
+           { return mat(i, j); }, py::arg("i"), py::arg("j"), "Get the element at row i and column j")
+      .def("set", [](CMatrix &mat, uint i, uint j, std::complex<double> value)
+           { mat(i, j) = value; }, py::arg("i"), py::arg("j"), py::arg("value"), "Set the element at row i and column j to value")
+      .def("get_numpy_matrix", [](const CMatrix &mat)
+           {
+             return py::array_t<std::complex<double>>(
+                 {mat.rows, mat.cols},               // shape
+                 {sizeof(std::complex<double>) * mat.cols, // strides
+                  sizeof(std::complex<double>)},
+                 mat.data                            // data pointer
+             );
+           },
+           "Get the complex matrix as a NumPy array")
+      .def_property_readonly("rows", &CMatrix::rows, "Get the number of rows in the matrix")
+      .def_property_readonly("cols", &CMatrix::cols, "Get the number of columns in the matrix");
 
   // Phase function bindings
   py::class_<PhaseFunction>(m, "PhaseFunction")
@@ -167,7 +209,7 @@ PYBIND11_MODULE(_core, m) {
            py::arg("max_phi"), py::arg("n_theta") = 360,
            py::arg("n_phi") = 360,
            "Get the angular intensity distribution of photon hits")
-     .def("compute_time_resolved_spatial_intensity", &Detector::compute_time_resolved_spatial_intensity, py::arg("max_theta"),
+      .def("compute_time_resolved_spatial_intensity", &Detector::compute_time_resolved_spatial_intensity, py::arg("max_theta"),
            py::arg("max_phi"), py::arg("dt"), py::arg("t_max"),
            py::arg("n_x") = 1125, py::arg("n_y") = 1125,
            py::arg("x_max") = 10.0, py::arg("y_max") = 10.0,
@@ -270,7 +312,8 @@ PYBIND11_MODULE(_core, m) {
 
   m.def(
       "run_simulation",
-      [](SimConfig &config) {
+      [](SimConfig &config)
+      {
         py::gil_scoped_release release;
         run_simulation(config);
       },
@@ -280,7 +323,8 @@ PYBIND11_MODULE(_core, m) {
 
   m.def(
       "run_simulation_parallel",
-      [](SimConfig &config) {
+      [](SimConfig &config)
+      {
         py::gil_scoped_release release;
         run_simulation_parallel(config);
       },
@@ -298,45 +342,39 @@ PYBIND11_MODULE(_core, m) {
       .export_values();
 
   m.def(
-      "set_log_level", [](Level level) { Logger::instance().set_level(level); },
+      "set_log_level", [](Level level)
+      { Logger::instance().set_level(level); },
       py::arg("level"), "Set the logging level for the luminis-mc module");
-
 
   // meanfreepath bindings
 
   // Bind TargetDistribution base class
-    py::class_<TargetDistribution>(m, "TargetDistribution")
-        .def("evaluate", &TargetDistribution::evaluate, py::arg("x"),
-             "Evaluate the target distribution at x");
+  py::class_<TargetDistribution>(m, "TargetDistribution")
+      .def("evaluate", &TargetDistribution::evaluate, py::arg("x"),
+           "Evaluate the target distribution at x");
 
-    py::class_<metropolis_hastings>(m, "MetropolisHastings")
-        .def(py::init<TargetDistribution *>(), py::arg("target_distribution"),
-             "Initialize with a target distribution function pointer")
-        .def("accept_reject", &metropolis_hastings::accept_reject,
-             py::arg("current_state"), py::arg("target_distribution_current_state"),
-             py::arg("proposal_stddev"),py::arg("positive_support"),
-             "Perform the accept-reject step of the Metropolis-Hastings algorithm")
-        .def("sample", &metropolis_hastings::sample, py::arg("num_samples"),
-             py::arg("initial_value"), py::arg("proposal_stddev"),py::arg("positive_support"),
-             "Generate samples using the Metropolis-Hastings algorithm")
-        .def_readonly("MCMC_samples", &metropolis_hastings::MCMC_samples,
-             "Get the generated MCMC samples");
+  py::class_<metropolis_hastings>(m, "MetropolisHastings")
+      .def(py::init<TargetDistribution *>(), py::arg("target_distribution"),
+           "Initialize with a target distribution function pointer")
+      .def("accept_reject", &metropolis_hastings::accept_reject,
+           py::arg("current_state"), py::arg("target_distribution_current_state"),
+           py::arg("proposal_stddev"), py::arg("positive_support"),
+           "Perform the accept-reject step of the Metropolis-Hastings algorithm")
+      .def("sample", &metropolis_hastings::sample, py::arg("num_samples"),
+           py::arg("initial_value"), py::arg("proposal_stddev"), py::arg("positive_support"),
+           "Generate samples using the Metropolis-Hastings algorithm")
+      .def_readonly("MCMC_samples", &metropolis_hastings::MCMC_samples,
+                    "Get the generated MCMC samples");
 
+  py::class_<Exponential, TargetDistribution>(m, "Exponential")
+      .def(py::init<double>(), py::arg("lambda"),
+           "Initialize the exponential distribution with rate parameter lambda")
+      .def("evaluate", &Exponential::evaluate, py::arg("x"),
+           "Evaluate the exponential distribution at x");
 
-     py::class_<Exponential, TargetDistribution>(m, "Exponential")
-        .def(py::init<double>(), py::arg("lambda"),
-             "Initialize the exponential distribution with rate parameter lambda")
-        .def("evaluate", &Exponential::evaluate, py::arg("x"),
-             "Evaluate the exponential distribution at x");
-
-
-     py::class_<HardSpheres, TargetDistribution>(m, "HardSpheres")
-        .def(py::init<double, double>(), py::arg("radius"), py::arg("density"),
-             "Initialize the hard sphere distribution with given radius and density")
-        .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
-             "Evaluate the hard sphere distribution at x");
-
-
-
-
+  py::class_<HardSpheres, TargetDistribution>(m, "HardSpheres")
+      .def(py::init<double, double>(), py::arg("radius"), py::arg("density"),
+           "Initialize the hard sphere distribution with given radius and density")
+      .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
+           "Evaluate the hard sphere distribution at x");
 }
