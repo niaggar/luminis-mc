@@ -1,7 +1,10 @@
 #pragma once
+#include "luminis/log/logger.hpp"
 #include <cmath>
 #include <complex>
+#include <cstdlib>
 #include <sys/types.h>
+#include <vector>
 
 namespace luminis::math {
 
@@ -23,8 +26,8 @@ struct Vec2 {
 };
 
 struct CVec2 {
-  std::complex<double> n{0.0, 0.0};
   std::complex<double> m{0.0, 0.0};
+  std::complex<double> n{0.0, 0.0};
 
   CVec2() = default;
   CVec2(std::complex<double> m, std::complex<double> n) : n(n), m(m) {}
@@ -33,21 +36,25 @@ struct CVec2 {
 struct Matrix {
   const uint rows;
   const uint cols;
-  double* data;
+  std::vector<double> data;
 
   Matrix(uint rows, uint cols) : rows(rows), cols(cols) {
-    data = new double[rows * cols]();
-  }
-
-  ~Matrix() {
-    delete[] data;
+    data.resize(rows * cols, 0.0);
   }
 
   double& operator()(uint i, uint j) {
+    if (i >= rows || j >= cols) {
+      LLOG_ERROR("Matrix index out of range");
+      std::exit(EXIT_FAILURE);
+    }
     return data[i * cols + j];
   }
 
   const double& operator()(uint i, uint j) const {
+    if (i >= rows || j >= cols) {
+      LLOG_ERROR("Matrix index out of range");
+      std::exit(EXIT_FAILURE);
+    }
     return data[i * cols + j];
   }
 };
@@ -55,21 +62,25 @@ struct Matrix {
 struct CMatrix {
   const uint rows;
   const uint cols;
-  std::complex<double>* data;
+  std::vector<std::complex<double>> data;
 
   CMatrix(uint rows, uint cols) : rows(rows), cols(cols) {
-    data = new std::complex<double>[rows * cols]();
-  }
-
-  ~CMatrix() {
-    delete[] data;
+    data.resize(rows * cols, std::complex<double>(0.0, 0.0));
   }
 
   std::complex<double>& operator()(uint i, uint j) {
+    if (i >= rows || j >= cols) {
+      LLOG_ERROR("CMatrix index out of range");
+      std::exit(EXIT_FAILURE);
+    }
     return data[i * cols + j];
   }
 
   const std::complex<double>& operator()(uint i, uint j) const {
+    if (i >= rows || j >= cols) {
+      LLOG_ERROR("CMatrix index out of range");
+      std::exit(EXIT_FAILURE);
+    }
     return data[i * cols + j];
   }
 };

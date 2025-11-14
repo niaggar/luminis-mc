@@ -56,45 +56,61 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("n", &CVec2::n);
 
   // Matrix bindings
-  py::class_<Matrix>(m, "Matrix")
+  py::class_<Matrix>(m, "Matrix", py::buffer_protocol())
       .def(py::init<uint, uint>(), py::arg("rows"), py::arg("cols"),
            "Initialize a Matrix with given number of rows and columns")
       .def("get", [](const Matrix &mat, uint i, uint j)
            { return mat(i, j); }, py::arg("i"), py::arg("j"), "Get the element at row i and column j")
       .def("set", [](Matrix &mat, uint i, uint j, double value)
            { mat(i, j) = value; }, py::arg("i"), py::arg("j"), py::arg("value"), "Set the element at row i and column j to value")
-      .def("get_numpy_matrix", [](const Matrix &mat)
+      .def("get_numpy", [](const Matrix &mat)
            {
              return py::array_t<double>(
-                 {mat.rows, mat.cols},       // shape
-                 {sizeof(double) * mat.cols, // strides
-                  sizeof(double)},
-                 mat.data                    // data pointer
-             );
+                 {mat.rows, mat.cols},
+                 {sizeof(double) * mat.cols, sizeof(double)},
+                 mat.data.data());
            },
-           "Get the matrix as a NumPy array")
-      .def_property_readonly("rows", &Matrix::rows, "Get the number of rows in the matrix")
-      .def_property_readonly("cols", &Matrix::cols, "Get the number of columns in the matrix");
+           "Get the matrix data as a NumPy array")
+      .def_buffer([](Matrix &mat) -> py::buffer_info
+           {
+             return py::buffer_info(
+                 mat.data.data(),
+                 sizeof(double),
+                 py::format_descriptor<double>::format(),
+                 2,
+                 {mat.rows, mat.cols},
+                 {sizeof(double) * mat.cols, sizeof(double)});
+           })
+      .def_readonly("rows", &Matrix::rows, "Get the number of rows in the matrix")
+      .def_readonly("cols", &Matrix::cols, "Get the number of columns in the matrix");
 
-  py::class_<CMatrix>(m, "CMatrix")
+  py::class_<CMatrix>(m, "CMatrix", py::buffer_protocol())
       .def(py::init<uint, uint>(), py::arg("rows"), py::arg("cols"),
            "Initialize a CMatrix with given number of rows and columns")
       .def("get", [](const CMatrix &mat, uint i, uint j)
            { return mat(i, j); }, py::arg("i"), py::arg("j"), "Get the element at row i and column j")
       .def("set", [](CMatrix &mat, uint i, uint j, std::complex<double> value)
            { mat(i, j) = value; }, py::arg("i"), py::arg("j"), py::arg("value"), "Set the element at row i and column j to value")
-      .def("get_numpy_matrix", [](const CMatrix &mat)
+      .def("get_numpy", [](const CMatrix &mat)
            {
              return py::array_t<std::complex<double>>(
-                 {mat.rows, mat.cols},               // shape
-                 {sizeof(std::complex<double>) * mat.cols, // strides
-                  sizeof(std::complex<double>)},
-                 mat.data                            // data pointer
-             );
+                 {mat.rows, mat.cols},
+                 {sizeof(std::complex<double>) * mat.cols, sizeof(std::complex<double>)},
+                 mat.data.data());
            },
-           "Get the complex matrix as a NumPy array")
-      .def_property_readonly("rows", &CMatrix::rows, "Get the number of rows in the matrix")
-      .def_property_readonly("cols", &CMatrix::cols, "Get the number of columns in the matrix");
+           "Get the complex matrix data as a NumPy array")
+      .def_buffer([](CMatrix &mat) -> py::buffer_info
+           {
+             return py::buffer_info(
+                 mat.data.data(),
+                 sizeof(std::complex<double>),
+                 py::format_descriptor<std::complex<double>>::format(),
+                 2,
+                 {mat.rows, mat.cols},
+                 {sizeof(std::complex<double>) * mat.cols, sizeof(std::complex<double>)});
+           })
+      .def_readonly("rows", &CMatrix::rows, "Get the number of rows in the matrix")
+      .def_readonly("cols", &CMatrix::cols, "Get the number of columns in the matrix");
 
   // Phase function bindings
   py::class_<PhaseFunction>(m, "PhaseFunction")
@@ -167,6 +183,22 @@ PYBIND11_MODULE(_core, m)
       .def("get_stokes_parameters", &Photon::get_stokes_parameters,
            "Get the Stokes parameters of the photon");
 
+  py::class_<PhotonRecord>(m, "PhotonRecord")
+      .def_readonly("velocity", &PhotonRecord::velocity)
+      .def_readonly("wavelength_nm", &PhotonRecord::wavelength_nm)
+      .def_readonly("k", &PhotonRecord::k)
+      .def_readonly("events", &PhotonRecord::events)
+      .def_readonly("penetration_depth", &PhotonRecord::penetration_depth)
+      .def_readonly("launch_time", &PhotonRecord::launch_time)
+      .def_readonly("arrival_time", &PhotonRecord::arrival_time)
+      .def_readonly("opticalpath", &PhotonRecord::opticalpath)
+      .def_readonly("weight", &PhotonRecord::weight)
+      .def_readonly("position", &PhotonRecord::position)
+      .def_readonly("direction", &PhotonRecord::direction)
+      .def_readonly("m", &PhotonRecord::m)
+      .def_readonly("n", &PhotonRecord::n)
+      .def_readonly("polarization", &PhotonRecord::polarization);
+
   // Laser Bindings
   py::enum_<LaserSource>(m, "LaserSource")
       .value("Point", LaserSource::Point)
@@ -185,53 +217,73 @@ PYBIND11_MODULE(_core, m)
 
   // Detector bindings
   py::class_<Detector>(m, "Detector")
-      .def(py::init<Vec3, Vec3, Vec3, Vec3>(), py::arg("origin"),
-           py::arg("normal"), py::arg("n_polarization"),
-           py::arg("m_polarization"))
+      .def(py::init<double>(), py::arg("z"),
+           "Initialize a Detector at a given z position")
       .def_readonly("hits", &Detector::hits)
       .def_readonly("origin", &Detector::origin)
       .def_readonly("normal", &Detector::normal)
+      .def_readonly("backward_normal", &Detector::backward_normal)
+      .def_readonly("n_polarization", &Detector::n_polarization)
+      .def_readonly("m_polarization", &Detector::m_polarization)
       .def_readonly("recorded_photons", &Detector::recorded_photons)
       .def("record_hit", &Detector::record_hit, py::arg("photon"),
            "Record a photon hit on the detector")
       .def("compute_events_histogram", &Detector::compute_events_histogram, py::arg("min_theta"),
            py::arg("max_theta"),
            "Get a histogram of photon hits based on the number of scattering events")
+      .def("compute_theta_histogram", &Detector::compute_theta_histogram, py::arg("min_theta"),
+           py::arg("max_theta"), py::arg("n_bins"),
+           "Get a histogram of photon hits based on the scattering angle theta")
+      .def("compute_phi_histogram", &Detector::compute_phi_histogram, py::arg("min_phi"),
+           py::arg("max_phi"), py::arg("n_bins"),
+           "Get a histogram of photon hits based on the scattering angle phi")
       .def("compute_speckle",
            &Detector::compute_speckle, py::arg("n_theta") = 1125,
            py::arg("n_phi") = 360,
            "Get the angular speckle distribution of photon hits")
-      .def("compute_spatial_intensity", &Detector::compute_spatial_intensity, py::arg("max_theta"),
-           py::arg("n_x") = 1125, py::arg("n_y") = 1125,
-           py::arg("x_max") = 10.0, py::arg("y_max") = 10.0,
+      .def("compute_spatial_intensity", &Detector::compute_spatial_intensity, py::arg("x_len"),
+           py::arg("y_len"), py::arg("max_theta"), py::arg("n_x") = 1125,
+           py::arg("n_y") = 1125,
            "Get the spatial intensity distribution of photon hits")
       .def("compute_angular_intensity", &Detector::compute_angular_intensity, py::arg("max_theta"),
            py::arg("max_phi"), py::arg("n_theta") = 360,
            py::arg("n_phi") = 360,
            "Get the angular intensity distribution of photon hits")
-      .def("compute_time_resolved_spatial_intensity", &Detector::compute_time_resolved_spatial_intensity, py::arg("max_theta"),
-           py::arg("max_phi"), py::arg("dt"), py::arg("t_max"),
-           py::arg("n_x") = 1125, py::arg("n_y") = 1125,
-           py::arg("x_max") = 10.0, py::arg("y_max") = 10.0,
-           "Get the time-resolved spatial intensity distribution of photon hits");
+      .def("compute_time_resolved_spatial_intensity", &Detector::compute_time_resolved_spatial_intensity,
+           py::arg("x_len"), py::arg("y_len"), py::arg("max_theta"),
+           py::arg("t_max"), py::arg("dt"), py::arg("n_x") = 1125,
+           py::arg("n_y") = 1125,
+           "Get the time-resolved spatial intensity distribution of photon hits")
+      .def("save_recorded_photons", &Detector::save_recorded_photons, py::arg("filename"),
+           "Save recorded photons to a binary file")
+      .def("load_recorded_photons", &Detector::load_recorded_photons, py::arg("filename"),
+           "Load recorded photons from a binary file");
 
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
       .def_readonly("Iy", &AngularIntensity::Iy)
-      .def_readonly("I", &AngularIntensity::I)
+      .def_readonly("Iz", &AngularIntensity::Iz)
+      .def_readonly("I_total", &AngularIntensity::I_total)
+      .def_readonly("Ico", &AngularIntensity::Ico)
+      .def_readonly("Icros", &AngularIntensity::Icros)
       .def_readonly("N_theta", &AngularIntensity::N_theta)
       .def_readonly("N_phi", &AngularIntensity::N_phi)
       .def_readonly("theta_max", &AngularIntensity::theta_max)
-      .def_readonly("phi_max", &AngularIntensity::phi_max);
+      .def_readonly("phi_max", &AngularIntensity::phi_max)
+      .def_readonly("dtheta", &AngularIntensity::dtheta)
+      .def_readonly("dphi", &AngularIntensity::dphi);
 
   py::class_<SpatialIntensity>(m, "SpatialIntensity")
       .def_readonly("Ix", &SpatialIntensity::Ix)
       .def_readonly("Iy", &SpatialIntensity::Iy)
-      .def_readonly("I", &SpatialIntensity::I)
+      .def_readonly("Iz", &SpatialIntensity::Iz)
+      .def_readonly("I_total", &SpatialIntensity::I_total)
+      .def_readonly("Ico", &SpatialIntensity::Ico)
+      .def_readonly("Icros", &SpatialIntensity::Icros)
       .def_readonly("N_x", &SpatialIntensity::N_x)
       .def_readonly("N_y", &SpatialIntensity::N_y)
-      .def_readonly("x_max", &SpatialIntensity::x_max)
-      .def_readonly("y_max", &SpatialIntensity::y_max)
+      .def_readonly("x_len", &SpatialIntensity::x_len)
+      .def_readonly("y_len", &SpatialIntensity::y_len)
       .def_readonly("dx", &SpatialIntensity::dx)
       .def_readonly("dy", &SpatialIntensity::dy);
 

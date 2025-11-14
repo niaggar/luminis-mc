@@ -1,93 +1,49 @@
 # %%
 
 from luminis_mc import (
-    Laser,
-    SimpleMedium,
     Detector,
-    SimConfig,
-    HenyeyGreensteinPhaseFunction,
-    AbsortionTimeDependent,
-    RayleighDebyePhaseFunction,
-    Rng,
 )
-from luminis_mc import LogLevel, LaserSource
-from luminis_mc import run_simulation, set_log_level
+from luminis_mc import LogLevel
+from luminis_mc import set_log_level
 import matplotlib.pyplot as plt
 import numpy as np
 
 set_log_level(LogLevel.debug)
 
-# %%
+detector = Detector(0)
+detector.load_recorded_photons("test-data-phi-conditional.dat")
 
-# Global frame of reference
-n_global = [1, 0, 0]
-m_global = [0, 1, 0]
-s_global = [0, 0, 1]
-light_speed = 299792458e-6
+events_hist = detector.compute_events_histogram(0, np.pi / 2)
+theta_hist = detector.compute_theta_histogram(0, np.pi / 2, 100)
+phi_hist = detector.compute_phi_histogram(0, 2*np.pi, 100)
 
-# Medium parameters
-radius = 1 # in micrometers
-mean_free_path = 2.8 # in micrometers
-wavelength = 1  # in micrometers
-inv_mfp = 1 / mean_free_path
-mu_absortion = 0.003 * inv_mfp
-mu_scattering = inv_mfp - mu_absortion
+# Plot histograms
+fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
-print(f"Mean free path: {mean_free_path}")
-print(f"Medium radius: {radius}")
+# Events histogram
+axes[0].plot(range(len(events_hist)), events_hist, linewidth=2)
+axes[0].set_xlabel('Event Index')
+axes[0].set_ylabel('Count')
+axes[0].set_title('Events Histogram')
+axes[0].grid(True, alpha=0.3)
 
-# Time parameters
-t_ref = mean_free_path / light_speed
-dt = 10 * t_ref
-max_time = 50 * t_ref
+# Theta histogram
+theta_bins = np.linspace(0, np.pi / 2, len(theta_hist) + 1)
+theta_centers = (theta_bins[:-1] + theta_bins[1:]) / 2
+axes[1].plot(theta_centers, theta_hist, linewidth=2)
+axes[1].set_xlabel('Theta (rad)')
+axes[1].set_ylabel('Count')
+axes[1].set_title('Theta Histogram')
+axes[1].grid(True, alpha=0.3)
 
-# Absortion parameters
-r_size = 100 * mean_free_path
-z_size = 200 * mean_free_path
-dr = mean_free_path / 5
-dz = mean_free_path / 5
+# Phi histogram
+phi_bins = np.linspace(0, 2*np.pi, len(phi_hist) + 1)
+phi_centers = (phi_bins[:-1] + phi_bins[1:]) / 2
+axes[2].plot(phi_centers, phi_hist, linewidth=2)
+axes[2].set_xlabel('Phi (rad)')
+axes[2].set_ylabel('Count')
+axes[2].set_title('Phi Histogram')
+axes[2].grid(True, alpha=0.3)
 
-# Phase function parameters
-thetaMin = 0.00001
-thetaMax = np.pi
-nDiv = 1000
-n_photons = 1000000
-
-# Laser parameters
-origin = [0, 0, 0]
-polarization = [1, 0]
-laser_radius = 0.1 * mean_free_path
-laser_type = LaserSource.Point
-# %%
-
-# Initialize components
-config = SimConfig(n_photons=n_photons)
-laser_source = Laser(origin, s_global, n_global, m_global, polarization, wavelength, laser_radius, laser_type)
-detector = Detector(origin, s_global, n_global, m_global)
-phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
-medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
-rng = Rng()
-print("Anystropy g:", phase_function.get_anisotropy_factor(rng))
-# %%
-
-run_simulation(config, medium, detector, laser_source)
-
-# %%
-
-print("Recorded photons:", len(detector.recorded_photons))
-
-min_hist_angle = 0
-max_hist_angle_list = [0.2, 1, 10, 30, 45, 180]
-
-for max_hist_angle in max_hist_angle_list:
-    hit_histogram_raw_data = detector.compute_events_histogram(min_hist_angle, max_hist_angle)
-    event_counts = np.asarray(hit_histogram_raw_data, dtype=int)
-    k = np.arange(len(event_counts))
-    plt.figure(figsize=(7,4))
-    plt.bar(k, event_counts, width=0.9)
-    plt.title(f"Histogram of detected photons (0 to {max_hist_angle} degrees)")
-    plt.xlabel("Event bin")
-    plt.ylabel("Number of photons")
-    plt.xlim(0, 1000)
-    plt.tight_layout()
-    plt.show()
+plt.tight_layout()
+plt.show()

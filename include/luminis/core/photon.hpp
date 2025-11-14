@@ -16,6 +16,7 @@ struct Photon {
   Vec3 n{0, 1, 0};
 
   uint events{0};
+  double penetration_depth{0.0};
   bool alive{true};
   double wavelength_nm{0.0};
   double k{0.0};
@@ -34,11 +35,13 @@ struct Photon {
   std::array<double, 4> get_stokes_parameters() const;
 };
 
-struct PhotonDetectorRecord {
+struct PhotonRecord {
   double velocity{299792458e-6}; // Speed of light in medium [mm/ns]
   double wavelength_nm{0.0};
+  double k{0.0};
 
-  double events{0};
+  uint events{0};
+  double penetration_depth{0.0};
   double launch_time{0.0};
   double arrival_time{0.0};
   double opticalpath{0.0};

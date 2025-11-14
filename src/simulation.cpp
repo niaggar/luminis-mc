@@ -141,8 +141,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     // Get scattering matrix
     CVec2 S = medium.scattering_matrix(theta, 0, photon.k);
 
-    // const double phi = medium.sample_azimuthal_angle(rng);
-    const double phi = medium.sample_conditional_azimuthal_angle(rng, S, photon.polarization, photon.k, theta);
+    const double phi = medium.sample_azimuthal_angle(rng);
+    // const double phi = medium.sample_conditional_azimuthal_angle(rng, S, photon.polarization, photon.k, theta);
     const double cos_theta = std::cos(theta);
     const double sin_theta = std::sin(theta);
     const double cos_phi = std::cos(phi);
