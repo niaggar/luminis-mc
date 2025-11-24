@@ -54,7 +54,7 @@ struct Detector {
 
   /// @brief Create empty detector copy for parallel processing
   Detector copy_start() const;
-  
+
   /// @brief Merge results from another detector
   /// @param other Detector to merge from
   void merge_from(const Detector &other);
@@ -76,13 +76,13 @@ struct Detector {
   /// @param max_phi Maximum angle (rads)
   /// @return Histogram bins
   std::vector<double> compute_phi_histogram(const double min_phi, const double max_phi, const int n_bins) const;
-  
+
   /// @brief Compute speckle pattern from interference
   /// @param n_theta Angular bins (theta)
   /// @param n_phi Angular bins (phi)
   /// @return Angular intensity pattern
   AngularIntensity compute_speckle(const int n_theta=1125, const int n_phi=360) const;
-  
+
   /// @brief Compute spatial intensity distribution centered at origin=(0,0,z)
   /// @param x_len Length in x direction
   /// @param y_len Length in y direction
@@ -91,17 +91,17 @@ struct Detector {
   /// @param n_y Number of bins in y direction
   /// @return Spatial intensity pattern
   SpatialIntensity compute_spatial_intensity(const double x_len, const double y_len, const double max_theta, const int n_x=1125, const int n_y=1125) const;
-  
+
   /// @brief Compute angular intensity distribution
   AngularIntensity compute_angular_intensity(const double max_theta, const double max_phi, const int n_theta=1125, const int n_phi=360) const;
-  
+
   /// @brief Compute time-resolved spatial intensity
   std::vector<SpatialIntensity> compute_time_resolved_spatial_intensity(const double x_len, const double y_len, const double max_theta, const double t_max, const double dt, const int n_x=1125, const int n_y=1125) const;
 
   /// @brief Save photon records to binary file
   /// @param filename Output file path
   void save_recorded_photons(const std::string &filename) const;
-  
+
   /// @brief Load photon records from binary file
   /// @param filename Input file path
   void load_recorded_photons(const std::string &filename);

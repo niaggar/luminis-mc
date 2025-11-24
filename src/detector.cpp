@@ -203,8 +203,8 @@ AngularIntensity Detector::compute_speckle(const int n_theta, const int n_phi) c
       intensity.Iy(it, ip) = std::norm(E_y(it, ip)) / solid_angle;
       intensity.Iz(it, ip) = std::norm(E_z(it, ip)) / solid_angle;
       intensity.I_total(it, ip) = intensity.Ix(it, ip) + intensity.Iy(it, ip) + intensity.Iz(it, ip);
-      intensity.Ico(it, ip) = std::norm(E_x(it, ip) + std::complex<double>(0,1) * E_y(it, ip)) / solid_angle;
-      intensity.Icros(it, ip) = std::norm(E_x(it, ip) - std::complex<double>(0,1) * E_y(it, ip)) / solid_angle;
+      intensity.Ico(it, ip) = std::norm((E_x(it, ip) + std::complex<double>(0,1) * E_y(it, ip)) / std::sqrt(2.0)) / solid_angle;
+      intensity.Icros(it, ip) = std::norm((E_x(it, ip) - std::complex<double>(0,1) * E_y(it, ip)) / std::sqrt(2.0)) / solid_angle;
     }
   }
 
@@ -262,8 +262,8 @@ SpatialIntensity Detector::compute_spatial_intensity(const double x_len, const d
       intensity.Iy(ix, iy) = std::norm(E_y(ix, iy)) / area_per_bin;
       intensity.Iz(ix, iy) = std::norm(E_z(ix, iy)) / area_per_bin;
       intensity.I_total(ix, iy) = intensity.Ix(ix, iy) + intensity.Iy(ix, iy) + intensity.Iz(ix, iy);
-      intensity.Ico(ix, iy) = std::norm(E_x(ix, iy) + std::complex<double>(0,1) * E_y(ix, iy)) / area_per_bin;
-      intensity.Icros(ix, iy) = std::norm(E_x(ix, iy) - std::complex<double>(0,1) * E_y(ix, iy)) / area_per_bin;
+      intensity.Ico(ix, iy) = std::norm((E_x(ix, iy) + std::complex<double>(0,1) * E_y(ix, iy)) / std::sqrt(2.0)) / area_per_bin;
+      intensity.Icros(ix, iy) = std::norm((E_x(ix, iy) - std::complex<double>(0,1) * E_y(ix, iy)) / std::sqrt(2.0)) / area_per_bin;
     }
   }
 
@@ -322,8 +322,8 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
       intensity.Iy(it, ip) = std::norm(E_y(it, ip)) / solid_angle;
       intensity.Iz(it, ip) = std::norm(E_z(it, ip)) / solid_angle;
       intensity.I_total(it, ip) = intensity.Ix(it, ip) + intensity.Iy(it, ip) + intensity.Iz(it, ip);
-      intensity.Ico(it, ip) = std::norm(E_x(it, ip) + std::complex<double>(0,1) * E_y(it, ip)) / solid_angle;
-      intensity.Icros(it, ip) = std::norm(E_x(it, ip) - std::complex<double>(0,1) * E_y(it, ip)) / solid_angle;
+      intensity.Ico(it, ip) = std::norm((E_x(it, ip) + std::complex<double>(0,1) * E_y(it, ip)) / std::sqrt(2.0)) / solid_angle;
+      intensity.Icros(it, ip) = std::norm((E_x(it, ip) - std::complex<double>(0,1) * E_y(it, ip)) / std::sqrt(2.0)) / solid_angle;
     }
   }
 
@@ -413,8 +413,8 @@ std::vector<SpatialIntensity> Detector::compute_time_resolved_spatial_intensity(
         intensity.Iy(ix, iy) = std::norm(E_y(ix, iy)) / area_per_bin;
         intensity.Iz(ix, iy) = std::norm(E_z(ix, iy)) / area_per_bin;
         intensity.I_total(ix, iy) = intensity.Ix(ix, iy) + intensity.Iy(ix, iy) + intensity.Iz(ix, iy);
-        intensity.Ico(ix, iy) = std::norm(E_x(ix, iy) + std::complex<double>(0,1) * E_y(ix, iy)) / area_per_bin;
-        intensity.Icros(ix, iy) = std::norm(E_x(ix, iy) - std::complex<double>(0,1) * E_y(ix, iy)) / area_per_bin;
+        intensity.Ico(ix, iy) = std::norm((E_x(ix, iy) + std::complex<double>(0,1) * E_y(ix, iy)) / std::sqrt(2.0)) / area_per_bin;
+        intensity.Icros(ix, iy) = std::norm((E_x(ix, iy) - std::complex<double>(0,1) * E_y(ix, iy)) / std::sqrt(2.0)) / area_per_bin;
       }
     }
   }
