@@ -11,7 +11,7 @@ import numpy as np
 set_log_level(LogLevel.debug)
 
 detector = Detector(0)
-detector.load_recorded_photons("test-data-phi-conditional.dat")
+detector.load_recorded_photons("test-data-phi-random.dat")
 
 events_hist = detector.compute_events_histogram(0, np.pi / 2)
 theta_hist = detector.compute_theta_histogram(0, np.pi / 2, 100)

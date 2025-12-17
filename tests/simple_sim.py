@@ -44,7 +44,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 5_000_000
+n_photons = 1_000_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -52,7 +52,7 @@ polarization = CVec2(1, 0)
 laser_radius = 0.1 * mean_free_path
 laser_type = LaserSource.Gaussian
 
-laser_source = Laser(origin, s_global, n_global, m_global, polarization, wavelength, laser_radius, laser_type)
+laser_source = Laser(origin, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(0)
 phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
