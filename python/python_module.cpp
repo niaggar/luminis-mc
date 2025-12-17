@@ -207,11 +207,10 @@ PYBIND11_MODULE(_core, m)
       .export_values();
 
   py::class_<Laser>(m, "Laser")
-      .def(
-          py::init<Vec3, Vec3, Vec3, Vec3, CVec2, double, double, LaserSource>(),
-          py::arg("position"), py::arg("direction"), py::arg("local_m"),
-          py::arg("local_n"), py::arg("polarization"), py::arg("wavelength"),
-          py::arg("sigma"), py::arg("source_type"))
+      .def(py::init<Vec3, CVec2, double, double, LaserSource>(),
+           py::arg("position"), py::arg("polarization"), py::arg("wavelength"),
+           py::arg("sigma"), py::arg("source_type"),
+           "Initialize a Laser source with given parameters")
       .def("emit_photon", &Laser::emit_photon, py::arg("rng"),
            "Emit a photon from the laser source");
 

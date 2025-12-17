@@ -119,17 +119,26 @@ void run_simulation_parallel(const SimConfig &config) {
 }
 
 void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, AbsorptionTimeDependent *absorption) {
+  const uint first_event = 0;
+
+  // Update incident direction for CBS
+  photon.s_0 = photon.dir;
+
+
   while (photon.alive) {
     // Sample free step
     const double step = medium.sample_free_path(rng);
     photon.opticalpath += step;
     photon.prev_pos = photon.pos;
-    photon.pos.x += step * photon.dir.x;
-    photon.pos.y += step * photon.dir.y;
-    photon.pos.z += step * photon.dir.z;
+    photon.pos = photon.pos + photon.dir * step;
+
+    // Update first scatter info for CBS
+    if (photon.events == first_event) {
+      photon.r_0 = photon.pos;
+    }
 
     // Check for detector hit
-    if (photon.events != 0) {
+    if (photon.events != first_event) {
       detector.record_hit(photon);
     }
     if (!photon.alive)
@@ -139,24 +148,36 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     const double theta = medium.sample_scattering_angle(rng);
 
     // Get scattering matrix
-    CVec2 S = medium.scattering_matrix(theta, 0, photon.k);
+    CVec2 S_vec = medium.scattering_matrix(theta, 0, photon.k);
 
     const double phi = medium.sample_azimuthal_angle(rng);
-    // const double phi = medium.sample_conditional_azimuthal_angle(rng, S, photon.polarization, photon.k, theta);
+    // const double phi = medium.sample_conditional_azimuthal_angle(rng, S_vec, photon.polarization, photon.k, theta);
     const double cos_theta = std::cos(theta);
     const double sin_theta = std::sin(theta);
     const double cos_phi = std::cos(phi);
     const double sin_phi = std::sin(phi);
 
+
+
     // Update photon polarization if needed
     if (photon.polarized) {
+      // Construct scattering matrix M_current = S * R
+      CMatrix R(2, 2);
+      R(0, 0) = cos_phi;   R(0, 1) = sin_phi;
+      R(1, 0) = -sin_phi;  R(1, 1) = cos_phi;
+      CMatrix S(2, 2);
+      S(0, 0) = S_vec.m;   S(0, 1) = 0.0;
+      S(1, 0) = 0.0;       S(1, 1) = S_vec.n;
+      CMatrix M_current = matmul(S, R);
+
+      // Calculate normalization factor F
       const std::complex<double> Em = photon.polarization.m;
       const std::complex<double> En = photon.polarization.n;
 
       const double Emm = std::norm(Em);
       const double Enn = std::norm(En);
-      const double s22 = std::norm(S.m);
-      const double s11 = std::norm(S.n);
+      const double s22 = std::norm(S_vec.m);
+      const double s11 = std::norm(S_vec.n);
 
       const double pow_cos_phi = std::pow(cos_phi, 2);
       const double pow_sin_phi = std::pow(sin_phi, 2);
@@ -166,9 +187,14 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
           Enn * (s22 * pow_sin_phi + s11 * pow_cos_phi) +
           2.0 * std::real(Em * std::conj(En)) * (s22 - s11) * sin_phi * cos_phi;
 
+      // Update polarization components
       const double F_inv_sqrt = 1.0 / std::sqrt(F);
-      photon.polarization.m = F_inv_sqrt * S.m * (Em * cos_phi + En * sin_phi);
-      photon.polarization.n = F_inv_sqrt * S.n * (-Em * sin_phi + En * cos_phi);
+      photon.polarization.m = (M_current(0, 0) * Em + M_current(0, 1) * En) * F_inv_sqrt;
+      photon.polarization.n = (M_current(1, 0) * Em + M_current(1, 1) * En) * F_inv_sqrt;
+
+
+
+
     }
 
     // Update photon direction
@@ -176,15 +202,9 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     const Vec3 old_m = photon.m;
     const Vec3 old_n = photon.n;
 
-    photon.m.x = old_m.x * cos_theta * cos_phi + old_n.x * cos_theta * sin_phi - old_dir.x * sin_theta;
-    photon.m.y = old_m.y * cos_theta * cos_phi + old_n.y * cos_theta * sin_phi - old_dir.y * sin_theta;
-    photon.m.z = old_m.z * cos_theta * cos_phi + old_n.z * cos_theta * sin_phi - old_dir.z * sin_theta;
-    photon.n.x = old_m.x * -1 * sin_phi + old_n.x * cos_phi;
-    photon.n.y = old_m.y * -1 * sin_phi + old_n.y * cos_phi;
-    photon.n.z = old_m.z * -1 * sin_phi + old_n.z * cos_phi;
-    photon.dir.x = old_m.x * sin_theta * cos_phi + old_n.x * sin_theta * sin_phi + old_dir.x * cos_theta;
-    photon.dir.y = old_m.y * sin_theta * cos_phi + old_n.y * sin_theta * sin_phi + old_dir.y * cos_theta;
-    photon.dir.z = old_m.z * sin_theta * cos_phi + old_n.z * sin_theta * sin_phi + old_dir.z * cos_theta;
+    photon.m = old_m * cos_theta * cos_phi + old_n * cos_theta * sin_phi - old_dir * sin_theta;
+    photon.n = old_m * -1 * sin_phi + old_n * cos_phi;
+    photon.dir = old_m * sin_theta * cos_phi + old_n * sin_theta * sin_phi + old_dir * cos_theta;
 
     // Update photon events
     const double d_weight = photon.weight * (medium.mu_absorption / medium.mu_attenuation);

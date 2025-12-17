@@ -11,10 +11,10 @@ namespace luminis::core {
 
 Detector::Detector(double z) {
   origin = {0, 0, z};
-  normal = {0, 0, 1};
-  backward_normal = {0, 0, -1};
-  n_polarization = {1, 0, 0};
-  m_polarization = {0, 1, 0};
+  normal = Z_UNIT_VEC3;
+  backward_normal = Z_UNIT_VEC3 * -1;
+  m_polarization = X_UNIT_VEC3;
+  n_polarization = Y_UNIT_VEC3;
 }
 
 Detector Detector::copy_start() const {

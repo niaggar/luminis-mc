@@ -15,7 +15,25 @@ struct Vec3 {
 
   Vec3() = default;
   Vec3(double x, double y, double z) : x(x), y(y), z(z) {}
+
+  Vec3 operator+(const Vec3& other) const {
+    return Vec3{x + other.x, y + other.y, z + other.z};
+  }
+  Vec3 operator-(const Vec3& other) const {
+    return Vec3{x - other.x, y - other.y, z - other.z};
+  }
+  Vec3 operator*(double scalar) const {
+    return Vec3{x * scalar, y * scalar, z * scalar};
+  }
+  Vec3 operator/(double scalar) const {
+    return Vec3{x / scalar, y / scalar, z / scalar};
+  }
 };
+
+const Vec3 ZERO_VEC3{0.0, 0.0, 0.0};
+const Vec3 X_UNIT_VEC3{1.0, 0.0, 0.0};
+const Vec3 Y_UNIT_VEC3{0.0, 1.0, 0.0};
+const Vec3 Z_UNIT_VEC3{0.0, 0.0, 1.0};
 
 struct Vec2 {
   double x{0.0};
@@ -83,9 +101,12 @@ struct CMatrix {
     }
     return data[i * cols + j];
   }
+
+
 };
 
 double dot(const Vec3 &a, const Vec3 &b);
 double norm(const Vec3 &v);
+CMatrix matmul(const CMatrix &A, const CMatrix &B);
 
 } // namespace luminis::math

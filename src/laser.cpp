@@ -24,12 +24,14 @@ math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center, const doubl
   };
 }
 
-Laser::Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
-             CVec2 polarization, double wavelength, double sigma,
-             LaserSource source_type)
-    : position(position), direction(direction),
-      local_m(local_m), local_n(local_n),
-      polarization(polarization), wavelength(wavelength), sigma(sigma),
+Laser::Laser(Vec3 position, CVec2 polarization, double wavelength, double sigma, LaserSource source_type)
+    : position(position),
+      direction{Z_UNIT_VEC3},
+      local_m{X_UNIT_VEC3},
+      local_n{Y_UNIT_VEC3},
+      polarization(polarization),
+      wavelength(wavelength),
+      sigma(sigma),
       source_type(source_type) {}
 
 // TODO: Implement time sampling based on pulse duration and repetition rate
