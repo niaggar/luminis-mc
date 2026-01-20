@@ -102,11 +102,18 @@ struct CMatrix {
     return data[i * cols + j];
   }
 
-
+  static CMatrix identity(uint size) {
+    CMatrix I(size, size);
+    for (uint i = 0; i < size; ++i) {
+      I(i, i) = std::complex<double>(1.0, 0.0);
+    }
+    return I;
+  }
 };
 
 double dot(const Vec3 &a, const Vec3 &b);
 double norm(const Vec3 &v);
-CMatrix matmul(const CMatrix &A, const CMatrix &B);
+void matmul(const CMatrix &A, const CMatrix &B, CMatrix &C);
+void matmulscalar(const double &scalar, CMatrix &A);
 
 } // namespace luminis::math

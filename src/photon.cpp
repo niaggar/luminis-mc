@@ -26,16 +26,6 @@ namespace luminis::core {
 
       this->wavelength_nm = wl;
       this->k = 2.0 * M_PI / wavelength_nm;
-
-      this->matrix_T(0, 0) = std::complex<double>(1.0, 0.0);
-      this->matrix_T(1, 1) = std::complex<double>(1.0, 0.0);
-      this->matrix_T(0, 1) = std::complex<double>(0.0, 0.0);
-      this->matrix_T(1, 0) = std::complex<double>(0.0, 0.0);
-
-      this->matrix_T_buffer(0, 0) = std::complex<double>(1.0, 0.0);
-      this->matrix_T_buffer(1, 1) = std::complex<double>(1.0, 0.0);
-      this->matrix_T_buffer(0, 1) = std::complex<double>(0.0, 0.0);
-      this->matrix_T_buffer(1, 0) = std::complex<double>(0.0, 0.0);
     }
 
     void Photon::set_polarization(CVec2 pol) {

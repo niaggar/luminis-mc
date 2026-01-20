@@ -296,9 +296,9 @@ AngularIntensity Detector::compute_angular_intensity(const double max_theta, con
     std::complex<double> En_local_photon = ph.polarization.n * phase * std::sqrt(ph.weight);
 
     // Accumulate field contributions
-    E_x(itheta, iphi) += Em_local_photon * m_polarization.x + En_local_photon * n_polarization.x;
-    E_y(itheta, iphi) += Em_local_photon * m_polarization.y + En_local_photon * n_polarization.y;
-    E_z(itheta, iphi) += Em_local_photon * m_polarization.z + En_local_photon * n_polarization.z;
+    E_x(itheta, iphi) += Em_local_photon * ph.m.x + En_local_photon * ph.n.x;
+    E_y(itheta, iphi) += Em_local_photon * ph.m.y + En_local_photon * ph.n.y;
+    E_z(itheta, iphi) += Em_local_photon * ph.m.z + En_local_photon * ph.n.z;
   }
 
   // Precompute theta and phi edges for solid angle calculation
