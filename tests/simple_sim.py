@@ -3,7 +3,7 @@ from luminis_mc import (
     SimpleMedium,
     Detector,
     SimConfig,
-    RayleighDebyePhaseFunction,
+    RayleighDebyeEMCPhaseFunction,
     CVec2,
     Vec3,
 )
@@ -44,7 +44,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1_000_000
+n_photons = 1
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -54,7 +54,7 @@ laser_type = LaserSource.Gaussian
 
 laser_source = Laser(origin, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(0)
-phase_function = RayleighDebyePhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
+phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
 
 config = SimConfig(

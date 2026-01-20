@@ -32,15 +32,15 @@ struct Photon {
   // CBS related
   Vec3 s_0{0, 0, 0}; // Incident direction (s_in)
   Vec3 s_1{0, 0, 0}; // Direction after 1st scatter
-
-  Vec3 s_n{0, 0, 0}; // Direction after current step (s_n)
-  Vec3 s_n1{0, 0, 0}; // Direction before current step (s_n-1)
+  Vec3 s_n2{0, 0, 0}; // Direction after second last scatter
+  Vec3 s_n1{0, 0, 0}; // Direction after last scatter
+  Vec3 s_n{0, 0, 0}; // Direction last scatter
 
   Vec3 r_0{0, 0, 0}; // Position first scatter
   Vec3 r_n{0, 0, 0}; // Position last scatter
 
-  CMatrix matrix_T{2, 2}; // Total Jones matrix
-  CMatrix matrix_T_buffer{2, 2}; // Buffer for Jones matrix updates
+  CMatrix matrix_T = CMatrix::identity(2); // Total Jones matrix
+  CMatrix matrix_T_buffer = CMatrix::identity(2);; // Buffer for Jones matrix updates
 
 
   Photon() = default;

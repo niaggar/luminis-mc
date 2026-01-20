@@ -10,13 +10,28 @@ double norm(const Vec3 &v) {
   return std::sqrt(dot(v, v));
 }
 
-CMatrix matmul(const CMatrix &A, const CMatrix &B) {
-    CMatrix C(2, 2);
-    C(0,0) = A(0,0)*B(0,0) + A(0,1)*B(1,0);
-    C(0,1) = A(0,0)*B(0,1) + A(0,1)*B(1,1);
-    C(1,0) = A(1,0)*B(0,0) + A(1,1)*B(1,0);
-    C(1,1) = A(1,0)*B(0,1) + A(1,1)*B(1,1);
-    return C;
+void matmul(const CMatrix &A, const CMatrix &B, CMatrix &C) {
+  if (A.cols != B.rows || A.rows != C.rows || B.cols != C.cols) {
+    LLOG_ERROR("CMatrix multiplication dimension mismatch");
+    std::exit(EXIT_FAILURE);
+  }
+
+  for (uint i = 0; i < A.rows; ++i) {
+    for (uint j = 0; j < B.cols; ++j) {
+      C(i, j) = std::complex<double>(0.0, 0.0);
+      for (uint k = 0; k < A.cols; ++k) {
+        C(i, j) += A(i, k) * B(k, j);
+      }
+    }
+  }
+}
+
+void matmulscalar(const double &scalar, CMatrix &A) {
+  for (uint i = 0; i < A.rows; ++i) {
+    for (uint j = 0; j < A.cols; ++j) {
+      A(i, j) *= scalar;
+    }
+  }
 }
 
 }
