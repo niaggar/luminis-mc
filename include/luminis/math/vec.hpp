@@ -112,8 +112,10 @@ struct CMatrix {
 };
 
 double dot(const Vec3 &a, const Vec3 &b);
+Vec3 cross(const Vec3 &a, const Vec3 &b);
 double norm(const Vec3 &v);
 void matmul(const CMatrix &A, const CMatrix &B, CMatrix &C);
 void matmulscalar(const double &scalar, CMatrix &A);
+double calculate_rotation_angle(const Vec3& n_from, const Vec3& n_to);
 
 } // namespace luminis::math

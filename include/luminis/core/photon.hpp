@@ -30,6 +30,7 @@ struct Photon {
 
 
   // CBS related
+  Vec3 n_0{0, 0, 0}; // Incident position
   Vec3 s_0{0, 0, 0}; // Incident direction (s_in)
   Vec3 s_1{0, 0, 0}; // Direction after 1st scatter
   Vec3 s_n2{0, 0, 0}; // Direction after second last scatter
@@ -67,6 +68,7 @@ struct PhotonRecord {
   Vec3 m{1.0, 0.0, 0.0};
   Vec3 n{0.0, 1.0, 0.0};
   CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
+  CVec2 reversed_polarization{std::complex<double>(0, 0), std::complex<double>(0, 0)};
 };
 
 } // namespace luminis::core

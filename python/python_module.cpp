@@ -41,7 +41,10 @@ PYBIND11_MODULE(_core, m)
            py::arg("z"))
       .def_readwrite("x", &Vec3::x)
       .def_readwrite("y", &Vec3::y)
-      .def_readwrite("z", &Vec3::z);
+      .def_readwrite("z", &Vec3::z)
+      .def("__repr__", [](const Vec3 &v) {
+        return "Vec3(" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " + std::to_string(v.z) + ")";
+      });
 
   py::class_<Vec2>(m, "Vec2")
       .def(py::init<>())
@@ -87,6 +90,8 @@ PYBIND11_MODULE(_core, m)
   py::class_<CMatrix>(m, "CMatrix", py::buffer_protocol())
       .def(py::init<uint, uint>(), py::arg("rows"), py::arg("cols"),
            "Initialize a CMatrix with given number of rows and columns")
+      .def_static("identity", &CMatrix::identity, py::arg("size"),
+           "Create an identity matrix of given size")
       .def("get", [](const CMatrix &mat, uint i, uint j)
            { return mat(i, j); }, py::arg("i"), py::arg("j"), "Get the element at row i and column j")
       .def("set", [](CMatrix &mat, uint i, uint j, std::complex<double> value)
@@ -149,8 +154,8 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<RayleighDebyeEMCPhaseFunction, PhaseFunction>(
       m, "RayleighDebyeEMCPhaseFunction")
-      .def(py::init<double, double, int, double, double>(),
-           py::arg("wavelength"), py::arg("radius"), py::arg("nDiv"),
+      .def(py::init<double, double, double, double, int, double, double>(),
+           py::arg("wavelength"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("nDiv"),
            py::arg("minVal"), py::arg("maxVal"))
       .def("pdf", &RayleighDebyeEMCPhaseFunction::PDF, py::arg("x"));
 
@@ -171,13 +176,26 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("m", &Photon::m)
       .def_readwrite("n", &Photon::n)
       .def_readwrite("events", &Photon::events)
+      .def_readwrite("penetration_depth", &Photon::penetration_depth)
       .def_readwrite("alive", &Photon::alive)
       .def_readwrite("wavelength_nm", &Photon::wavelength_nm)
+      .def_readonly("k", &Photon::k)
       .def_readwrite("opticalpath", &Photon::opticalpath)
+      .def_readwrite("launch_time", &Photon::launch_time)
+      .def_readwrite("velocity", &Photon::velocity)
       .def_readwrite("weight", &Photon::weight)
       .def_readwrite("polarized", &Photon::polarized)
       .def_readwrite("polarization", &Photon::polarization)
-      .def_readonly("k", &Photon::k)
+      .def_readonly("n_0", &Photon::n_0)
+      .def_readonly("s_0", &Photon::s_0)
+      .def_readonly("s_1", &Photon::s_1)
+      .def_readonly("s_n2", &Photon::s_n2)
+      .def_readonly("s_n1", &Photon::s_n1)
+      .def_readonly("s_n", &Photon::s_n)
+      .def_readonly("r_0", &Photon::r_0)
+      .def_readonly("r_n", &Photon::r_n)
+      .def_readonly("matrix_T", &Photon::matrix_T)
+      .def_readonly("matrix_T_buffer", &Photon::matrix_T_buffer)
       .def("set_polarization", &Photon::set_polarization, py::arg("polarization"),
            "Set the polarization state of the photon")
       .def("get_stokes_parameters", &Photon::get_stokes_parameters,
@@ -197,7 +215,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("direction", &PhotonRecord::direction)
       .def_readonly("m", &PhotonRecord::m)
       .def_readonly("n", &PhotonRecord::n)
-      .def_readonly("polarization", &PhotonRecord::polarization);
+      .def_readonly("polarization", &PhotonRecord::polarization)
+      .def_readonly("reversed_polarization", &PhotonRecord::reversed_polarization);
 
   // Laser Bindings
   py::enum_<LaserSource>(m, "LaserSource")
@@ -206,11 +225,38 @@ PYBIND11_MODULE(_core, m)
       .value("Gaussian", LaserSource::Gaussian)
       .export_values();
 
+  py::enum_<TemporalProfile>(m, "TemporalProfile")
+      .value("Delta", TemporalProfile::Delta)
+      .value("Gaussian", TemporalProfile::Gaussian)
+      .value("TopHat", TemporalProfile::TopHat)
+      .value("ExponentialTime", TemporalProfile::Exponential)
+      .value("PulseTrain", TemporalProfile::PulseTrain)
+      .value("CW", TemporalProfile::CW)
+      .export_values();
+
   py::class_<Laser>(m, "Laser")
       .def(py::init<Vec3, CVec2, double, double, LaserSource>(),
            py::arg("position"), py::arg("polarization"), py::arg("wavelength"),
            py::arg("sigma"), py::arg("source_type"),
            "Initialize a Laser source with given parameters")
+      .def_readwrite("position", &Laser::position)
+      .def_readwrite("direction", &Laser::direction)
+      .def_readwrite("local_m", &Laser::local_m)
+      .def_readwrite("local_n", &Laser::local_n)
+      .def_readwrite("polarization", &Laser::polarization)
+      .def_readwrite("wavelength", &Laser::wavelength)
+      .def_readwrite("sigma", &Laser::sigma)
+      .def_readwrite("source_type", &Laser::source_type)
+      .def_readwrite("temporal_profile", &Laser::temporal_profile)
+      .def_readwrite("pulse_duration", &Laser::pulse_duration)
+      .def_readwrite("repetition_rate", &Laser::repetition_rate)
+      .def_readwrite("time_offset", &Laser::time_offset)
+      .def("set_temporal_profile", &Laser::set_temporal_profile,
+           py::arg("profile"), py::arg("pulse_duration") = 0.0,
+           py::arg("repetition_rate") = 0.0, py::arg("time_offset") = 0.0,
+           "Set the temporal profile of the laser")
+      .def("sample_emission_time", &Laser::sample_emission_time, py::arg("rng"),
+           "Sample an emission time from the temporal profile")
       .def("emit_photon", &Laser::emit_photon, py::arg("rng"),
            "Emit a photon from the laser source");
 
@@ -291,6 +337,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("mu_a", &Medium::mu_absorption)
       .def_readonly("mu_s", &Medium::mu_scattering)
       .def_readonly("mu_t", &Medium::mu_attenuation)
+      .def_readonly("light_speed", &Medium::light_speed)
+      .def_readonly("refractive_index", &Medium::refractive_index)
       .def_readonly("phase_function", &Medium::phase_function)
       .def("sample_free_path", &Medium::sample_free_path, py::arg("rng"),
            "Sample the free path length in the medium")
@@ -298,16 +346,23 @@ PYBIND11_MODULE(_core, m)
            py::arg("rng"), "Sample the scattering angle in the medium")
       .def("sample_azimuthal_angle", &Medium::sample_azimuthal_angle,
            py::arg("rng"), "Sample the azimuthal angle in the medium")
+      .def("sample_conditional_azimuthal_angle", &Medium::sample_conditional_azimuthal_angle,
+           py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("k"), py::arg("theta"),
+           "Sample the azimuthal angle conditioned on scattering angle theta")
       .def("scattering_matrix", &Medium::scattering_matrix, py::arg("theta"),
            py::arg("phi"), py::arg("k"),
-           "Get the scattering matrix for given angles and wavenumber");
+           "Get the scattering matrix for given angles and wavenumber")
+      .def("light_speed_in_medium", &Medium::light_speed_in_medium,
+           "Get the speed of light in the medium");
 
   py::class_<SimpleMedium, Medium>(m, "SimpleMedium")
-      .def(py::init<double, double, PhaseFunction *, double, double>(),
+      .def(py::init<double, double, PhaseFunction *, double, double, double, double>(),
            py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"),
-           py::arg("mfp"), py::arg("radius"))
+           py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"))
       .def_readonly("mean_free_path", &SimpleMedium::mean_free_path)
-      .def_readonly("radius", &SimpleMedium::radius);
+      .def_readonly("radius", &SimpleMedium::radius)
+      .def_readonly("n_particle", &SimpleMedium::n_particle)
+      .def_readonly("n_medium", &SimpleMedium::n_medium);
 
   // Absorption bindings
   py::class_<Absorption>(m, "Absorption")
@@ -343,23 +398,21 @@ PYBIND11_MODULE(_core, m)
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *>(),
-           py::arg("n_photons"), py::arg("medium") = nullptr,
-           py::arg("laser") = nullptr, py::arg("detector") = nullptr,
-           py::arg("absorption") = nullptr,
-           "Initialize simulation config with number of photons, medium, laser, detector, and optional seed")
-      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *>(),
-           py::arg("seed"), py::arg("n_photons"), py::arg("medium") = nullptr,
-           py::arg("laser") = nullptr, py::arg("detector") = nullptr,
-           py::arg("absorption") = nullptr,
-           "Initialize simulation config with seed, number of photons, medium, laser, detector")
-      .def_readwrite("seed", &SimConfig::seed)
-      .def_readwrite("n_photons", &SimConfig::n_photons)
-      .def_readwrite("n_threads", &SimConfig::n_threads)
-      .def_readwrite("medium", &SimConfig::medium)
-      .def_readwrite("laser", &SimConfig::laser)
-      .def_readwrite("detector", &SimConfig::detector)
-      .def_readwrite("absorption", &SimConfig::absorption);
+      .def(py::init<std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *, bool>(),
+           py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
+           "Initialize a simulation configuration with given parameters")
+      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *, bool>(),
+               py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
+               "Initialize a simulation configuration with given parameters including RNG seed")
+          .def_readonly("seed", &SimConfig::seed)
+          .def_readonly("n_photons", &SimConfig::n_photons)
+          .def_readonly("medium", &SimConfig::medium)
+          .def_readonly("laser", &SimConfig::laser)
+          .def_readonly("detector", &SimConfig::detector)
+          .def_readonly("absorption", &SimConfig::absorption)
+          .def_readonly("track_reverse_paths", &SimConfig::track_reverse_paths)
+          .def_readwrite("n_threads", &SimConfig::n_threads);
+      
 
   m.def(
       "run_simulation",
@@ -396,6 +449,34 @@ PYBIND11_MODULE(_core, m)
       "set_log_level", [](Level level)
       { Logger::instance().set_level(level); },
       py::arg("level"), "Set the logging level for the luminis-mc module");
+
+  // Math functions
+  m.def("dot", &dot, py::arg("a"), py::arg("b"),
+        "Compute the dot product of two Vec3 vectors");
+  m.def("cross", &cross, py::arg("a"), py::arg("b"),
+        "Compute the cross product of two Vec3 vectors");
+  m.def("norm", &norm, py::arg("v"),
+        "Compute the norm of a Vec3 vector");
+  m.def("matmul", &matmul, py::arg("A"), py::arg("B"), py::arg("C"),
+        "Multiply two complex matrices A and B, storing result in C");
+  m.def("matmulscalar", &matmulscalar, py::arg("scalar"), py::arg("A"),
+        "Multiply a complex matrix by a scalar");
+  m.def("calculate_rotation_angle", &calculate_rotation_angle,
+        py::arg("n_from"), py::arg("n_to"),
+        "Calculate the rotation angle between two normal vectors");
+
+  // Laser spatial distributions
+  m.def("uniform_distribution", &uniform_distribution,
+        py::arg("rng"), py::arg("center"), py::arg("sigma"),
+        "Generate a random point from uniform distribution");
+  m.def("gaussian_distribution", &gaussian_distribution,
+        py::arg("rng"), py::arg("center"), py::arg("sigma"),
+        "Generate a random point from Gaussian distribution");
+
+  // Form factor for phase functions
+  m.def("form_factor", &form_factor,
+        py::arg("theta"), py::arg("k"), py::arg("radius"),
+        "Compute the form factor for given scattering angle, wavenumber, and particle radius");
 
   // meanfreepath bindings
 
