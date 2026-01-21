@@ -23,17 +23,25 @@ n_global = Vec3(0, 1, 0)
 s_global = Vec3(0, 0, 1)
 light_speed = 299792458e-6
 
-# Medium parameters
-radius = 0.46 # in micrometers
-mean_free_path = 2.8 # in micrometers
-wavelength = 0.525  # in micrometers
+# Medium parameters in micrometers
+radius = 0.1
+mean_free_path = 100
+wavelength = 0.532
 inv_mfp = 1 / mean_free_path
-mu_absortion = 0.0003 * inv_mfp
-mu_scattering = inv_mfp - mu_absortion
-# mean_free_path = 1 / (mu_absortion + mu_scattering)
+mu_scattering = inv_mfp
+mu_absortion = 0.001 * inv_mfp
+n_particle = 1.59
+n_medium = 1.33
 
 print(f"Mean free path: {mean_free_path}")
-print(f"Medium radius: {radius}")
+print(f"Particle radius: {radius}")
+print(f"Wavelength: {wavelength}")
+print(f"Scattering coefficient: {mu_scattering}")
+print(f"Absorption coefficient: {mu_absortion}")
+print(f"Albedo: {mu_scattering / (mu_scattering + mu_absortion)}")
+print(f"Refractive index particle: {n_particle}")
+print(f"Refractive index medium: {n_medium}")
+print(f"Relative refractive index: {n_particle / n_medium}")
 
 # Time parameters
 t_ref = mean_free_path / light_speed
@@ -54,14 +62,15 @@ laser_type = LaserSource.Gaussian
 
 laser_source = Laser(origin, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(0)
-phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, nDiv, thetaMin, thetaMax)
-medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius)
+phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, nDiv, thetaMin, thetaMax)
+medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius, n_particle, n_medium)
 
 config = SimConfig(
     n_photons=n_photons,
     medium=medium,
     detector=detector,
     laser=laser_source,
+    parallel=True,
 )
 config.n_threads = 8
 

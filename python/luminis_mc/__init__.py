@@ -5,6 +5,15 @@ from ._core import (
     Vec3,
     Vec2,
     CVec2,
+    Matrix,
+    CMatrix,
+    # Math functions
+    dot,
+    cross,
+    norm,
+    matmul,
+    matmulscalar,
+    calculate_rotation_angle,
     # Phase functions
     PhaseFunction,
     UniformPhaseFunction,
@@ -13,11 +22,16 @@ from ._core import (
     RayleighDebyePhaseFunction,
     RayleighDebyeEMCPhaseFunction,
     DrainePhaseFunction,
+    form_factor,
     # Photon
     Photon,
+    PhotonRecord,
     # Laser
     LaserSource,
+    TemporalProfile,
     Laser,
+    uniform_distribution,
+    gaussian_distribution,
     # Detector
     Detector,
     AngularSpeckle,
@@ -50,6 +64,15 @@ __all__ = [
     "Vec3",
     "Vec2",
     "CVec2",
+    "Matrix",
+    "CMatrix",
+    # Math functions
+    "dot",
+    "cross",
+    "norm",
+    "matmul",
+    "matmulscalar",
+    "calculate_rotation_angle",
     # Phase functions
     "PhaseFunction",
     "UniformPhaseFunction",
@@ -58,11 +81,16 @@ __all__ = [
     "RayleighDebyePhaseFunction",
     "RayleighDebyeEMCPhaseFunction",
     "DrainePhaseFunction",
+    "form_factor",
     # Photon
     "Photon",
+    "PhotonRecord",
     # Laser
     "LaserSource",
+    "TemporalProfile",
     "Laser",
+    "uniform_distribution",
+    "gaussian_distribution",
     # Detector
     "Detector",
     "AngularSpeckle",

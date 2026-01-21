@@ -6,9 +6,9 @@
 namespace luminis::sample {
 
 double form_factor(const double theta, const double k, const double radius) {
-  const double ks = 2.0 * k * std::sin(theta / 2.0);
-  const double numerator = 3 * (std::sin(ks * radius) - ks * radius * std::cos(ks * radius));
-  const double denominator = std::pow(ks * radius, 3);
+  const double u = 2.0 * k * radius * std::sin(theta / 2.0);
+  const double numerator = 3 * (std::sin(u) - u * std::cos(u));
+  const double denominator = std::pow(u, 3);
 
   return numerator / denominator;
 }
@@ -18,9 +18,9 @@ double form_factor(const double theta, const double k, const double radius) {
 double PhaseFunction::sample_phi(double x) const {
   return 2.0 * M_PI * x; // Uniformly sample phi in [0, 2pi)
 }
-double PhaseFunction::sample_phi_conditional(double theta, CVec2& S, CVec2& E, double k, Rng& rng) const {
-    const double s2sq = std::norm(S.m); // |S2|^2
-    const double s1sq = std::norm(S.n); // |S1|^2
+double PhaseFunction::sample_phi_conditional(double theta, CMatrix& S, CVec2& E, double k, Rng& rng) const {
+    const double s2sq = std::norm(S(0,0)); // |S2|^2
+    const double s1sq = std::norm(S(1,1)); // |S1|^2
 
     const double e1sq = std::norm(E.m);
     const double e2sq = std::norm(E.n);
@@ -127,7 +127,7 @@ double RayleighDebyePhaseFunction::PDF(double x) {
 
 
 
-RayleighDebyeEMCPhaseFunction::RayleighDebyeEMCPhaseFunction(double wavelength, double radius, int nDiv, double minVal, double maxVal) {
+RayleighDebyeEMCPhaseFunction::RayleighDebyeEMCPhaseFunction(double wavelength, double radius, double n_particle, double n_medium, int nDiv, double minVal, double maxVal) {
   if (radius <= 0.0) {
     LLOG_WARN("RayleighDebyeEMCPhaseFunction: radius must be positive, got {}", radius);
   }
@@ -137,6 +137,8 @@ RayleighDebyeEMCPhaseFunction::RayleighDebyeEMCPhaseFunction(double wavelength, 
 
   this->radius = radius;
   this->wavelength = wavelength;
+  this->n_particle = n_particle;
+  this->n_medium = n_medium;
   this->k = 2 * M_PI / wavelength;
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
@@ -148,8 +150,10 @@ double RayleighDebyeEMCPhaseFunction::sample_theta(double x) const {
 }
 double RayleighDebyeEMCPhaseFunction::PDF(double x) {
   const double F = form_factor(x, k, radius);
-  const double a = 1.0 / (4.0 * M_PI);
-  return a * std::pow(F, 2) * (1.0 + std::pow(cos(x), 2));
+  const double volume = (4.0 / 3.0) * M_PI * std::pow(radius, 3);
+  const double m = n_particle / n_medium;
+  const double a = std::pow(k, 4) * std::pow(m - 1.0, 2) * volume * volume / (4.0 * M_PI);
+  return a * F * F * (1.0 + cos(x)*cos(x));
 }
 
 

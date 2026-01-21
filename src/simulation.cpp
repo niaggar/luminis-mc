@@ -16,19 +16,18 @@ namespace luminis::core {
 using luminis::math::Rng;
 using luminis::math::mix_seed;
 
-SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a)
-    : n_photons(n), medium(m), laser(l), detector(d), absorption(a) {}
+SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+    : n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
-SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a)
-    : seed(s), n_photons(n), medium(m), laser(l), detector(d), absorption(a) {}
-
+SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+    : seed(s), n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 void run_simulation(const SimConfig &config) {
   Rng rng(config.seed);
 
   for (std::size_t i = 0; i < config.n_photons; ++i) {
     Photon photon = config.laser->emit_photon(rng);
     photon.velocity = config.medium->light_speed_in_medium();
-    run_photon(photon, *config.medium, *config.detector, rng, config.absorption);
+    run_photon(photon, *config.medium, *config.detector, rng, config.absorption, config.track_reverse_paths);
   }
 }
 
@@ -87,7 +86,7 @@ void run_simulation_parallel(const SimConfig &config) {
         for (std::size_t i = 0; i < my_count; ++i) {
           Photon photon = config.laser->emit_photon(rng);
           photon.velocity = config.medium->light_speed_in_medium();
-          run_photon(photon, *config.medium, det, rng, abs_ptr);
+          run_photon(photon, *config.medium, det, rng, abs_ptr, config.track_reverse_paths);
         }
 
       } catch (...) {
@@ -118,15 +117,18 @@ void run_simulation_parallel(const SimConfig &config) {
   LLOG_INFO("Parallel simulation finished. Total hits: {}", config.detector->hits);
 }
 
-void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, AbsorptionTimeDependent *absorption) {
+void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths) {
   const uint first_event = 0;
+  bool hit_detector = false;
 
   // Update incident direction for CBS
+  photon.n_0 = photon.n;
   photon.s_0 = photon.dir;
   photon.s_1 = photon.dir;
   photon.s_n2 = photon.dir;
   photon.s_n1 = photon.dir;
   photon.s_n = photon.dir;
+
 
   while (photon.alive) {
     // Sample free step
@@ -138,18 +140,21 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     // Check for detector hit
     if (photon.events != first_event) {
       detector.record_hit(photon);
+
+      if (!photon.alive) {
+        hit_detector = true;
+        break;
+      }
     }
-    if (!photon.alive)
-      break;
 
     // Scatter the photon
     const double theta = medium.sample_scattering_angle(rng);
 
     // Get scattering matrix
-    CVec2 S_vec = medium.scattering_matrix(theta, 0, photon.k);
+    CMatrix S_matrix = medium.scattering_matrix(theta, 0, photon.k);
 
     // const double phi = medium.sample_azimuthal_angle(rng);
-    const double phi = medium.sample_conditional_azimuthal_angle(rng, S_vec, photon.polarization, photon.k, theta);
+    const double phi = medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
     const double cos_theta = std::cos(theta);
     const double sin_theta = std::sin(theta);
     const double cos_phi = std::cos(phi);
@@ -170,11 +175,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
       CMatrix R(2, 2);
       R(0, 0) = cos_phi;   R(0, 1) = sin_phi;
       R(1, 0) = -sin_phi;  R(1, 1) = cos_phi;
-      CMatrix S(2, 2);
-      S(0, 0) = S_vec.m;   S(0, 1) = 0.0;
-      S(1, 0) = 0.0;       S(1, 1) = S_vec.n;
       CMatrix T_current = CMatrix(2, 2);
-      matmul(S, R, T_current);
+      matmul(S_matrix, R, T_current);
 
       // Calculate normalization factor F (m=1, n=2)
       const std::complex<double> Em = photon.polarization.m;
@@ -182,8 +184,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
 
       const double Emm = std::norm(Em);
       const double Enn = std::norm(En);
-      const double s22 = std::norm(S_vec.m);
-      const double s11 = std::norm(S_vec.n);
+      const double s22 = std::norm(S_matrix(0,0));
+      const double s11 = std::norm(S_matrix(1,1));
 
       const double pow_cos_phi = std::pow(cos_phi, 2);
       const double pow_sin_phi = std::pow(sin_phi, 2);
@@ -195,29 +197,34 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
 
       // Update polarization components
       const double F_inv_sqrt = 1.0 / std::sqrt(F);
-      
-      photon.polarization.m = (T_current(0, 0) * Em + T_current(0, 1) * En) * F_inv_sqrt;
-      photon.polarization.n = (T_current(1, 0) * Em + T_current(1, 1) * En) * F_inv_sqrt;
+      LLOG_DEBUG("F = {}, F_inv_sqrt = {}", F, F_inv_sqrt);
+      matmulscalar(F_inv_sqrt, T_current);
+
+      photon.polarization.m = (T_current(0, 0) * Em + T_current(0, 1) * En);
+      photon.polarization.n = (T_current(1, 0) * Em + T_current(1, 1) * En);
 
       // Update first scatter info for CBS
-      if (photon.events == first_event) {
-        photon.r_0 = photon.pos;
-        photon.s_1 = photon.dir;
-        photon.s_n = photon.dir;   
-        photon.s_n1 = photon.s_0;  
-        photon.s_n2 = photon.s_0;
-      } else {
-        photon.r_n = photon.pos;
-        photon.s_n2 = photon.s_n1;
-        photon.s_n1 = photon.s_n;
-        photon.s_n = photon.dir;
+      if (track_reverse_paths) {
+        if (photon.events == first_event) {
+          photon.r_0 = photon.pos;
+          photon.s_1 = photon.dir;
+          photon.s_n = photon.dir;   
+          photon.s_n1 = photon.s_0;  
+          photon.s_n2 = photon.s_0;
+        } else {
+          photon.r_n = photon.pos;
+          photon.s_n2 = photon.s_n1;
+          photon.s_n1 = photon.s_n;
+          photon.s_n = photon.dir;
 
-        // Update matrix T
-        CMatrix next_T(photon.matrix_T.rows, photon.matrix_T.cols);
-        matmul(photon.matrix_T_buffer, photon.matrix_T, next_T);
-        
-        photon.matrix_T.data.swap(next_T.data);
-        photon.matrix_T_buffer.data.swap(T_current.data);
+          // Update matrix T
+          matmul(photon.matrix_T_buffer, photon.matrix_T, photon.matrix_T);
+          LLOG_DEBUG("CBS forward path matrix T_forward_transposed:");
+          LLOG_DEBUG("[[{}+i{}, {}+i{}],", photon.matrix_T(0,0).real(), photon.matrix_T(0,0).imag(), photon.matrix_T(0,1).real(), photon.matrix_T(0,1).imag());
+          LLOG_DEBUG(" [{}+i{}, {}+i{}]]", photon.matrix_T(1,0).real(), photon.matrix_T(1,0).imag(), photon.matrix_T(1,1).real(), photon.matrix_T(1,1).imag());
+
+          photon.matrix_T_buffer.data.swap(T_current.data);
+        }
       }
     }
 
@@ -242,6 +249,82 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     }
   }
 
+  LLOG_DEBUG("Photon terminated after {} events, final weight: {}, optical path: {}", photon.events, photon.weight, photon.opticalpath);
+
+  // Update reversed path info for CBS
+  if (hit_detector && track_reverse_paths && photon.events > 1) {
+
+    Vec3 s_0 = photon.s_0;
+    Vec3 s_1 = photon.s_1;
+    Vec3 s_n2 = photon.s_n2;
+    Vec3 s_n1 = photon.s_n1;
+    Vec3 s_n = photon.s_n;
+
+    Vec3 n_0 = photon.n_0;
+    Vec3 n_1 = cross(s_0, s_1);
+    Vec3 n_prime  = cross(s_0, s_n1 * (-1.0));
+    Vec3 n_n1 = cross(s_n1 * (-1.0), s_n2 * (-1.0));
+    Vec3 n_n  = cross(s_n1 * (-1.0), s_n);
+
+    double phi_n = calculate_rotation_angle(n_0, n_prime);
+    double phi_n_prime = calculate_rotation_angle(n_prime, n_1 * (-1.0));
+    double phi_1_prime = calculate_rotation_angle(n_1 * (-1.0), n_n1);
+
+    LLOG_DEBUG("CBS angles: phi_n = {}, phi_n' = {}, phi_1' = {}", phi_n, phi_n_prime, phi_1_prime);
+
+    double theta_n = calculate_rotation_angle(s_n1 * (-1.0), s_0);
+    double theta_1 = calculate_rotation_angle(s_n, s_1 * (-1.0));
+
+    LLOG_DEBUG("CBS angles: theta_1 = {}, theta_n = {}", theta_1, theta_n);
+
+    // Rotation matrices
+    CMatrix R_n(2, 2);
+    R_n(0, 0) = std::cos(phi_n);   R_n(0, 1) = std::sin(phi_n);
+    R_n(1, 0) = -std::sin(phi_n);  R_n(1, 1) = std::cos(phi_n);
+    CMatrix R_n_prime(2, 2);
+    R_n_prime(0, 0) = std::cos(phi_n_prime);   R_n_prime(0, 1) = std::sin(phi_n_prime);
+    R_n_prime(1, 0) = -std::sin(phi_n_prime);  R_n_prime(1, 1) = std::cos(phi_n_prime);
+    CMatrix R_1_prime(2, 2);
+    R_1_prime(0, 0) = std::cos(phi_1_prime);   R_1_prime(0, 1) = std::sin(phi_1_prime);
+    R_1_prime(1, 0) = -std::sin(phi_1_prime);  R_1_prime(1, 1) = std::cos(phi_1_prime);
+
+    // Scattering matrices
+    CMatrix S_n = medium.scattering_matrix(theta_n, 0, photon.k);
+    CMatrix S_1 = medium.scattering_matrix(theta_1, 0, photon.k);
+
+    // Auxiliary matrix Q
+    CMatrix Q(2, 2);
+    Q(0, 0) = 1; Q(0, 1) = 0;
+    Q(1, 0) = 0; Q(1, 1) = -1;
+
+    // Calculate reversed path matrix
+    CMatrix T_forward_transposed = CMatrix(2, 2);
+    T_forward_transposed(0,0) = photon.matrix_T(0,0);
+    T_forward_transposed(0,1) = photon.matrix_T(1,0);
+    T_forward_transposed(1,0) = photon.matrix_T(0,1);
+    T_forward_transposed(1,1) = photon.matrix_T(1,1);
+
+    LLOG_DEBUG("CBS forward path matrix T_forward_transposed:");
+    LLOG_DEBUG("[[{}+i{}, {}+i{}],", T_forward_transposed(0,0).real(), T_forward_transposed(0,0).imag(), T_forward_transposed(0,1).real(), T_forward_transposed(0,1).imag());
+    LLOG_DEBUG(" [{}+i{}, {}+i{}]]", T_forward_transposed(1,0).real(), T_forward_transposed(1,0).imag(), T_forward_transposed(1,1).real(), T_forward_transposed(1,1).imag());
+
+    CMatrix J_reversed = CMatrix::identity(2);
+    matmul(S_n, R_n, J_reversed);
+    matmul(R_n_prime, J_reversed, J_reversed);
+    matmul(Q, J_reversed, J_reversed);
+    matmul(T_forward_transposed, J_reversed, J_reversed);
+    matmul(Q, J_reversed, J_reversed);
+    matmul(R_1_prime, J_reversed, J_reversed);
+    matmul(S_1, J_reversed, J_reversed);
+
+    LLOG_DEBUG("CBS reversed path matrix T_reversed:");
+    LLOG_DEBUG("[[{}+i{}, {}+i{}],", J_reversed(0,0).real(), J_reversed(0,0).imag(), J_reversed(0,1).real(), J_reversed(0,1).imag());
+    LLOG_DEBUG(" [{}+i{}, {}+i{}]]", J_reversed(1,0).real(), J_reversed(1,0).imag(), J_reversed(1,1).real(), J_reversed(1,1).imag());
+
+
+    
+
+  }
 
   // LLOG_DEBUG(
   //     "Photon terminated after {} events, final weight: {}, optical path: {}",
