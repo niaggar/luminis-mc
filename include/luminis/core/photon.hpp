@@ -27,9 +27,12 @@ struct Photon {
 
   bool polarized{true};
   CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
+  CVec2 polarization_reverse{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
 
   // CBS related
+  CVec2 initial_polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
+
   Vec3 n_0{0, 0, 0}; // Incident position
   Vec3 s_0{0, 0, 0}; // Incident direction (s_in)
   Vec3 s_1{0, 0, 0}; // Direction after 1st scatter
@@ -52,23 +55,23 @@ struct Photon {
 };
 
 struct PhotonRecord {
-  double velocity{299792458e-6}; // Speed of light in medium [mm/ns]
-  double wavelength_nm{0.0};
-  double k{0.0};
-
   uint events{0};
   double penetration_depth{0.0};
   double launch_time{0.0};
   double arrival_time{0.0};
   double opticalpath{0.0};
-
   double weight{0.0};
-  Vec3 position{0.0, 0.0, 0.0};
+
+  Vec3 position_first_scattering{0.0, 0.0, 0.0};
+  Vec3 position_last_scattering{0.0, 0.0, 0.0};
+  Vec3 position_detector{0.0, 0.0, 0.0};
+
   Vec3 direction{0.0, 0.0, 1.0};
   Vec3 m{1.0, 0.0, 0.0};
   Vec3 n{0.0, 1.0, 0.0};
-  CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
-  CVec2 reversed_polarization{std::complex<double>(0, 0), std::complex<double>(0, 0)};
+
+  CVec2 polarization_forward{std::complex<double>(1, 0), std::complex<double>(0, 0)};
+  CVec2 polarization_reverse{std::complex<double>(0, 0), std::complex<double>(0, 0)};
 };
 
 } // namespace luminis::core

@@ -30,6 +30,7 @@ add_library(_core_c
     src/absortion.cpp
     src/meanfreepath.cpp
     src/vec.cpp
+    src/core.cpp
 )
 target_link_libraries(_core_c PRIVATE _core_headers)
 set_target_properties(_core_c PROPERTIES POSITION_INDEPENDENT_CODE ON)

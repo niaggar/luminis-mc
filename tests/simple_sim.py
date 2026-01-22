@@ -29,7 +29,7 @@ mean_free_path = 100
 wavelength = 0.532
 inv_mfp = 1 / mean_free_path
 mu_scattering = inv_mfp
-mu_absortion = 0.001 * inv_mfp
+mu_absortion = 0.1 * inv_mfp
 n_particle = 1.59
 n_medium = 1.33
 
