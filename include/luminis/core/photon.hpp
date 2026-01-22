@@ -61,6 +61,7 @@ struct PhotonRecord {
   double arrival_time{0.0};
   double opticalpath{0.0};
   double weight{0.0};
+  double k{0.0};
 
   Vec3 position_first_scattering{0.0, 0.0, 0.0};
   Vec3 position_last_scattering{0.0, 0.0, 0.0};

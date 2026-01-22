@@ -55,6 +55,14 @@ from ._core import (
     MetropolisHastings,
     Exponential,
     HardSpheres,
+    # Compute
+    compute_events_histogram,
+    compute_theta_histogram,
+    compute_phi_histogram,
+    compute_speckle,
+    # Save / Load
+    save_recorded_photons,
+    load_recorded_photons,
 )
 
 __all__ = [
@@ -114,4 +122,12 @@ __all__ = [
     "MetropolisHastings",
     "Exponential",
     "HardSpheres",
+    # Compute
+    "compute_events_histogram",
+    "compute_theta_histogram",
+    "compute_phi_histogram",
+    "compute_speckle",
+    # Save / Load
+    "save_recorded_photons",
+    "load_recorded_photons",
 ]

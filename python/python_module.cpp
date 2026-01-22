@@ -4,6 +4,7 @@
 #include <luminis/core/photon.hpp>
 #include <luminis/core/simulation.hpp>
 #include <luminis/core/absortion.hpp>
+#include <luminis/core/core.hpp>
 #include <luminis/log/logger.hpp>
 #include <luminis/math/rng.hpp>
 #include <luminis/sample/phase.hpp>
@@ -168,7 +169,7 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("penetration_depth", &Photon::penetration_depth)
       .def_readwrite("alive", &Photon::alive)
       .def_readwrite("wavelength_nm", &Photon::wavelength_nm)
-      .def_readonly("k", &Photon::k)
+      .def_readwrite("k", &Photon::k)
       .def_readwrite("opticalpath", &Photon::opticalpath)
       .def_readwrite("launch_time", &Photon::launch_time)
       .def_readwrite("velocity", &Photon::velocity)
@@ -197,6 +198,7 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("arrival_time", &PhotonRecord::arrival_time)
       .def_readonly("opticalpath", &PhotonRecord::opticalpath)
       .def_readonly("weight", &PhotonRecord::weight)
+      .def_readonly("k", &PhotonRecord::k)
       .def_readonly("position_first_scattering", &PhotonRecord::position_first_scattering)
       .def_readonly("position_last_scattering", &PhotonRecord::position_last_scattering)
       .def_readonly("position_detector", &PhotonRecord::position_detector)
@@ -289,6 +291,26 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("y_len", &SpatialIntensity::y_len)
       .def_readonly("dx", &SpatialIntensity::dx)
       .def_readonly("dy", &SpatialIntensity::dy);
+
+  m.def("compute_events_histogram", &compute_events_histogram,
+        py::arg("detector"), py::arg("min_theta"), py::arg("max_theta"),
+        py::return_value_policy::take_ownership,
+        "Compute the events histogram from the detector data");
+
+  m.def("compute_theta_histogram", &compute_theta_histogram,
+        py::arg("detector"), py::arg("min_theta"), py::arg("max_theta"), py::arg("n_bins"),
+        py::return_value_policy::take_ownership,
+        "Compute the theta histogram from the detector data");
+
+  m.def("compute_phi_histogram", &compute_phi_histogram,
+        py::arg("detector"), py::arg("min_phi"), py::arg("max_phi"), py::arg("n_bins"),
+        py::return_value_policy::take_ownership,
+        "Compute the phi histogram from the detector data");
+
+  m.def("compute_speckle", &compute_speckle,
+        py::arg("detector"), py::arg("n_theta"), py::arg("n_phi"),
+        py::return_value_policy::take_ownership,
+        "Compute the angular speckle pattern from the detector data");
 
   // Medium bindings
   py::class_<Medium>(m, "Medium")
@@ -466,4 +488,15 @@ PYBIND11_MODULE(_core, m)
            "Initialize the hard sphere distribution with given radius and density")
       .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
            "Evaluate the hard sphere distribution at x");
+
+
+  // Save and read data
+  m.def("save_recorded_photons", &save_recorded_photons,
+        py::arg("filename"), py::arg("detector"),
+        "Save recorded photons from the detector to a file");
+
+  m.def("load_recorded_photons", &load_recorded_photons,
+        py::arg("filename"), py::arg("detector"),
+        "Load recorded photons into the detector from a file");
+
 }

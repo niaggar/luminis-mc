@@ -21,6 +21,7 @@ SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, Detector *d, Absorption
 
 SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
     : seed(s), n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
+
 void run_simulation(const SimConfig &config) {
   Rng rng(config.seed);
 

@@ -105,6 +105,7 @@ void Detector::record_hit(Photon &photon) {
   photon_rec.arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
   photon_rec.opticalpath = photon.opticalpath;
   photon_rec.weight = photon.weight;
+  photon_rec.k = photon.k;
   photon_rec.position_detector = photon.pos;
   photon_rec.position_first_scattering = photon.r_0;
   photon_rec.position_last_scattering = photon.r_n;

@@ -6,6 +6,9 @@ from luminis_mc import (
     RayleighDebyeEMCPhaseFunction,
     CVec2,
     Vec3,
+    compute_events_histogram,
+    load_recorded_photons,
+    save_recorded_photons
 )
 from luminis_mc import LogLevel, LaserSource
 from luminis_mc import run_simulation_parallel, set_log_level
@@ -21,7 +24,7 @@ start_time = time.time()
 m_global = Vec3(1, 0, 0)
 n_global = Vec3(0, 1, 0)
 s_global = Vec3(0, 0, 1)
-light_speed = 299792458e-6
+light_speed = 1
 
 # Medium parameters in micrometers
 radius = 0.1
@@ -52,7 +55,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1
+n_photons = 1000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -79,4 +82,4 @@ run_simulation_parallel(config)
 end_time = time.time()
 print(f"Simulation time: {end_time - start_time:.2f} seconds")
 
-detector.save_recorded_photons("test-data-phi-random.dat")
+save_recorded_photons("test-data-phi-random.dat", detector)

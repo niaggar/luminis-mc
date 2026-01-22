@@ -2,6 +2,10 @@
 
 from luminis_mc import (
     Detector,
+    compute_events_histogram,
+    compute_theta_histogram,
+    compute_phi_histogram,
+    load_recorded_photons,
 )
 from luminis_mc import LogLevel
 from luminis_mc import set_log_level
@@ -11,11 +15,11 @@ import numpy as np
 set_log_level(LogLevel.debug)
 
 detector = Detector(0)
-detector.load_recorded_photons("test-data-phi-random.dat")
+load_recorded_photons("test-data-phi-random.dat", detector)
 
-events_hist = detector.compute_events_histogram(0, np.pi / 2)
-theta_hist = detector.compute_theta_histogram(0, np.pi / 2, 100)
-phi_hist = detector.compute_phi_histogram(0, 2*np.pi, 100)
+events_hist = compute_events_histogram(detector, 0, np.pi / 2)
+theta_hist = compute_theta_histogram(detector, 0, np.pi / 2, 100)
+phi_hist = compute_phi_histogram(detector, 0, 2*np.pi, 100)
 
 # Plot histograms
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
