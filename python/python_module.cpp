@@ -42,9 +42,8 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("x", &Vec3::x)
       .def_readwrite("y", &Vec3::y)
       .def_readwrite("z", &Vec3::z)
-      .def("__repr__", [](const Vec3 &v) {
-        return "Vec3(" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " + std::to_string(v.z) + ")";
-      });
+      .def("__repr__", [](const Vec3 &v)
+           { return "Vec3(" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " + std::to_string(v.z) + ")"; });
 
   py::class_<Vec2>(m, "Vec2")
       .def(py::init<>())
@@ -67,23 +66,18 @@ PYBIND11_MODULE(_core, m)
       .def("set", [](Matrix &mat, uint i, uint j, double value)
            { mat(i, j) = value; }, py::arg("i"), py::arg("j"), py::arg("value"), "Set the element at row i and column j to value")
       .def("get_numpy", [](const Matrix &mat)
-           {
-             return py::array_t<double>(
+           { return py::array_t<double>(
                  {mat.rows, mat.cols},
                  {sizeof(double) * mat.cols, sizeof(double)},
-                 mat.data.data());
-           },
-           "Get the matrix data as a NumPy array")
+                 mat.data.data()); }, "Get the matrix data as a NumPy array")
       .def_buffer([](Matrix &mat) -> py::buffer_info
-           {
-             return py::buffer_info(
-                 mat.data.data(),
-                 sizeof(double),
-                 py::format_descriptor<double>::format(),
-                 2,
-                 {mat.rows, mat.cols},
-                 {sizeof(double) * mat.cols, sizeof(double)});
-           })
+                  { return py::buffer_info(
+                        mat.data.data(),
+                        sizeof(double),
+                        py::format_descriptor<double>::format(),
+                        2,
+                        {mat.rows, mat.cols},
+                        {sizeof(double) * mat.cols, sizeof(double)}); })
       .def_readonly("rows", &Matrix::rows, "Get the number of rows in the matrix")
       .def_readonly("cols", &Matrix::cols, "Get the number of columns in the matrix");
 
@@ -91,29 +85,24 @@ PYBIND11_MODULE(_core, m)
       .def(py::init<uint, uint>(), py::arg("rows"), py::arg("cols"),
            "Initialize a CMatrix with given number of rows and columns")
       .def_static("identity", &CMatrix::identity, py::arg("size"),
-           "Create an identity matrix of given size")
+                  "Create an identity matrix of given size")
       .def("get", [](const CMatrix &mat, uint i, uint j)
            { return mat(i, j); }, py::arg("i"), py::arg("j"), "Get the element at row i and column j")
       .def("set", [](CMatrix &mat, uint i, uint j, std::complex<double> value)
            { mat(i, j) = value; }, py::arg("i"), py::arg("j"), py::arg("value"), "Set the element at row i and column j to value")
       .def("get_numpy", [](const CMatrix &mat)
-           {
-             return py::array_t<std::complex<double>>(
+           { return py::array_t<std::complex<double>>(
                  {mat.rows, mat.cols},
                  {sizeof(std::complex<double>) * mat.cols, sizeof(std::complex<double>)},
-                 mat.data.data());
-           },
-           "Get the complex matrix data as a NumPy array")
+                 mat.data.data()); }, "Get the complex matrix data as a NumPy array")
       .def_buffer([](CMatrix &mat) -> py::buffer_info
-           {
-             return py::buffer_info(
-                 mat.data.data(),
-                 sizeof(std::complex<double>),
-                 py::format_descriptor<std::complex<double>>::format(),
-                 2,
-                 {mat.rows, mat.cols},
-                 {sizeof(std::complex<double>) * mat.cols, sizeof(std::complex<double>)});
-           })
+                  { return py::buffer_info(
+                        mat.data.data(),
+                        sizeof(std::complex<double>),
+                        py::format_descriptor<std::complex<double>>::format(),
+                        2,
+                        {mat.rows, mat.cols},
+                        {sizeof(std::complex<double>) * mat.cols, sizeof(std::complex<double>)}); })
       .def_readonly("rows", &CMatrix::rows, "Get the number of rows in the matrix")
       .def_readonly("cols", &CMatrix::cols, "Get the number of columns in the matrix");
 
@@ -202,21 +191,20 @@ PYBIND11_MODULE(_core, m)
            "Get the Stokes parameters of the photon");
 
   py::class_<PhotonRecord>(m, "PhotonRecord")
-      .def_readonly("velocity", &PhotonRecord::velocity)
-      .def_readonly("wavelength_nm", &PhotonRecord::wavelength_nm)
-      .def_readonly("k", &PhotonRecord::k)
       .def_readonly("events", &PhotonRecord::events)
       .def_readonly("penetration_depth", &PhotonRecord::penetration_depth)
       .def_readonly("launch_time", &PhotonRecord::launch_time)
       .def_readonly("arrival_time", &PhotonRecord::arrival_time)
       .def_readonly("opticalpath", &PhotonRecord::opticalpath)
       .def_readonly("weight", &PhotonRecord::weight)
-      .def_readonly("position", &PhotonRecord::position)
+      .def_readonly("position_first_scattering", &PhotonRecord::position_first_scattering)
+      .def_readonly("position_last_scattering", &PhotonRecord::position_last_scattering)
+      .def_readonly("position_detector", &PhotonRecord::position_detector)
       .def_readonly("direction", &PhotonRecord::direction)
       .def_readonly("m", &PhotonRecord::m)
       .def_readonly("n", &PhotonRecord::n)
-      .def_readonly("polarization", &PhotonRecord::polarization)
-      .def_readonly("reversed_polarization", &PhotonRecord::reversed_polarization);
+      .def_readonly("polarization_forward", &PhotonRecord::polarization_forward)
+      .def_readonly("polarization_reverse", &PhotonRecord::polarization_reverse);
 
   // Laser Bindings
   py::enum_<LaserSource>(m, "LaserSource")
@@ -272,37 +260,7 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("m_polarization", &Detector::m_polarization)
       .def_readonly("recorded_photons", &Detector::recorded_photons)
       .def("record_hit", &Detector::record_hit, py::arg("photon"),
-           "Record a photon hit on the detector")
-      .def("compute_events_histogram", &Detector::compute_events_histogram, py::arg("min_theta"),
-           py::arg("max_theta"),
-           "Get a histogram of photon hits based on the number of scattering events")
-      .def("compute_theta_histogram", &Detector::compute_theta_histogram, py::arg("min_theta"),
-           py::arg("max_theta"), py::arg("n_bins"),
-           "Get a histogram of photon hits based on the scattering angle theta")
-      .def("compute_phi_histogram", &Detector::compute_phi_histogram, py::arg("min_phi"),
-           py::arg("max_phi"), py::arg("n_bins"),
-           "Get a histogram of photon hits based on the scattering angle phi")
-      .def("compute_speckle",
-           &Detector::compute_speckle, py::arg("n_theta") = 1125,
-           py::arg("n_phi") = 360,
-           "Get the angular speckle distribution of photon hits")
-      .def("compute_spatial_intensity", &Detector::compute_spatial_intensity, py::arg("x_len"),
-           py::arg("y_len"), py::arg("max_theta"), py::arg("n_x") = 1125,
-           py::arg("n_y") = 1125,
-           "Get the spatial intensity distribution of photon hits")
-      .def("compute_angular_intensity", &Detector::compute_angular_intensity, py::arg("max_theta"),
-           py::arg("max_phi"), py::arg("n_theta") = 360,
-           py::arg("n_phi") = 360,
-           "Get the angular intensity distribution of photon hits")
-      .def("compute_time_resolved_spatial_intensity", &Detector::compute_time_resolved_spatial_intensity,
-           py::arg("x_len"), py::arg("y_len"), py::arg("max_theta"),
-           py::arg("t_max"), py::arg("dt"), py::arg("n_x") = 1125,
-           py::arg("n_y") = 1125,
-           "Get the time-resolved spatial intensity distribution of photon hits")
-      .def("save_recorded_photons", &Detector::save_recorded_photons, py::arg("filename"),
-           "Save recorded photons to a binary file")
-      .def("load_recorded_photons", &Detector::load_recorded_photons, py::arg("filename"),
-           "Load recorded photons from a binary file");
+           "Record a photon hit on the detector");
 
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
@@ -402,17 +360,16 @@ PYBIND11_MODULE(_core, m)
            py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
            "Initialize a simulation configuration with given parameters")
       .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *, bool>(),
-               py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
-               "Initialize a simulation configuration with given parameters including RNG seed")
-          .def_readonly("seed", &SimConfig::seed)
-          .def_readonly("n_photons", &SimConfig::n_photons)
-          .def_readonly("medium", &SimConfig::medium)
-          .def_readonly("laser", &SimConfig::laser)
-          .def_readonly("detector", &SimConfig::detector)
-          .def_readonly("absorption", &SimConfig::absorption)
-          .def_readonly("track_reverse_paths", &SimConfig::track_reverse_paths)
-          .def_readwrite("n_threads", &SimConfig::n_threads);
-      
+           py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
+           "Initialize a simulation configuration with given parameters including RNG seed")
+      .def_readonly("seed", &SimConfig::seed)
+      .def_readonly("n_photons", &SimConfig::n_photons)
+      .def_readonly("medium", &SimConfig::medium)
+      .def_readonly("laser", &SimConfig::laser)
+      .def_readonly("detector", &SimConfig::detector)
+      .def_readonly("absorption", &SimConfig::absorption)
+      .def_readonly("track_reverse_paths", &SimConfig::track_reverse_paths)
+      .def_readwrite("n_threads", &SimConfig::n_threads);
 
   m.def(
       "run_simulation",
