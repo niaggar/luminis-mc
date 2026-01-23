@@ -15,7 +15,7 @@ from luminis_mc import run_simulation_parallel, set_log_level
 import numpy as np
 import time
 
-set_log_level(LogLevel.debug)
+set_log_level(LogLevel.warn)
 
 
 start_time = time.time()
@@ -31,8 +31,8 @@ radius = 0.1
 mean_free_path = 100
 wavelength = 0.532
 inv_mfp = 1 / mean_free_path
-mu_scattering = inv_mfp
-mu_absortion = 0.1 * inv_mfp
+mu_absortion = 0.0003 * inv_mfp
+mu_scattering = inv_mfp - mu_absortion
 n_particle = 1.59
 n_medium = 1.33
 
@@ -55,7 +55,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1000
+n_photons = 10_000_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)

@@ -2,6 +2,8 @@
 
 from luminis_mc import (
     Detector,
+    compute_speckle,
+    load_recorded_photons,
 )
 from luminis_mc import LogLevel
 from luminis_mc import set_log_level
@@ -11,9 +13,9 @@ import numpy as np
 set_log_level(LogLevel.debug)
 
 detector = Detector(0)
-detector.load_recorded_photons("test-data-phi-conditional.dat")
+load_recorded_photons("test-data-phi-random.dat", detector)
 
-speckle = detector.compute_speckle()
+speckle = compute_speckle(detector, 1125, 360)
 I_total_array = np.array(speckle.I_total, copy=False)
 I_x_array = np.array(speckle.Ix, copy=False)
 I_y_array = np.array(speckle.Iy, copy=False)
