@@ -16,10 +16,10 @@ namespace luminis::core {
 using luminis::math::Rng;
 using luminis::math::mix_seed;
 
-SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, MultiDetector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
     : n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
-SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, Detector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, MultiDetector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
     : seed(s), n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
 void run_simulation(const SimConfig &config) {
@@ -47,7 +47,7 @@ void run_simulation_parallel(const SimConfig &config) {
 
 
   // Create thread-local detectors and absorptions
-  std::vector<std::unique_ptr<Detector>> thread_detectors;
+  std::vector<std::unique_ptr<MultiDetector>> thread_detectors;
   thread_detectors.reserve(n_threads);
   std::vector<AbsorptionTimeDependent> thread_absorptions;
   if (config.absorption)
@@ -80,7 +80,7 @@ void run_simulation_parallel(const SimConfig &config) {
         oss << "Thread " << t << " (id " << std::this_thread::get_id() << ") processing " << my_count << " photons with seed " << thread_seed;
         LLOG_INFO(oss.str());
 
-        Detector& det = *thread_detectors[t];
+        MultiDetector& det = *thread_detectors[t];
         AbsorptionTimeDependent* abs_ptr = nullptr;
         if (config.absorption) abs_ptr = &thread_absorptions[t];
 
@@ -115,12 +115,12 @@ void run_simulation_parallel(const SimConfig &config) {
     }
   }
 
-  LLOG_INFO("Parallel simulation finished. Total hits: {}", config.detector->hits);
+  LLOG_INFO("Parallel simulation finished");
 }
 
-void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths) {
+void run_photon(Photon &photon, Medium &medium, MultiDetector &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths) {
   const uint first_event = 0;
-  bool hit_detector = false;
+  std::vector<u_int> hit_detectors;
 
   // Update incident direction for CBS
   photon.n_0 = photon.n;
@@ -141,9 +141,9 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
 
     // Check for detector hit
     if (photon.events != first_event) {
-      hit_detector = detector.is_hit_by(photon);
+      hit_detectors = detector.validate_hit_by(photon);
 
-      if (hit_detector) {
+      if (!hit_detectors.empty()) {
         photon.alive = false;
         break;
       }
@@ -254,7 +254,7 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
   }
 
   // Update reversed path info for CBS
-  if (hit_detector && track_reverse_paths && photon.events > 1) {
+  if (track_reverse_paths && photon.events > 1 && !hit_detectors.empty()) {
     Vec3 s_0 = photon.s_0;
     Vec3 s_1 = photon.s_1;
     Vec3 s_n2 = photon.s_n2;
@@ -328,8 +328,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     photon.polarization_reverse = E_reversed;
   }
 
-  if (hit_detector)
-    detector.record_hit(photon);
+  if (!hit_detectors.empty())
+    detector.record_hit_in(photon, hit_detectors);
 
   LLOG_DEBUG("Photon terminated after {} events, final weight: {}, optical path: {}", photon.events, photon.weight, photon.opticalpath);
 }
