@@ -1,7 +1,10 @@
 from luminis_mc import (
     Laser,
     SimpleMedium,
+    MultiDetector,
     AngleDetector,
+    HistogramDetector,
+    ThetaHistogramDetector,
     SimConfig,
     RayleighDebyeEMCPhaseFunction,
     CVec2,
@@ -10,6 +13,7 @@ from luminis_mc import (
     Rng,
     save_angle_detector_fields,
     load_angle_detector_fields,
+    make_theta_condition,
 )
 from luminis_mc import LogLevel, LaserSource
 from luminis_mc import run_simulation_parallel, set_log_level
@@ -60,12 +64,30 @@ polarization = CVec2(1, 0)
 laser_radius = 0.1 * mean_free_path
 laser_type = LaserSource.Gaussian
 
+
 rng_test = Rng()
 laser_source = Laser(origin, polarization, wavelength, laser_radius, laser_type)
-detector = AngleDetector(0, 1125, 360)
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius, n_particle, n_medium)
 anysotropy = phase_function.get_anisotropy_factor(rng_test)
+
+detectors_container = MultiDetector()
+speckle_detector = detectors_container.add_detector(AngleDetector(0, 1125, 360))
+histogram_detector_1 = detectors_container.add_detector(HistogramDetector(0, 500))
+histogram_detector_2 = detectors_container.add_detector(HistogramDetector(0, 500))
+histogram_detector_3 = detectors_container.add_detector(HistogramDetector(0, 500))
+histogram_detector_4 = detectors_container.add_detector(HistogramDetector(0, 500))
+histogram_detector_5 = detectors_container.add_detector(HistogramDetector(0, 500))
+histogram_detector_6 = detectors_container.add_detector(HistogramDetector(0, 500))
+theta_histogram_detector = detectors_container.add_detector(ThetaHistogramDetector(0, 500))
+
+histogram_detector_1.set_theta_limit(0, np.pi)      # 180 degrees
+histogram_detector_2.set_theta_limit(0, np.pi/2)    # 90 degrees
+histogram_detector_3.set_theta_limit(0, np.pi/4)    # 45 degrees
+histogram_detector_4.set_theta_limit(0, np.pi/8)    # 22.5 degrees
+histogram_detector_5.set_theta_limit(0, 0.2)        # ~11.5 degrees
+histogram_detector_6.set_theta_limit(0, 0.1)        # ~5.7 degrees
+
 
 
 print("CONDITIONS FOR RAYLEIGH-DEBYE APPROXIMATION:")
@@ -89,7 +111,7 @@ print(f"Anisotropy: {anysotropy}")
 config = SimConfig(
     n_photons=n_photons,
     medium=medium,
-    detector=detector,
+    detector=detectors_container,
     laser=laser_source,
     parallel=True,
 )
@@ -101,10 +123,10 @@ end_time = time.time()
 print(f"---- Simulation time: {end_time - start_time:.2f} seconds")
 
 
-save_angle_detector_fields("speckle_fields.dat", detector)
+save_angle_detector_fields("speckle_fields.dat", speckle_detector)
 
 
-speckle_pattern = compute_speckle_angledetector(detector)
+speckle_pattern = compute_speckle_angledetector(speckle_detector)
 I_total_array = np.array(speckle_pattern.I_total, copy=False)
 I_x_array = np.array(speckle_pattern.Ix, copy=False)
 I_y_array = np.array(speckle_pattern.Iy, copy=False)
@@ -157,3 +179,42 @@ study_speckle(I_total_array, "Total Intensity")
 study_speckle(I_x_array, "X Polarization Intensity")
 study_speckle(I_y_array, "Y Polarization Intensity")
 study_speckle(I_z_array, "Z Polarization Intensity")
+
+
+# plot histogram from hitogram_detector the data is just ints that count hits
+def plot_histogram(detector, title):
+    hits_data = np.array(detector.histogram)
+    plt.figure(figsize=(8, 5))
+    plt.plot(range(len(hits_data)), hits_data, linewidth=2)
+    plt.xlabel("Event Index")
+    plt.ylabel("Counts")
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+plot_histogram(histogram_detector_1, "Histogram Detector 1 (theta 0 to 180 degrees)")
+plot_histogram(histogram_detector_2, "Histogram Detector 2 (theta 0 to 90 degrees)")
+plot_histogram(histogram_detector_3, "Histogram Detector 3 (theta 0 to 45 degrees)")
+plot_histogram(histogram_detector_4, "Histogram Detector 4 (theta 0 to 22.5 degrees)")
+plot_histogram(histogram_detector_5, "Histogram Detector 5 (theta 0 to ~11.5 degrees)")
+plot_histogram(histogram_detector_6, "Histogram Detector 6 (theta 0 to ~5.7 degrees)")
+
+
+print(f"Number of photons detected by speckle detector: {speckle_detector.hits}")
+print(f"Number of photons detected by histogram detector 1: {histogram_detector_1.hits}")
+print(f"Number of photons detected by histogram detector 2: {histogram_detector_2.hits}")
+print(f"Number of photons detected by histogram detector 3: {histogram_detector_3.hits}")
+print(f"Number of photons detected by histogram detector 4: {histogram_detector_4.hits}")
+print(f"Number of photons detected by histogram detector 5: {histogram_detector_5.hits}")
+print(f"Number of photons detected by histogram detector 6: {histogram_detector_6.hits}")
+
+
+theta_bins = np.linspace(0, np.pi / 2, len(theta_histogram_detector.histogram) + 1)
+theta_centers = (theta_bins[:-1] + theta_bins[1:]) / 2
+plt.figure(figsize=(8, 5))
+plt.plot(theta_centers, theta_histogram_detector.histogram, linewidth=2)
+plt.xlabel('Theta (rad)')
+plt.ylabel('Count')
+plt.title('Theta Histogram')
+plt.grid(True, alpha=0.3)
+plt.show()

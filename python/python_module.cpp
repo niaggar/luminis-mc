@@ -277,10 +277,23 @@ PYBIND11_MODULE(_core, m)
         py::arg("min_events"), py::arg("max_events"),
         "Create a detection condition based on number of scattering events");
 
+  // MultiDetector bindings
+  py::class_<MultiDetector>(m, "MultiDetector")
+      .def(py::init<>())
+      .def_readonly("detectors", &MultiDetector::detectors)
+      .def("add_detector", [](MultiDetector &self, const Detector &det) -> Detector *
+           {
+          auto cloned_det = det.clone();
+          self.add_detector(std::move(cloned_det));
+          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Agrega un detector y devuelve una referencia a la copia interna")
+      .def("validate_hit_by", &MultiDetector::validate_hit_by, py::arg("photon"), "Validate which detectors are hit by the given photon")
+      .def("record_hit_in", &MultiDetector::record_hit_in, py::arg("photon"), py::arg("detector_ids"), "Record a photon hit in specified detectors");
+
   // Detector bindings
   py::class_<Detector>(m, "Detector")
       .def(py::init<double>(), py::arg("z"),
            "Initialize a Detector at a given z position")
+      .def_readonly("id", &Detector::id)
       .def_readonly("hits", &Detector::hits)
       .def_readonly("origin", &Detector::origin)
       .def_readonly("normal", &Detector::normal)
@@ -288,15 +301,15 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("n_polarization", &Detector::n_polarization)
       .def_readonly("m_polarization", &Detector::m_polarization)
       .def_readonly("recorded_photons", &Detector::recorded_photons)
+      .def("set_theta_limit", &Detector::set_theta_limit,
+           py::arg("min_theta"), py::arg("max_theta"),
+           "Set the polar angle detection limits (in radians)")
+      .def("set_phi_limit", &Detector::set_phi_limit,
+           py::arg("min_phi"), py::arg("max_phi"),
+           "Set the azimuthal angle detection limits (in radians)")
       .def("record_hit", &Detector::record_hit, py::arg("photon"), "Record a photon hit on the detector")
       .def("is_hit_by", &Detector::is_hit_by, py::arg("photon"),
-           "Check if a photon hits the detector")
-      .def("add_detection_condition", &Detector::add_detection_condition,
-           py::arg("condition"),
-           "Add a detection condition to the detector")
-      .def("validate_detection_conditions",
-           &Detector::validate_detection_conditions, py::arg("photon"),
-           "Validate all detection conditions for a given photon");
+           "Check if a photon hits the detector");
 
   // AngleDetector bindings
   py::class_<AngleDetector, Detector>(m, "AngleDetector")
@@ -307,7 +320,22 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("N_theta", &AngleDetector::N_theta)
       .def_readonly("N_phi", &AngleDetector::N_phi)
       .def_readonly("dtheta", &AngleDetector::dtheta)
-      .def_readonly("dphi", &AngleDetector::dphi);
+      .def_readonly("dphi", &AngleDetector::dphi)
+      .def_readonly("E_x", &AngleDetector::E_x)
+      .def_readonly("E_y", &AngleDetector::E_y)
+      .def_readonly("E_z", &AngleDetector::E_z);
+
+  // HistogramDetector bindings
+  py::class_<HistogramDetector, Detector>(m, "HistogramDetector")
+      .def(py::init<double, u_int>(), py::arg("z"), py::arg("max_events"),
+           "Initialize a HistogramDetector at a given z position")
+      .def_readonly("histogram", &HistogramDetector::histogram);
+  
+  // ThetaHistogramDetector bindings
+  py::class_<ThetaHistogramDetector, Detector>(m, "ThetaHistogramDetector")
+      .def(py::init<double, u_int>(), py::arg("z"), py::arg("n_bins"),
+           "Initialize a ThetaHistogramDetector at a given z position")
+      .def_readonly("histogram", &ThetaHistogramDetector::histogram);
 
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
@@ -428,18 +456,18 @@ PYBIND11_MODULE(_core, m)
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *, bool>(),
+      .def(py::init<std::size_t, Medium *, Laser *, MultiDetector *, AbsorptionTimeDependent *, bool>(),
            py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
            "Initialize a simulation configuration with given parameters")
-      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, Detector *, AbsorptionTimeDependent *, bool>(),
+      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, MultiDetector *, AbsorptionTimeDependent *, bool>(),
            py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
            "Initialize a simulation configuration with given parameters including RNG seed")
       .def_readonly("seed", &SimConfig::seed)
       .def_readonly("n_photons", &SimConfig::n_photons)
-      .def_readonly("medium", &SimConfig::medium)
-      .def_readonly("laser", &SimConfig::laser)
-      .def_readonly("detector", &SimConfig::detector)
-      .def_readonly("absorption", &SimConfig::absorption)
+      .def_readonly("medium", &SimConfig::medium, pybind11::return_value_policy::reference)
+      .def_readonly("laser", &SimConfig::laser, pybind11::return_value_policy::reference)
+      .def_readonly("detector", &SimConfig::detector, pybind11::return_value_policy::reference)
+      .def_readonly("absorption", &SimConfig::absorption, pybind11::return_value_policy::reference)
       .def_readonly("track_reverse_paths", &SimConfig::track_reverse_paths)
       .def_readwrite("n_threads", &SimConfig::n_threads);
 
