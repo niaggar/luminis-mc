@@ -48,6 +48,11 @@ namespace luminis::core
       const int n_theta = 1125,
       const int n_phi = 360);
 
+  /// @brief Compute speckle pattern from interference
+  /// @return Angular intensity pattern
+  AngularIntensity compute_speckle_angledetector(
+      AngleDetector &detector);
+
   /// @brief Compute spatial intensity as a grid distribution centered at origin=(0,0,z)
   /// @param x_len Length in x direction
   /// @param y_len Length in y direction
@@ -89,5 +94,10 @@ namespace luminis::core
   /// @brief Load photon records from binary file
   /// @param filename Input file path
   void load_recorded_photons(const std::string &filename, Detector &detector);
+
+
+  void save_angle_detector_fields(const std::string &filename, const AngleDetector &detector);
+
+  void load_angle_detector_fields(const std::string &filename, AngleDetector &detector);
 
 } // namespace luminis::core

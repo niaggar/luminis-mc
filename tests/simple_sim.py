@@ -8,14 +8,15 @@ from luminis_mc import (
     Vec3,
     compute_events_histogram,
     load_recorded_photons,
-    save_recorded_photons
+    save_recorded_photons,
+    Rng
 )
 from luminis_mc import LogLevel, LaserSource
 from luminis_mc import run_simulation_parallel, set_log_level
 import numpy as np
 import time
 
-set_log_level(LogLevel.warn)
+set_log_level(LogLevel.info)
 
 
 start_time = time.time()
@@ -27,9 +28,9 @@ s_global = Vec3(0, 0, 1)
 light_speed = 1
 
 # Medium parameters in micrometers
-radius = 0.1
-mean_free_path = 100
-wavelength = 0.532
+radius = 0.46
+mean_free_path = 2.8
+wavelength = 0.525
 inv_mfp = 1 / mean_free_path
 mu_absortion = 0.0003 * inv_mfp
 mu_scattering = inv_mfp - mu_absortion
@@ -55,7 +56,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 10_000_000
+n_photons = 500_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -67,6 +68,12 @@ laser_source = Laser(origin, polarization, wavelength, laser_radius, laser_type)
 detector = Detector(0)
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius, n_particle, n_medium)
+
+rng_test = Rng()
+anysotropy = phase_function.get_anisotropy_factor(rng_test)
+print(f"Anisotropy: {anysotropy}")
+
+
 
 config = SimConfig(
     n_photons=n_photons,

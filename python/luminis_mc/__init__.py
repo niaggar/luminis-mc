@@ -34,8 +34,14 @@ from ._core import (
     gaussian_distribution,
     # Detector
     Detector,
+    AngleDetector,
     AngularSpeckle,
     SpatialIntensity,
+    DetectionCondition,
+    make_theta_condition,
+    make_phi_condition,
+    make_position_condition,
+    make_events_condition,
     # Medium
     Medium,
     SimpleMedium,
@@ -60,9 +66,12 @@ from ._core import (
     compute_theta_histogram,
     compute_phi_histogram,
     compute_speckle,
+    compute_speckle_angledetector,
     # Save / Load
     save_recorded_photons,
     load_recorded_photons,
+    save_angle_detector_fields,
+    load_angle_detector_fields,
 )
 
 __all__ = [
@@ -101,8 +110,14 @@ __all__ = [
     "gaussian_distribution",
     # Detector
     "Detector",
+    "AngleDetector",
     "AngularSpeckle",
     "SpatialIntensity",
+    "DetectionCondition",
+    "make_theta_condition",
+    "make_phi_condition",
+    "make_position_condition",
+    "make_events_condition",
     # Medium
     "Medium",
     "SimpleMedium",
@@ -127,7 +142,10 @@ __all__ = [
     "compute_theta_histogram",
     "compute_phi_histogram",
     "compute_speckle",
+    "compute_speckle_angledetector",
     # Save / Load
     "save_recorded_photons",
     "load_recorded_photons",
+    "save_angle_detector_fields",
+    "load_angle_detector_fields",
 ]

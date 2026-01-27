@@ -78,8 +78,8 @@ struct Matrix {
 };
 
 struct CMatrix {
-  const uint rows;
-  const uint cols;
+  uint rows;
+  uint cols;
   std::vector<std::complex<double>> data;
 
   CMatrix(uint rows, uint cols) : rows(rows), cols(cols) {

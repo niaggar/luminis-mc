@@ -47,14 +47,14 @@ void run_simulation_parallel(const SimConfig &config) {
 
 
   // Create thread-local detectors and absorptions
-  std::vector<Detector> thread_detectors;
+  std::vector<std::unique_ptr<Detector>> thread_detectors;
   thread_detectors.reserve(n_threads);
   std::vector<AbsorptionTimeDependent> thread_absorptions;
   if (config.absorption)
     thread_absorptions.reserve(n_threads);
 
   for (std::size_t t = 0; t < n_threads; ++t) {
-    thread_detectors.emplace_back(config.detector->copy_start());
+    thread_detectors.emplace_back(config.detector->clone());
 
     if (config.absorption)
       thread_absorptions.emplace_back(config.absorption->copy_start());
@@ -80,7 +80,7 @@ void run_simulation_parallel(const SimConfig &config) {
         oss << "Thread " << t << " (id " << std::this_thread::get_id() << ") processing " << my_count << " photons with seed " << thread_seed;
         LLOG_INFO(oss.str());
 
-        Detector& det = thread_detectors[t];
+        Detector& det = *thread_detectors[t];
         AbsorptionTimeDependent* abs_ptr = nullptr;
         if (config.absorption) abs_ptr = &thread_absorptions[t];
 
@@ -97,6 +97,7 @@ void run_simulation_parallel(const SimConfig &config) {
     });
   }
 
+  LLOG_INFO("All threads launched.");
 
   // Join threads
   for (auto &th : workers) th.join();
@@ -104,10 +105,9 @@ void run_simulation_parallel(const SimConfig &config) {
     std::rethrow_exception(thread_exception);
   }
 
-
   // Merge thread-local detectors and absorptions
   for (std::size_t t = 0; t < n_threads; ++t) {
-    config.detector->merge_from(thread_detectors[t]);
+    config.detector->merge_from(*thread_detectors[t]);
   }
   if (config.absorption) {
     for (std::size_t t = 0; t < n_threads; ++t) {
@@ -155,8 +155,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     // Get scattering matrix
     CMatrix S_matrix = medium.scattering_matrix(theta, 0, photon.k);
 
-    // const double phi = medium.sample_azimuthal_angle(rng);
-    const double phi = medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
+    const double phi = medium.sample_azimuthal_angle(rng);
+    // const double phi = medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
     const double cos_theta = std::cos(theta);
     const double sin_theta = std::sin(theta);
     const double cos_phi = std::cos(phi);
@@ -170,6 +170,7 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     photon.m = old_m * cos_theta * cos_phi + old_n * cos_theta * sin_phi - old_dir * sin_theta;
     photon.n = old_m * -1 * sin_phi + old_n * cos_phi;
     photon.dir = old_m * sin_theta * cos_phi + old_n * sin_theta * sin_phi + old_dir * cos_theta;
+
 
     // Update photon polarization if needed
     if (photon.polarized) {
@@ -228,10 +229,10 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
       }
     }
 
+
     // Update photon events
     const double d_weight = photon.weight * (medium.mu_absorption / medium.mu_attenuation);
     photon.weight = photon.weight - d_weight;
-    // photon.weight = photon.weight * expected_intensity;
     photon.events++;
 
     LLOG_DEBUG("Photon weight after event {}: {}", photon.events, photon.weight);
@@ -327,7 +328,8 @@ void run_photon(Photon &photon, Medium &medium, Detector &detector, Rng &rng, Ab
     photon.polarization_reverse = E_reversed;
   }
 
-  detector.record_hit(photon);
+  if (hit_detector)
+    detector.record_hit(photon);
 
   LLOG_DEBUG("Photon terminated after {} events, final weight: {}, optical path: {}", photon.events, photon.weight, photon.opticalpath);
 }

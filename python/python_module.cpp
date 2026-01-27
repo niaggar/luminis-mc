@@ -250,6 +250,33 @@ PYBIND11_MODULE(_core, m)
       .def("emit_photon", &Laser::emit_photon, py::arg("rng"),
            "Emit a photon from the laser source");
 
+  // Detection condition bindings
+  py::class_<DetectionCondition>(m, "DetectionCondition")
+      .def(py::init<std::function<bool(const Photon &)>>(),
+           py::arg("condition"),
+           "Initialize a DetectionCondition with a callable condition");
+
+  m.def("make_theta_condition",
+        &make_theta_condition,
+        py::arg("min_theta"), py::arg("max_theta"),
+        "Create a detection condition based on polar angle range");
+
+  m.def("make_phi_condition",
+        &make_phi_condition,
+        py::arg("min_phi"), py::arg("max_phi"),
+        "Create a detection condition based on azimuthal angle range");
+
+  m.def("make_position_condition",
+        &make_position_condition,
+        py::arg("x_min"), py::arg("x_max"),
+        py::arg("y_min"), py::arg("y_max"),
+        "Create a detection condition based on position range");
+
+  m.def("make_events_condition",
+        &make_events_condition,
+        py::arg("min_events"), py::arg("max_events"),
+        "Create a detection condition based on number of scattering events");
+
   // Detector bindings
   py::class_<Detector>(m, "Detector")
       .def(py::init<double>(), py::arg("z"),
@@ -261,8 +288,26 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("n_polarization", &Detector::n_polarization)
       .def_readonly("m_polarization", &Detector::m_polarization)
       .def_readonly("recorded_photons", &Detector::recorded_photons)
-      .def("record_hit", &Detector::record_hit, py::arg("photon"),
-           "Record a photon hit on the detector");
+      .def("record_hit", &Detector::record_hit, py::arg("photon"), "Record a photon hit on the detector")
+      .def("is_hit_by", &Detector::is_hit_by, py::arg("photon"),
+           "Check if a photon hits the detector")
+      .def("add_detection_condition", &Detector::add_detection_condition,
+           py::arg("condition"),
+           "Add a detection condition to the detector")
+      .def("validate_detection_conditions",
+           &Detector::validate_detection_conditions, py::arg("photon"),
+           "Validate all detection conditions for a given photon");
+
+  // AngleDetector bindings
+  py::class_<AngleDetector, Detector>(m, "AngleDetector")
+      .def(py::init<double, int, int>(), py::arg("z"), py::arg("n_theta"),
+           py::arg("n_phi"),
+           "Initialize a AngleDetector at a given z position with angular "
+           "resolution")
+      .def_readonly("N_theta", &AngleDetector::N_theta)
+      .def_readonly("N_phi", &AngleDetector::N_phi)
+      .def_readonly("dtheta", &AngleDetector::dtheta)
+      .def_readonly("dphi", &AngleDetector::dphi);
 
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
@@ -309,6 +354,11 @@ PYBIND11_MODULE(_core, m)
 
   m.def("compute_speckle", &compute_speckle,
         py::arg("detector"), py::arg("n_theta"), py::arg("n_phi"),
+        py::return_value_policy::take_ownership,
+        "Compute the angular speckle pattern from the detector data");
+
+  m.def("compute_speckle_angledetector", &compute_speckle_angledetector,
+        py::arg("angledetector"),
         py::return_value_policy::take_ownership,
         "Compute the angular speckle pattern from the detector data");
 
@@ -489,7 +539,6 @@ PYBIND11_MODULE(_core, m)
       .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
            "Evaluate the hard sphere distribution at x");
 
-
   // Save and read data
   m.def("save_recorded_photons", &save_recorded_photons,
         py::arg("filename"), py::arg("detector"),
@@ -499,4 +548,11 @@ PYBIND11_MODULE(_core, m)
         py::arg("filename"), py::arg("detector"),
         "Load recorded photons into the detector from a file");
 
+  m.def("save_angle_detector_fields", &save_angle_detector_fields,
+        py::arg("filename"), py::arg("angledetector"),
+        "Save the fields of the angle detector to a file");
+
+  m.def("load_angle_detector_fields", &load_angle_detector_fields,
+        py::arg("filename"), py::arg("angledetector"),
+        "Load the fields of the angle detector from a file");
 }
