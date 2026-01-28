@@ -52,9 +52,11 @@ struct CVec2 {
 };
 
 struct Matrix {
-  const uint rows;
-  const uint cols;
+  uint rows;
+  uint cols;
   std::vector<double> data;
+
+  Matrix() = default;
 
   Matrix(uint rows, uint cols) : rows(rows), cols(cols) {
     data.resize(rows * cols, 0.0);
