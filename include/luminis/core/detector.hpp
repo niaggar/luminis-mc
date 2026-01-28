@@ -149,6 +149,7 @@ namespace luminis::core
     void merge_from(const Detector &other) override;
   };
 
+  /// @brief Theta Histogram detector for recording photon theta angle counts
   struct ThetaHistogramDetector : public Detector
   {
     std::vector<int> histogram;
@@ -160,6 +161,81 @@ namespace luminis::core
 
     std::unique_ptr<Detector> clone() const override;
 
+    void merge_from(const Detector &other) override;
+  };
+
+  /// @brief Spatial detector for recording spatial intensity distribution
+  struct SpatialDetector : public Detector
+  {
+    int N_x;       ///< Number of x bins
+    int N_y;       ///< Number of y bins
+    double dx;     ///< x resolution
+    double dy;     ///< y resolution
+    CMatrix E_x;    ///< Accumulated E-field x-component
+    CMatrix E_y;    ///< Accumulated E-field y-component
+    CMatrix E_z;    ///< Accumulated E-field z-component
+
+    /// @brief Construct spatial detector at z-position with spatial size
+    /// @param z Detector z-coordinate
+    /// @param x_len Physical x length
+    /// @param y_len Physical y length
+    /// @param n_x Number of x bins
+    /// @param n_y Number of y bins
+    SpatialDetector(double z, double x_len, double y_len, int n_x, int n_y);
+
+    /// @brief Record photon intersection with detector plane (overrides base)
+    /// @param photon Photon to validate and record
+    void record_hit(Photon &photon) override;
+
+    /// @brief Create empty spatial detector copy for parallel processing
+    /// @return Cloned spatial detector
+    std::unique_ptr<Detector> clone() const override;
+
+    /// @brief Merge results from another spatial detector
+    /// @param other Spatial detector to merge from
+    void merge_from(const Detector &other) override;
+  };
+
+  struct SpatialCoherentDetector : public Detector
+  {
+    int N_x;   ///< Number of x bins
+    int N_y;     ///< Number of y bins
+    double dx; ///< x resolution
+    double dy;   ///< y resolution
+    Matrix I_x;   ///< Accumulated Intensity x-component
+    Matrix I_y;   ///< Accumulated Intensity y-component
+    Matrix I_z;   ///< Accumulated Intensity z-component
+
+    Matrix I_inco_x;   ///< Accumulated Incoherent Intensity x-component
+    Matrix I_inco_y;   ///< Accumulated Incoherent Intensity y-component
+    Matrix I_inco_z;   ///< Accumulated Incoherent Intensity z-component
+
+    std::vector<double> I_x_theta;
+    std::vector<double> I_y_theta;
+    std::vector<double> I_z_theta;
+
+    std::vector<double> I_inco_x_theta;
+    std::vector<double> I_inco_y_theta;
+    std::vector<double> I_inco_z_theta;
+
+    /// @brief Construct spatial coherent detector at z-position with spatial size
+    /// @param z Detector z-coordinate
+    /// @param x_len Physical x length
+    /// @param y_len Physical y length
+    /// @param n_x Number of x bins
+    /// @param n_y Number of y bins
+    SpatialCoherentDetector(double z, double x_len, double y_len, int n_x, int n_y);
+
+    /// @brief Record photon intersection with detector plane (overrides base)
+    /// @param photon Photon to validate and record
+    void record_hit(Photon &photon) override;
+
+    /// @brief Create empty spatial detector copy for parallel processing
+    /// @return Cloned spatial detector
+    std::unique_ptr<Detector> clone() const override;
+
+    /// @brief Merge results from another spatial detector
+    /// @param other Spatial detector to merge from
     void merge_from(const Detector &other) override;
   };
 

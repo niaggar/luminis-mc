@@ -337,6 +337,43 @@ PYBIND11_MODULE(_core, m)
            "Initialize a ThetaHistogramDetector at a given z position")
       .def_readonly("histogram", &ThetaHistogramDetector::histogram);
 
+  // SpatialDetector bindings
+  py::class_<SpatialDetector, Detector>(m, "SpatialDetector")
+      .def(py::init<double, double, double, int, int>(), py::arg("z"),
+           py::arg("x_len"), py::arg("y_len"), py::arg("N_x"), py::arg("N_y"),
+           "Initialize a SpatialDetector at a given z position with spatial "
+           "resolution")
+      .def_readonly("N_x", &SpatialDetector::N_x)
+      .def_readonly("N_y", &SpatialDetector::N_y)
+      .def_readonly("dx", &SpatialDetector::dx)
+      .def_readonly("dy", &SpatialDetector::dy)
+      .def_readonly("E_x", &SpatialDetector::E_x)
+      .def_readonly("E_y", &SpatialDetector::E_y)
+      .def_readonly("E_z", &SpatialDetector::E_z);
+
+  // SpatialCoherentDetector bindings
+  py::class_<SpatialCoherentDetector, Detector>(m, "SpatialCoherentDetector")
+      .def(py::init<double, double, double, int, int>(), py::arg("z"),
+           py::arg("x_len"), py::arg("y_len"), py::arg("N_x"), py::arg("N_y"),
+           "Initialize a SpatialCoherentDetector at a given z position with spatial "
+           "resolution")
+      .def_readonly("N_x", &SpatialCoherentDetector::N_x)
+      .def_readonly("N_y", &SpatialCoherentDetector::N_y)
+      .def_readonly("dx", &SpatialCoherentDetector::dx)
+      .def_readonly("dy", &SpatialCoherentDetector::dy)
+      .def_readonly("I_x", &SpatialCoherentDetector::I_x)
+      .def_readonly("I_y", &SpatialCoherentDetector::I_y)
+      .def_readonly("I_z", &SpatialCoherentDetector::I_z)
+      .def_readonly("I_inco_x", &SpatialCoherentDetector::I_inco_x)
+      .def_readonly("I_inco_y", &SpatialCoherentDetector::I_inco_y)
+      .def_readonly("I_inco_z", &SpatialCoherentDetector::I_inco_z)
+      .def_readonly("I_x_theta", &SpatialCoherentDetector::I_x_theta)
+      .def_readonly("I_y_theta", &SpatialCoherentDetector::I_y_theta)
+      .def_readonly("I_z_theta", &SpatialCoherentDetector::I_z_theta)
+      .def_readonly("I_inco_x_theta", &SpatialCoherentDetector::I_inco_x_theta)
+      .def_readonly("I_inco_y_theta", &SpatialCoherentDetector::I_inco_y_theta)
+      .def_readonly("I_inco_z_theta", &SpatialCoherentDetector::I_inco_z_theta);
+
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
       .def_readonly("Iy", &AngularIntensity::Iy)
@@ -457,10 +494,10 @@ PYBIND11_MODULE(_core, m)
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
       .def(py::init<std::size_t, Medium *, Laser *, MultiDetector *, AbsorptionTimeDependent *, bool>(),
-           py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
+           py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
            "Initialize a simulation configuration with given parameters")
       .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, MultiDetector *, AbsorptionTimeDependent *, bool>(),
-           py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("parallel") = false,
+           py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
            "Initialize a simulation configuration with given parameters including RNG seed")
       .def_readonly("seed", &SimConfig::seed)
       .def_readonly("n_photons", &SimConfig::n_photons)
