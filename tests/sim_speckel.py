@@ -56,7 +56,7 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 100_000
+n_photons = 10_000_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -70,6 +70,7 @@ laser_source = Laser(origin, polarization, wavelength, laser_radius, laser_type)
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius, n_particle, n_medium)
 anysotropy = phase_function.get_anisotropy_factor(rng_test)
+print(f"Transport mean free path: {1 / (1 - anysotropy[0])}")
 
 detectors_container = MultiDetector()
 speckle_detector = detectors_container.add_detector(AngleDetector(0, 1125, 360))
@@ -113,7 +114,7 @@ config = SimConfig(
     medium=medium,
     detector=detectors_container,
     laser=laser_source,
-    parallel=True,
+    track_reverse_paths=False,
 )
 config.n_threads = 8
 

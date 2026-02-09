@@ -14,11 +14,11 @@ struct Absorption {
   const double depth;
   const double d_r;
   const double d_z;
-  std::vector<std::vector<double>> absorption_values;
+  Matrix absorption_values;
 
   Absorption(double r, double z, double dr, double dz);
   void record_absorption(const Photon &photon, double d_weight);
-  std::vector<std::vector<double>> get_absorption_image(const int n_photons) const;
+  Matrix get_absorption_image(const int n_photons) const;
 };
 
 struct AbsorptionTimeDependent {
@@ -36,7 +36,7 @@ struct AbsorptionTimeDependent {
   void merge_from(const AbsorptionTimeDependent &other);
 
   void record_absorption(const Photon &photon, double d_weight);
-  std::vector<std::vector<double>> get_absorption_image(const int n_photons, const int time_index) const;
+  Matrix get_absorption_image(const int n_photons, const int time_index) const;
 };
 
 AbsorptionTimeDependent* combine_absorptions(const std::vector<AbsorptionTimeDependent> &absorptions);

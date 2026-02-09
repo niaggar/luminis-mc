@@ -84,6 +84,8 @@ struct CMatrix {
   uint cols;
   std::vector<std::complex<double>> data;
 
+  CMatrix() = default;
+
   CMatrix(uint rows, uint cols) : rows(rows), cols(cols) {
     data.resize(rows * cols, std::complex<double>(0.0, 0.0));
   }

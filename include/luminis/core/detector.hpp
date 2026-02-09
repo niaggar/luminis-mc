@@ -71,14 +71,9 @@ namespace luminis::core
     Detector(Detector &&) = default;
     Detector &operator=(Detector &&) = default;
 
-    /// @brief Check if photon hits the detector
-    /// @param photon Photon to validate
-    /// @return True if photon hits the detector
-    bool is_hit_by(const Photon &photon) const;
-
     /// @brief Record photon intersection with detector plane
     /// @param photon Photon to validate and record
-    virtual void record_hit(Photon &photon);
+    virtual bool record_hit(Photon &photon, std::function<void()> coherent_calculation);
 
     /// @brief Create empty detector copy for parallel processing
     virtual std::unique_ptr<Detector> clone() const;
@@ -122,7 +117,7 @@ namespace luminis::core
 
     /// @brief Record photon intersection with detector plane (overrides base)
     /// @param photon Photon to validate and record
-    void record_hit(Photon &photon) override;
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
 
     /// @brief Create empty speckle detector copy for parallel processing
     /// @return Cloned speckle detector
@@ -142,7 +137,7 @@ namespace luminis::core
     HistogramDetector(double z, u_int n_bins)
         : Detector(z), histogram(n_bins, 0) {}
 
-    void record_hit(Photon &photon) override;
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
 
     std::unique_ptr<Detector> clone() const override;
 
@@ -157,7 +152,7 @@ namespace luminis::core
     ThetaHistogramDetector(double z, u_int n_bins)
         : Detector(z), histogram(n_bins, 0) {}
 
-    void record_hit(Photon &photon) override;
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
 
     std::unique_ptr<Detector> clone() const override;
 
@@ -175,6 +170,12 @@ namespace luminis::core
     CMatrix E_y;    ///< Accumulated E-field y-component
     CMatrix E_z;    ///< Accumulated E-field z-component
 
+    Matrix I_x;    ///< Accumulated Intensity x-component
+    Matrix I_y;    ///< Accumulated Intensity y-component
+    Matrix I_z;    ///< Accumulated Intensity z-component
+    Matrix I_plus;   ///< Accumulated Copolarized Intensity
+    Matrix I_minus; ///< Accumulated Crosspolarized Intensity
+
     /// @brief Construct spatial detector at z-position with spatial size
     /// @param z Detector z-coordinate
     /// @param x_len Physical x length
@@ -185,7 +186,7 @@ namespace luminis::core
 
     /// @brief Record photon intersection with detector plane (overrides base)
     /// @param photon Photon to validate and record
-    void record_hit(Photon &photon) override;
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
 
     /// @brief Create empty spatial detector copy for parallel processing
     /// @return Cloned spatial detector
@@ -228,7 +229,7 @@ namespace luminis::core
 
     /// @brief Record photon intersection with detector plane (overrides base)
     /// @param photon Photon to validate and record
-    void record_hit(Photon &photon) override;
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
 
     /// @brief Create empty spatial detector copy for parallel processing
     /// @return Cloned spatial detector
@@ -236,6 +237,42 @@ namespace luminis::core
 
     /// @brief Merge results from another spatial detector
     /// @param other Spatial detector to merge from
+    void merge_from(const Detector &other) override;
+  };
+
+  struct AngularCoherentDetector : public Detector
+  {
+    int N_theta;   ///< Number of theta bins
+    double dtheta; ///< Theta resolution
+    std::vector<double> I_x;   ///< Accumulated Intensity x-component
+    std::vector<double> I_y;   ///< Accumulated Intensity y-component
+    std::vector<double> I_z;   ///< Accumulated Intensity z-component
+    std::vector<double> I_plus;   ///< Accumulated Coherent Intensity
+    std::vector<double> I_minus; ///< Accumulated Crossed Intensity
+    std::vector<double> I_total; ///< Accumulated Total Intensity
+
+    std::vector<double> I_inco_x;   ///< Accumulated Incoherent Intensity x-component
+    std::vector<double> I_inco_y;   ///< Accumulated Incoherent Intensity y-component
+    std::vector<double> I_inco_z;   ///< Accumulated Incoherent Intensity z-component
+    std::vector<double> I_inco_plus;   ///< Accumulated Incoherent Coherent Intensity
+    std::vector<double> I_inco_minus; ///< Accumulated Incoherent Crossed Intensity
+    std::vector<double> I_inco_total; ///< Accumulated Incoherent Total Intensity
+
+    /// @brief Construct angular coherent detector at z-position with angular size
+    /// @param z Detector z-coordinate
+    /// @param n_theta Number of theta bins
+    AngularCoherentDetector(double z, int n_theta, double max_theta);
+
+    /// @brief Record photon intersection with detector plane (overrides base)
+    /// @param photon Photon to validate and record
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
+
+    /// @brief Create empty angular detector copy for parallel processing
+    /// @return Cloned angular detector
+    std::unique_ptr<Detector> clone() const override;
+
+    /// @brief Merge results from another angular detector
+    /// @param other Angular detector to merge from
     void merge_from(const Detector &other) override;
   };
 
@@ -254,18 +291,9 @@ namespace luminis::core
     /// @param detector Detector to add
     void add_detector(std::unique_ptr<Detector> detector);
 
-    /// @brief Validate hit by all detectors
-    /// @param photon Photon to validate
-    std::vector<u_int> validate_hit_by(const Photon &photon) const;
-
     /// @brief Record hit by all detectors
     /// @param photon Photon to record
-    void record_hit_by(Photon &photon);
-
-    /// @brief Record hit in specific detectors
-    /// @param photon Photon to record
-    /// @param detector_ids IDs of detectors to record hit in
-    void record_hit_in(Photon &photon, const std::vector<u_int> &detector_ids);
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation);
 
     /// @brief Merge results from another multi-detector
     /// @param other Multi-detector to merge from

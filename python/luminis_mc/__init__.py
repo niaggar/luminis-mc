@@ -39,6 +39,7 @@ from ._core import (
     ThetaHistogramDetector,
     SpatialDetector,
     SpatialCoherentDetector,
+    AngularCoherentDetector,
     MultiDetector,
     # Utilities for Detection Conditions
     AngularSpeckle,
@@ -121,6 +122,7 @@ __all__ = [
     "ThetaHistogramDetector",
     "SpatialDetector",
     "SpatialCoherentDetector",
+    "AngularCoherentDetector",
     "MultiDetector",
     # Utilities for Detection Conditions
     "AngularSpeckle",
