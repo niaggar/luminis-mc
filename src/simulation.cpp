@@ -60,7 +60,7 @@ namespace luminis::core
       thread_detectors.emplace_back(config.detector->clone());
 
       if (config.absorption)
-        thread_absorptions.emplace_back(config.absorption->copy_start());
+        thread_absorptions.emplace_back(config.absorption->clone());
     }
 
     // Launch threads
