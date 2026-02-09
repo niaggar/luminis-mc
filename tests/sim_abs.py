@@ -132,7 +132,7 @@ mu_scattering_sim = inv_mfp_sim - mu_absortion_sim
 
 # Time parameters
 t_ref = mean_free_path_sim / light_speed
-dt = 0.1 * t_ref
+dt = 0.5 * t_ref
 max_time = 10 * t_ref
 
 # Phase function parameters
@@ -154,6 +154,11 @@ x_len = mean_free_path_sim * 20
 y_len = mean_free_path_sim * 20
 r_len = mean_free_path_sim * 10
 
+abs_r_len = 5 * mean_free_path_sim
+abs_z_len = 10 * mean_free_path_sim
+abs_d_r = mean_free_path_sim / 100
+abs_d_z = mean_free_path_sim / 100
+
 
 
 data_storage = []
@@ -170,6 +175,15 @@ for r in radius_study:
     phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
     medium = SimpleMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
     anysotropy = phase_function.get_anisotropy_factor(rng_test)
+
+    absorption = AbsorptionTimeDependent(
+        radius=abs_r_len,
+        depth=abs_z_len,
+        d_r=abs_d_r,
+        d_z=abs_d_z,
+        d_t=0,
+        t_max=0,
+    )
 
     # Detector setup
     detectors_container = MultiDetector()
@@ -188,17 +202,19 @@ for r in radius_study:
         detector=detectors_container,
         laser=laser_source,
         track_reverse_paths=False,
+        absorption=absorption,
     )
     config.n_threads = 8
     run_simulation_parallel(config)
 
     # Extracting intensity data
-    I_plus_matrix = np.array(spatial_detector.I_plus, copy=False) / n_photons
-    I_minus_matrix = np.array(spatial_detector.I_minus, copy=False) / n_photons
     I_rad_plus_array = np.array(spatial_detector.calculate_radial_plus_intensity()) / n_photons
     I_rad_minus_array = np.array(spatial_detector.calculate_radial_minus_intensity()) / n_photons
 
-    data_storage.append((radius_real, size_parameter, condition_2, anysotropy[0], I_rad_plus_array, I_rad_minus_array))
+    # Extracting absorption data
+    absorption_data = absorption.get_absorption_image(n_photons, 0)
+
+    data_storage.append((radius_real, size_parameter, condition_2, anysotropy[0], I_rad_plus_array, I_rad_minus_array, absorption_data))
 
 
 
@@ -206,19 +222,33 @@ end_time = time.time()
 print(f"---- Simulation time: {end_time - start_time:.2f} seconds")
 
 # Plot the I_rad_plus_array for each radius in a single figure
-plt.rcParams['text.usetex'] = True
-plt.figure(figsize=(10, 6))
-for (radius_real, size_parameter, condition_2, anysotropy, I_rad_plus_array, I_rad_minus_array) in data_storage:
-    n_bins = len(I_rad_plus_array)
-    radius_array = np.linspace(0, r_len, n_bins)
-    plt.plot(radius_array, I_rad_plus_array, label=f'$g={anysotropy:.2f}, r={radius_real:.2f}$')
-plt.xlabel('Radius (l)')
-plt.ylabel('Radial Copolarized Intensity')
-plt.title('Radial Copolarized Intensity for Different Particle Radii')
-plt.xlim(0, 4)
-plt.legend()
-plt.grid(True)
-plt.show()
+# plt.rcParams['text.usetex'] = True
+# plt.figure(figsize=(10, 6))
+# for (radius_real, size_parameter, condition_2, anysotropy, I_rad_plus_array, I_rad_minus_array, absorption_data) in data_storage:
+#     n_bins = len(I_rad_plus_array)
+#     radius_array = np.linspace(0, r_len, n_bins)
+#     plt.plot(radius_array, I_rad_plus_array, label=f'$g={anysotropy:.2f}, r={radius_real:.2f}$')
+# plt.xlabel('Radius (l)')
+# plt.ylabel('Radial Copolarized Intensity')
+# plt.title('Radial Copolarized Intensity for Different Particle Radii')
+# plt.xlim(0, 4)
+# plt.legend()
+# plt.grid(True)
+# plt.show()
+
+
+# Plot the absorption data for each radius in a different figure each
+for (radius_real, size_parameter, condition_2, anysotropy, I_rad_plus_array, I_rad_minus_array, absorption_data) in data_storage:
+    plt.rcParams['text.usetex'] = True
+    plt.figure(figsize=(6, 5))
+    extent = [0.0, abs_z_len, -abs_r_len, abs_r_len]
+    plt.imshow(absorption_data, cmap='inferno', origin='lower', extent=extent, aspect='auto')
+    plt.colorbar(label='Absorption Probability')
+    plt.title(f'Absorption Distribution for r={radius_real:.2f}, g={anysotropy:.2f}')
+    plt.xlabel('Radius (l)')
+    plt.ylabel('Depth (l)')
+    plt.grid(False)
+    plt.show()
 
 
 
@@ -233,15 +263,3 @@ plt.show()
 
 
 
-
-
-
-
-
-
-
-# study_spatial_intensity(I_plus_array, I_minus_array, "Spatial Intensities", 
-#                        x_len, y_len, resolution, resolution,
-#                        length_unit="mfp", show_plot=True)
-# study_radial_intensity(I_rad_plus_array, I_rad_minus_array, "Radial Intensities", 
-#                       max_radius=r_len, length_unit="mfp", show_plot=True)

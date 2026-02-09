@@ -31,7 +31,7 @@ light_speed = 1
 
 # Medium parameters in micrometers
 mean_free_path_real = 2.8
-radius_real = 0.3
+radius_real = 0.15
 wavelength_real = 0.525
 n_particle_real = 1.31
 n_medium_real = 1.33
@@ -39,7 +39,7 @@ n_medium_real = 1.33
 
 mean_free_path_sim = 1.0
 inv_mfp_sim = 1 / mean_free_path_sim
-mu_absortion_sim = 0.001 * inv_mfp_sim
+mu_absortion_sim = 0.05 * inv_mfp_sim
 mu_scattering_sim = inv_mfp_sim - mu_absortion_sim
 
 
@@ -51,24 +51,21 @@ condition_2 = size_parameter * condition_1
 
 # Time parameters
 t_ref = mean_free_path_sim / light_speed
-dt = 0.1 * t_ref
+dt = 0.5 * t_ref
 max_time = 10 * t_ref
 
 # Phase function parameters
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 1_000_000
+n_photons = 10_000_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
-# polarization = CVec2(1, 0)  # Linear Vertical polarization
-# polarization = CVec2(0, 1)  # Linear Horizontal polarization
-# polarization = CVec2(1/np.sqrt(2), 1/np.sqrt(2))  # Linear 45 degrees polarization
-# polarization = CVec2(1/np.sqrt(2), -1/np.sqrt(2))  # Linear -45 degrees polarization
+
 polarization = CVec2(1/np.sqrt(2), -1j/np.sqrt(2))  # Circular Right polarization
 # polarization = CVec2(1/np.sqrt(2), 1j/np.sqrt(2))   # Circular Left polarization
-laser_radius = 0.1 * mean_free_path_sim
+laser_radius = 0.5 * mean_free_path_sim
 laser_type = LaserSource.Gaussian
 
 
@@ -76,13 +73,19 @@ rng_test = Rng()
 laser_source = Laser(origin, polarization, wavelength_real, laser_radius, laser_type)
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
+
+abs_r_len = 5 * mean_free_path_sim
+abs_z_len = 10 * mean_free_path_sim
+abs_d_r = mean_free_path_sim / 100
+abs_d_z = mean_free_path_sim / 100
+
 absorption = AbsorptionTimeDependent(
-    radius=10 * mean_free_path_sim,
-    depth=100 * mean_free_path_sim,
-    d_r=mean_free_path_sim / 50,
-    d_z=mean_free_path_sim / 100,
-    d_t=0,
-    t_max=0,
+    radius=abs_r_len,
+    depth=abs_z_len,
+    d_r=abs_d_r,
+    d_z=abs_d_z,
+    d_t=dt,
+    t_max=15*dt,
 )
 anysotropy = phase_function.get_anisotropy_factor(rng_test)
 
@@ -96,12 +99,7 @@ resolution = 500
 
 detectors_container = MultiDetector()
 spatial_detector = detectors_container.add_detector(SpatialDetector(0, x_len, y_len, r_len, resolution, resolution, resolution))
-spatial_time_detector = detectors_container.add_detector(SpatialTimeDetector(0, x_len, y_len, r_len, resolution, resolution, resolution, int(max_time / dt), dt, max_time))
 histogram_detector_1 = detectors_container.add_detector(HistogramDetector(0, 500))
-
-# histogram_detector_1.set_theta_limit(0, np.pi/2)
-# spatial_detector.set_theta_limit(0, max_cbs_theta)
-
 
 print("CONDITIONS FOR RAYLEIGH-DEBYE APPROXIMATION:")
 print(f"Size parameter: {size_parameter}")
@@ -127,7 +125,7 @@ config = SimConfig(
     medium=medium,
     detector=detectors_container,
     laser=laser_source,
-    # absorption=absorption,
+    absorption=absorption,
     track_reverse_paths=False,
 )
 config.n_threads = 8
@@ -144,7 +142,6 @@ print(f"---- Simulation time: {end_time - start_time:.2f} seconds")
 # plot histogram from hitogram_detector the data is just ints that count hits
 def plot_histogram(detector, title):
     array_data = np.array(detector.histogram, int)
-    # array_data = array_data / np.max(array_data)
     hits_data = np.array(array_data)
     plt.figure(figsize=(8, 5))
     plt.plot(range(len(hits_data)), hits_data, linewidth=2)
@@ -166,9 +163,6 @@ I_minus_array = np.array(spatial_detector.I_minus, copy=False) / n_photons
 I_rad_plus_array = np.array(spatial_detector.calculate_radial_plus_intensity()) / n_photons
 I_rad_minus_array = np.array(spatial_detector.calculate_radial_minus_intensity()) / n_photons
 
-
-
-print("Plotting CBS Detector Spatial Intensities")
 def study_spatial_intensity(I_plus_array, I_minus_array, title, detector_width, detector_height, 
                            nx_bins, ny_bins, length_unit="mfp", save_path=None, show_plot=True):
     """
@@ -264,26 +258,60 @@ study_spatial_intensity(I_plus_array, I_minus_array, "Spatial Intensities",
 study_radial_intensity(I_rad_plus_array, I_rad_minus_array, "Radial Intensities", 
                       max_radius=r_len, length_unit="mfp", show_plot=True)
 
-for time_index in range(spatial_time_detector.N_t):
-    sp_det = spatial_time_detector.time_bins[time_index]
-    
-    I_plus_time_array = np.array(sp_det.I_plus, copy=False) / n_photons
-    I_minus_time_array = np.array(sp_det.I_minus, copy=False) / n_photons
-    
-    current_time = time_index * dt
 
-    save_file = f"/Users/niaggar/Downloads/right_polarization_10M/intensity_t{time_index:03d}.png"
-    study_spatial_intensity(I_plus_time_array, I_minus_time_array, 
-                           f"Spatial Intensities at t = {current_time:.3f} ({t_ref:.3f}·mfp/c)",
-                           x_len, y_len, resolution, resolution,
-                           length_unit="mfp",
-                           save_path=save_file, show_plot=False)
+
+def study_absorption_image(abs_image, title, abs_r_len, abs_z_len, length_unit="mfp", save_path=None, show_plot=True):
+    """
+    Plot absorption image with physical units.
     
-    I_plus_rad_time_array = np.array(sp_det.calculate_radial_plus_intensity()) / n_photons
-    I_minus_rad_time_array = np.array(sp_det.calculate_radial_minus_intensity()) / n_photons
+    Args:
+        abs_image: 2D array of absorbed photon counts
+        title: Plot title
+        abs_r_len: Maximum radius of absorption image in physical units
+        abs_z_len: Maximum depth of absorption image in physical units
+        length_unit: String describing the length unit (default: "mfp" for mean free path)
+        save_path: Optional path to save figure
+        show_plot: Whether to display the plot
+    """    
     
-    save_file_radial = f"/Users/niaggar/Downloads/right_polarization_10M/radial_intensity_t{time_index:03d}.png"
-    study_radial_intensity(I_plus_rad_time_array, I_minus_rad_time_array,
-                           f"Radial Intensities at t = {current_time:.3f} ({t_ref:.3f}·mfp/c)",
-                           max_radius=r_len, length_unit="mfp",
-                           save_path=save_file_radial, show_plot=False)
+    plt.figure(figsize=(8, 5))
+    extent = [0.0, abs_z_len, -abs_r_len, abs_r_len]
+    plt.imshow(abs_image, cmap='inferno', origin='lower', extent=extent, aspect='auto')
+    plt.colorbar(label='Absorbed Photon Count')
+    plt.title(title)
+    plt.xlabel(f"Depth ({length_unit})")
+    plt.ylabel(f"Radius ({length_unit})")
+    plt.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Image saved to: {save_path}")
+    
+    if show_plot:
+        plt.show()
+
+
+
+total_absortion_images = len(absorption.time_slices)
+
+for i in range(total_absortion_images):
+    abs_image = absorption.get_absorption_image(n_photons, i)
+    save_file = f"/Users/niaggar/Downloads/abs/absortion_t{i:03d}.png"
+    study_absorption_image(abs_image, f"Absorption Image at Time Slice {i+1}/{total_absortion_images}", 
+                          abs_r_len, abs_z_len, length_unit="mfp", save_path=save_file, show_plot=False)
+
+# abs_image = absorption.get_absorption_image(n_photons, 0)
+# abs_image_numpy = np.array(abs_image, copy=False)
+# print(f"Total absorbed photons: {np.sum(abs_image_numpy)}")
+# print(abs_image_numpy)
+
+# extent = [0.0, abs_z_len, -abs_r_len, abs_r_len]
+
+# plt.figure(figsize=(8, 5))
+# plt.imshow(abs_image_numpy, cmap='inferno', origin='lower', extent=extent, aspect='auto')
+# plt.colorbar(label='Absorbed Photon Count')
+# plt.title('Absorption Image (Radius vs Depth)')
+# plt.ylabel('Radius (mfp)')
+# plt.xlabel('Depth (mfp)')
+# plt.grid(True, alpha=0.3)
+# plt.show()
