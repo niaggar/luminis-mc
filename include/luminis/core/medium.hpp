@@ -16,7 +16,7 @@ struct Medium {
   const double mu_scattering{0.0}; // Scattering coefficient [1/mm]
   const double mu_attenuation{0.0}; // Attenuation coefficient [1/mm]
 
-  const double light_speed{299792458e-6}; // Speed of light in medium [mm/ns]
+  const double light_speed{1}; // Speed of light in medium [mm/ns]
   const double refractive_index{1.0};     // Refractive index of the medium
 
   virtual ~Medium() = default;
