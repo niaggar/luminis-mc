@@ -35,4 +35,6 @@ namespace luminis::core
 
   void run_photon(Photon &photon, Medium &medium, MultiDetector &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths);
 
+  void coherent_calculation(Photon &photon, Medium &medium);
+
 } // namespace luminis::core

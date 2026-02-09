@@ -32,6 +32,23 @@ namespace luminis::core
   {
     return light_speed / refractive_index;
   }
+  bool Medium::is_inside(const Vec3 &position) const
+  {
+    bool inside = true;
+    if (position.z < 0)
+    {
+      inside = false;
+    }
+    else if (std::isnan(position.x) || std::isnan(position.y) || std::isnan(position.z))
+    {
+      inside = false;
+    }
+    else if (std::isinf(position.x) || std::isinf(position.y) || std::isinf(position.z))
+    {
+      inside = false;
+    }
+    return inside;
+  }
 
   SimpleMedium::SimpleMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium)
       : Medium(absorption, scattering, phase_func)

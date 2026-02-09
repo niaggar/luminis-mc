@@ -28,6 +28,7 @@ struct Medium {
   virtual double sample_scattering_angle(Rng &rng) const = 0;
   virtual CMatrix scattering_matrix(const double theta, const double phi, const double k) const = 0;
   double light_speed_in_medium() const;
+  bool is_inside(const Vec3 &position) const;
 };
 
 struct SimpleMedium : public Medium {

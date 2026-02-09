@@ -4,6 +4,7 @@ from luminis_mc import (
     MultiDetector,
     HistogramDetector,
     SpatialCoherentDetector,
+    AngularCoherentDetector,
     SimConfig,
     RayleighDebyeEMCPhaseFunction,
     CVec2,
@@ -28,13 +29,13 @@ s_global = Vec3(0, 0, 1)
 light_speed = 1
 
 # Medium parameters in micrometers
-radius = 0.46
+radius = 0.3
 mean_free_path = 2.8
 wavelength = 0.525
 inv_mfp = 1 / mean_free_path
-mu_absortion = 0.1 * inv_mfp
+mu_absortion = 0.001 * inv_mfp
 mu_scattering = inv_mfp - mu_absortion
-n_particle = 1.59
+n_particle = 1.31
 n_medium = 1.33
 
 size_parameter = 2 * np.pi * radius / wavelength
@@ -51,11 +52,11 @@ max_time = 50 * t_ref
 thetaMin = 0.00001
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 10_000_000
+n_photons = 1_000_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
-polarization = CVec2(1, 0)
+polarization = CVec2(1/np.sqrt(2), 1j/np.sqrt(2))  # Circular polarization
 laser_radius = 0.1 * mean_free_path
 laser_type = LaserSource.Gaussian
 
@@ -66,8 +67,11 @@ phase_function = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n
 medium = SimpleMedium(mu_absortion, mu_scattering, phase_function, mean_free_path, radius, n_particle, n_medium)
 anysotropy = phase_function.get_anisotropy_factor(rng_test)
 
+max_cbs_theta = 0.05 # radians
+
 detectors_container = MultiDetector()
-cbs_detector = detectors_container.add_detector(SpatialCoherentDetector(0, 280.0, 280.0, 1000, 1000))
+cbs_spatial_detector = detectors_container.add_detector(SpatialCoherentDetector(0, mean_free_path*5, mean_free_path*5, 500, 500))
+cbs_angular_detector = detectors_container.add_detector(AngularCoherentDetector(0, 100, max_cbs_theta))
 histogram_detector_1 = detectors_container.add_detector(HistogramDetector(0, 500))
 histogram_detector_2 = detectors_container.add_detector(HistogramDetector(0, 500))
 histogram_detector_3 = detectors_container.add_detector(HistogramDetector(0, 500))
@@ -75,10 +79,10 @@ histogram_detector_4 = detectors_container.add_detector(HistogramDetector(0, 500
 
 histogram_detector_1.set_theta_limit(0, np.pi/2)    # 90 degrees
 histogram_detector_2.set_theta_limit(0, np.pi/8)    # 22.5 degrees
-histogram_detector_3.set_theta_limit(0, 0.2)        # ~11.5 degrees
-histogram_detector_4.set_theta_limit(0, 0.1)        # ~5.7 degrees
+histogram_detector_3.set_theta_limit(0, 0.1)        # ~11.5 degrees
+histogram_detector_4.set_theta_limit(0, max_cbs_theta)        # ~5.7 degrees
 
-cbs_detector.set_theta_limit(0, 0.05)
+cbs_spatial_detector.set_theta_limit(0, max_cbs_theta)
 
 
 print("CONDITIONS FOR RAYLEIGH-DEBYE APPROXIMATION:")
@@ -88,6 +92,8 @@ print(f"Size parameter * |n_particle / n_medium - 1|: {condition_2}")
 
 print("MEDIUM PARAMETERS:")
 print(f"Mean free path: {mean_free_path}")
+print(f"Transport mean free path: {mean_free_path / (1 - anysotropy[0])}")
+print(f"Max cbs theory theta: {wavelength / (np.sqrt(2) * (mean_free_path / (1 - anysotropy[0])))}")
 print(f"Particle radius: {radius}")
 print(f"Wavelength: {wavelength}")
 print(f"Scattering coefficient: {mu_scattering}")
@@ -119,7 +125,9 @@ print(f"---- Simulation time: {end_time - start_time:.2f} seconds")
 
 # plot histogram from hitogram_detector the data is just ints that count hits
 def plot_histogram(detector, title):
-    hits_data = np.array(detector.histogram)
+    array_data = np.array(detector.histogram, int)
+    # array_data = array_data / np.max(array_data)
+    hits_data = np.array(array_data)
     plt.figure(figsize=(8, 5))
     plt.plot(range(len(hits_data)), hits_data, linewidth=2)
     plt.xlabel("Event Index")
@@ -128,28 +136,34 @@ def plot_histogram(detector, title):
     plt.grid(True, alpha=0.3)
     plt.show()
 
+print(len(histogram_detector_1.histogram))
+print(len(histogram_detector_2.histogram))
+print(len(histogram_detector_3.histogram))
+print(len(histogram_detector_4.histogram))
+
 plot_histogram(histogram_detector_1, "Histogram Detector 1 (theta 0 to 90 degrees)")
 plot_histogram(histogram_detector_2, "Histogram Detector 2 (theta 0 to 22.5 degrees)")
 plot_histogram(histogram_detector_3, "Histogram Detector 3 (theta 0 to ~11.5 degrees)")
-plot_histogram(histogram_detector_4, "Histogram Detector 4 (theta 0 to ~5.7 degrees)")
+plot_histogram(histogram_detector_4, f"Histogram Detector 4 (theta 0 to {max_cbs_theta} radians)")
 print(f"Number of photons detected by histogram detector 1: {histogram_detector_1.hits}")
 print(f"Number of photons detected by histogram detector 2: {histogram_detector_2.hits}")
 print(f"Number of photons detected by histogram detector 3: {histogram_detector_3.hits}")
 print(f"Number of photons detected by histogram detector 4: {histogram_detector_4.hits}")
-print(f"Number of photons detected by CBS detector: {cbs_detector.hits}")
+print(f"Number of photons detected by CBS spatial detector: {cbs_spatial_detector.hits}")
+print(f"Number of photons detected by CBS angular detector: {cbs_angular_detector.hits}")
 
 
 
-I_x_array = np.array(cbs_detector.I_x, copy=False)
-I_y_array = np.array(cbs_detector.I_y, copy=False)
-I_z_array = np.array(cbs_detector.I_z, copy=False)
 
-I_inco_x_array = np.array(cbs_detector.I_inco_x, copy=False)
-I_inco_y_array = np.array(cbs_detector.I_inco_y, copy=False)
-I_inco_z_array = np.array(cbs_detector.I_inco_z, copy=False)
+I_x_array = np.array(cbs_spatial_detector.I_x, copy=False)
+I_y_array = np.array(cbs_spatial_detector.I_y, copy=False)
+I_inco_x_array = np.array(cbs_spatial_detector.I_inco_x, copy=False)
+I_inco_y_array = np.array(cbs_spatial_detector.I_inco_y, copy=False)
 
-print("Plotting CBS Detector Spatial Intensities...")
-print("Coherent Intensities:")
+I_x_enhancement = np.divide(I_x_array, I_inco_x_array, out=np.ones_like(I_x_array), where=I_inco_x_array!=0)
+I_y_enhancement = np.divide(I_y_array, I_inco_y_array, out=np.ones_like(I_y_array), where=I_inco_y_array!=0)
+
+print("Plotting CBS Detector Spatial Intensities")
 
 def study_spatial_intensity(I_array, title):
     plt.figure(figsize=(8, 8))
@@ -170,22 +184,28 @@ def study_spatial_intensity(I_array, title):
 
 study_spatial_intensity(I_x_array, "Coherent X Polarization Intensity")
 study_spatial_intensity(I_y_array, "Coherent Y Polarization Intensity")
-study_spatial_intensity(I_z_array, "Coherent Z Polarization Intensity")
 study_spatial_intensity(I_inco_x_array, "Incoherent X Polarization Intensity")
 study_spatial_intensity(I_inco_y_array, "Incoherent Y Polarization Intensity")
-study_spatial_intensity(I_inco_z_array, "Incoherent Z Polarization Intensity")
+study_spatial_intensity(I_x_enhancement, "Enhancement Factor X Polarization")
+study_spatial_intensity(I_y_enhancement, "Enhancement Factor Y Polarization")
 
 
-I_x_theta_array = np.array(cbs_detector.I_x_theta)
-I_y_theta_array = np.array(cbs_detector.I_y_theta)
-I_z_theta_array = np.array(cbs_detector.I_z_theta)
+I_x_theta_array = np.array(cbs_angular_detector.I_x)
+I_y_theta_array = np.array(cbs_angular_detector.I_y)
 
-I_inco_x_theta_array = np.array(cbs_detector.I_inco_x_theta)
-I_inco_y_theta_array = np.array(cbs_detector.I_inco_y_theta)
-I_inco_z_theta_array = np.array(cbs_detector.I_inco_z_theta)
+I_plus_theta_array = np.array(cbs_angular_detector.I_plus)
+I_minus_theta_array = np.array(cbs_angular_detector.I_minus)
+I_total_array = np.array(cbs_angular_detector.I_total)
+
+I_inco_x_theta_array = np.array(cbs_angular_detector.I_inco_x)
+I_inco_y_theta_array = np.array(cbs_angular_detector.I_inco_y)
+
+I_inco_plus_theta_array = np.array(cbs_angular_detector.I_inco_plus)
+I_inco_minus_theta_array = np.array(cbs_angular_detector.I_inco_minus)
+I_inco_total_array = np.array(cbs_angular_detector.I_inco_total)
 
 def plot_angular_intensity(I_theta_array, title):
-    theta_values = np.linspace(0, 0.1, len(I_theta_array))
+    theta_values = np.linspace(0, max_cbs_theta, len(I_theta_array))
     plt.figure(figsize=(8, 5))
     plt.plot(theta_values, I_theta_array, linewidth=2)
     plt.xlabel("Theta (radians)")
@@ -197,7 +217,24 @@ def plot_angular_intensity(I_theta_array, title):
 print("Angular Intensities:")
 plot_angular_intensity(I_x_theta_array, "Angular Coherent X Polarization Intensity")
 plot_angular_intensity(I_y_theta_array, "Angular Coherent Y Polarization Intensity")
-plot_angular_intensity(I_z_theta_array, "Angular Coherent Z Polarization Intensity")
+plot_angular_intensity(I_plus_theta_array, "Angular Coherent Plus Polarization Intensity")
+plot_angular_intensity(I_minus_theta_array, "Angular Coherent Minus Polarization Intensity")
+plot_angular_intensity(I_total_array, "Angular Coherent Total Intensity")
 plot_angular_intensity(I_inco_x_theta_array, "Angular Incoherent X Polarization Intensity")
 plot_angular_intensity(I_inco_y_theta_array, "Angular Incoherent Y Polarization Intensity")
-plot_angular_intensity(I_inco_z_theta_array, "Angular Incoherent Z Polarization Intensity")
+plot_angular_intensity(I_inco_plus_theta_array, "Angular Incoherent Plus Polarization Intensity")
+plot_angular_intensity(I_inco_minus_theta_array, "Angular Incoherent Minus Polarization Intensity")
+plot_angular_intensity(I_inco_total_array, "Angular Incoherent Total Intensity")
+
+
+I_x_enhancement = np.divide(I_x_theta_array, I_inco_x_theta_array, out=np.ones_like(I_x_theta_array), where=I_inco_x_theta_array!=0)
+I_y_enhancement = np.divide(I_y_theta_array, I_inco_y_theta_array, out=np.ones_like(I_y_theta_array), where=I_inco_y_theta_array!=0)
+I_plus_enhancement = np.divide(I_plus_theta_array, I_inco_plus_theta_array, out=np.ones_like(I_plus_theta_array), where=I_inco_plus_theta_array!=0)
+I_minus_enhancement = np.divide(I_minus_theta_array, I_inco_minus_theta_array, out=np.ones_like(I_minus_theta_array), where=I_inco_minus_theta_array!=0)
+I_total_enhancement = np.divide(I_total_array, I_inco_total_array, out=np.ones_like(I_total_array), where=I_inco_total_array!=0)
+
+plot_angular_intensity(I_x_enhancement, "Enhancement Factor X Polarization")
+plot_angular_intensity(I_y_enhancement, "Enhancement Factor Y Polarization")
+plot_angular_intensity(I_plus_enhancement, "Enhancement Factor Plus Polarization")
+plot_angular_intensity(I_minus_enhancement, "Enhancement Factor Minus Polarization")
+plot_angular_intensity(I_total_enhancement, "Enhancement Factor Total Intensity")

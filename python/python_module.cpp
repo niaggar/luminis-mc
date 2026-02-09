@@ -285,9 +285,7 @@ PYBIND11_MODULE(_core, m)
            {
           auto cloned_det = det.clone();
           self.add_detector(std::move(cloned_det));
-          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Agrega un detector y devuelve una referencia a la copia interna")
-      .def("validate_hit_by", &MultiDetector::validate_hit_by, py::arg("photon"), "Validate which detectors are hit by the given photon")
-      .def("record_hit_in", &MultiDetector::record_hit_in, py::arg("photon"), py::arg("detector_ids"), "Record a photon hit in specified detectors");
+          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Agrega un detector y devuelve una referencia a la copia interna");
 
   // Detector bindings
   py::class_<Detector>(m, "Detector")
@@ -306,10 +304,7 @@ PYBIND11_MODULE(_core, m)
            "Set the polar angle detection limits (in radians)")
       .def("set_phi_limit", &Detector::set_phi_limit,
            py::arg("min_phi"), py::arg("max_phi"),
-           "Set the azimuthal angle detection limits (in radians)")
-      .def("record_hit", &Detector::record_hit, py::arg("photon"), "Record a photon hit on the detector")
-      .def("is_hit_by", &Detector::is_hit_by, py::arg("photon"),
-           "Check if a photon hits the detector");
+           "Set the azimuthal angle detection limits (in radians)");
 
   // AngleDetector bindings
   py::class_<AngleDetector, Detector>(m, "AngleDetector")
@@ -330,7 +325,7 @@ PYBIND11_MODULE(_core, m)
       .def(py::init<double, u_int>(), py::arg("z"), py::arg("max_events"),
            "Initialize a HistogramDetector at a given z position")
       .def_readonly("histogram", &HistogramDetector::histogram);
-  
+
   // ThetaHistogramDetector bindings
   py::class_<ThetaHistogramDetector, Detector>(m, "ThetaHistogramDetector")
       .def(py::init<double, u_int>(), py::arg("z"), py::arg("n_bins"),
@@ -349,7 +344,12 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("dy", &SpatialDetector::dy)
       .def_readonly("E_x", &SpatialDetector::E_x)
       .def_readonly("E_y", &SpatialDetector::E_y)
-      .def_readonly("E_z", &SpatialDetector::E_z);
+      .def_readonly("E_z", &SpatialDetector::E_z)
+      .def_readonly("I_x", &SpatialDetector::I_x)
+      .def_readonly("I_y", &SpatialDetector::I_y)
+      .def_readonly("I_z", &SpatialDetector::I_z)
+      .def_readonly("I_plus", &SpatialDetector::I_plus)
+      .def_readonly("I_minus", &SpatialDetector::I_minus);
 
   // SpatialCoherentDetector bindings
   py::class_<SpatialCoherentDetector, Detector>(m, "SpatialCoherentDetector")
@@ -373,6 +373,26 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("I_inco_x_theta", &SpatialCoherentDetector::I_inco_x_theta)
       .def_readonly("I_inco_y_theta", &SpatialCoherentDetector::I_inco_y_theta)
       .def_readonly("I_inco_z_theta", &SpatialCoherentDetector::I_inco_z_theta);
+
+  py::class_<AngularCoherentDetector, Detector>(m, "AngularCoherentDetector")
+      .def(py::init<double, int, double>(), py::arg("z"), py::arg("n_theta"),
+           py::arg("theta_max"),
+           "Initialize a AngularCoherentDetector at a given z position with angular "
+           "resolution")
+      .def_readonly("N_theta", &AngularCoherentDetector::N_theta)
+      .def_readonly("dtheta", &AngularCoherentDetector::dtheta)
+      .def_readonly("I_x", &AngularCoherentDetector::I_x)
+      .def_readonly("I_y", &AngularCoherentDetector::I_y)
+      .def_readonly("I_z", &AngularCoherentDetector::I_z)
+      .def_readonly("I_plus", &AngularCoherentDetector::I_plus)
+      .def_readonly("I_minus", &AngularCoherentDetector::I_minus)
+      .def_readonly("I_total", &AngularCoherentDetector::I_total)
+      .def_readonly("I_inco_x", &AngularCoherentDetector::I_inco_x)
+      .def_readonly("I_inco_y", &AngularCoherentDetector::I_inco_y)
+      .def_readonly("I_inco_z", &AngularCoherentDetector::I_inco_z)
+      .def_readonly("I_inco_plus", &AngularCoherentDetector::I_inco_plus)
+      .def_readonly("I_inco_minus", &AngularCoherentDetector::I_inco_minus)
+      .def_readonly("I_inco_total", &AngularCoherentDetector::I_inco_total);
 
   py::class_<AngularIntensity>(m, "AngularSpeckle")
       .def_readonly("Ix", &AngularIntensity::Ix)
