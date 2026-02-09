@@ -30,7 +30,7 @@ namespace luminis::core
   }
   double Medium::light_speed_in_medium() const
   {
-    return light_speed / refractive_index;
+    return light_speed;
   }
   bool Medium::is_inside(const Vec3 &position) const
   {

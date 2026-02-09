@@ -191,7 +191,8 @@ namespace luminis::core
 
   bool AngleDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
   {
-    if (photon.pos.z > 0) return false;
+    if (photon.pos.z > 0)
+      return false;
 
     const bool valid = check_conditions(photon);
     if (!valid)
@@ -254,7 +255,8 @@ namespace luminis::core
   // HistogramDetector implementation
   bool HistogramDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
   {
-    if (photon.pos.z > 0) return false;
+    if (photon.pos.z > 0)
+      return false;
 
     const bool valid = check_conditions(photon);
     if (!valid)
@@ -297,7 +299,8 @@ namespace luminis::core
   // ThetaHistogramDetector implementation
   bool ThetaHistogramDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
   {
-    if (photon.pos.z > 0) return false;
+    if (photon.pos.z > 0)
+      return false;
 
     const bool valid = check_conditions(photon);
     if (!valid)
@@ -339,11 +342,13 @@ namespace luminis::core
   }
 
   // SpatialDetector implementation
-  SpatialDetector::SpatialDetector(double z, double x_len, double y_len, int n_x, int n_y)
+  SpatialDetector::SpatialDetector(double z, double x_len, double y_len, double r_len, int n_x, int n_y, int n_r)
       : Detector(z)
   {
     N_x = n_x;
     N_y = n_y;
+    N_r = n_r;
+    dr = r_len / N_r;
     dx = x_len / n_x;
     dy = y_len / n_y;
     E_x = CMatrix(n_x, n_y);
@@ -354,6 +359,8 @@ namespace luminis::core
     I_z = Matrix(n_x, n_y);
     I_plus = Matrix(n_x, n_y);
     I_minus = Matrix(n_x, n_y);
+    I_rad_plus.resize(N_r, 0.0);
+    I_rad_minus.resize(N_r, 0.0);
   }
 
   bool SpatialDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
@@ -416,7 +423,7 @@ namespace luminis::core
     std::complex<double> E_det_z = (Em_local_photon * photon.m.z + En_local_photon * photon.n.z);
 
     const std::complex<double> I_imag(0.0, 1.0);
-    std::complex<double> E_plus_val  = (E_det_x - I_imag * E_det_y) / std::sqrt(2.0);
+    std::complex<double> E_plus_val = (E_det_x - I_imag * E_det_y) / std::sqrt(2.0);
     std::complex<double> E_minus_val = (E_det_x + I_imag * E_det_y) / std::sqrt(2.0);
 
     // Accumulate field contributions
@@ -430,6 +437,15 @@ namespace luminis::core
     I_plus(ix, iy) += std::norm(E_plus_val);
     I_minus(ix, iy) += std::norm(E_minus_val);
 
+    // Radial bins
+    double r = std::sqrt(hit_point.x * hit_point.x + hit_point.y * hit_point.y);
+    int ir = static_cast<int>(r / dr);
+    if (ir < N_r)
+    {
+      I_rad_plus[ir] += std::norm(E_plus_val);
+      I_rad_minus[ir] += std::norm(E_minus_val);
+    }
+
     return true;
   }
 
@@ -437,7 +453,8 @@ namespace luminis::core
   {
     const double x_len = N_x * dx;
     const double y_len = N_y * dy;
-    auto det = std::make_unique<SpatialDetector>(origin.z, x_len, y_len, N_x, N_y);
+    const double r_len = N_r * dr;
+    auto det = std::make_unique<SpatialDetector>(origin.z, x_len, y_len, r_len, N_x, N_y, N_r);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -468,6 +485,109 @@ namespace luminis::core
         I_minus(ix, iy) += other_spatial.I_minus(ix, iy);
       }
     }
+
+    for (int ir = 0; ir < N_r; ++ir)
+    {
+      I_rad_plus[ir] += other_spatial.I_rad_plus[ir];
+      I_rad_minus[ir] += other_spatial.I_rad_minus[ir];
+    }
+  }
+
+  std::vector<double> SpatialDetector::calculate_radial_plus_intensity() const
+  {
+    std::vector<double> radial_intensity(N_r, 0.0);
+    for (int ir = 0; ir < N_r; ++ir)
+    {
+      double r_inner = ir * dr;
+      double r_outer = (ir + 1) * dr;
+      double area = M_PI * (r_outer * r_outer - r_inner * r_inner);
+      if (area > 0)
+      {
+        radial_intensity[ir] = I_rad_plus[ir] / area;
+      }
+    }
+    return radial_intensity;
+  }
+
+  std::vector<double> SpatialDetector::calculate_radial_minus_intensity() const
+  {
+    std::vector<double> radial_intensity(N_r, 0.0);
+    for (int ir = 0; ir < N_r; ++ir)
+    {
+      double r_inner = ir * dr;
+      double r_outer = (ir + 1) * dr;
+      double area = M_PI * (r_outer * r_outer - r_inner * r_inner);
+      if (area > 0)
+      {
+        radial_intensity[ir] = I_rad_minus[ir] / area;
+      }
+    }
+    return radial_intensity;
+  }
+
+  // SpatialTimeDetector implementation
+  SpatialTimeDetector::SpatialTimeDetector(double z, double x_len, double y_len, double r_len,int n_x, int n_y, int n_r, int n_t, double dt, double t_max)
+      : Detector(z)
+  {
+    N_x = n_x;
+    N_y = n_y;
+    N_r = n_r;
+    N_t = n_t;
+    dx = x_len / n_x;
+    dy = y_len / n_y;
+    dr = r_len / n_r;
+    this->dt = dt;
+    this->t_max = t_max;
+    time_bins.reserve(N_t);
+    for (int i = 0; i < N_t; ++i)
+    {
+      time_bins.push_back(SpatialDetector(z, x_len, y_len, r_len, n_x, n_y, n_r));
+    }
+  }
+
+  bool SpatialTimeDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
+  {
+    const bool valid = check_conditions(photon);
+    if (!valid)
+      return false;
+
+    const double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+    if (arrival_time < 0 || arrival_time >= t_max)
+      return false;
+
+    int time_bin_index = static_cast<int>(arrival_time / dt);
+    if (time_bin_index < 0 || time_bin_index >= N_t)
+      return false;
+
+    return time_bins[time_bin_index].record_hit(photon, coherent_calculation);
+  }
+
+  std::unique_ptr<Detector> SpatialTimeDetector::clone() const
+  {
+    const double x_len = N_x * dx;
+    const double y_len = N_y * dy;
+    const double r_len = N_r * dr;
+    auto det = std::make_unique<SpatialTimeDetector>(origin.z, x_len, y_len, r_len, N_x, N_y, N_r, N_t, dt, t_max);
+    det->filter_theta_enabled = filter_theta_enabled;
+    det->filter_theta_min = filter_theta_min;
+    det->filter_theta_max = filter_theta_max;
+    det->_cache_cos_theta_min = _cache_cos_theta_min;
+    det->_cache_cos_theta_max = _cache_cos_theta_max;
+    det->filter_phi_enabled = filter_phi_enabled;
+    det->filter_phi_min = filter_phi_min;
+    det->filter_phi_max = filter_phi_max;
+    return det;
+  }
+
+  void SpatialTimeDetector::merge_from(const Detector &other)
+  {
+    const SpatialTimeDetector &other_time = dynamic_cast<const SpatialTimeDetector &>(other);
+    hits += other_time.hits;
+
+    for (int i = 0; i < N_t; ++i)
+    {
+      time_bins[i].merge_from(other_time.time_bins[i]);
+    }
   }
 
   // SpatialCoherentDetector implementation
@@ -496,7 +616,8 @@ namespace luminis::core
 
   bool SpatialCoherentDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
   {
-    if (photon.events < 2) return false;
+    if (photon.events < 2)
+      return false;
 
     const bool valid = check_conditions(photon);
     if (!valid)
@@ -638,13 +759,14 @@ namespace luminis::core
 
   bool AngularCoherentDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
   {
-    if (photon.pos.z > 0) return false;
-    if (photon.events < 2) return false;
+    if (photon.pos.z > 0)
+      return false;
+    if (photon.events < 2)
+      return false;
 
     const bool valid = check_conditions(photon);
     if (!valid)
       return false;
-
 
     const Vec3 u = photon.dir;
     const double costtheta = -1 * u.z;
@@ -677,12 +799,11 @@ namespace luminis::core
     std::complex<double> E_rev_lab_y = (E_rev_local.m * m_0.y + E_rev_local.n * n_0.y) * phase * path_phase * std::sqrt(w);
     std::complex<double> E_rev_lab_z = (E_rev_local.m * m_0.z + E_rev_local.n * n_0.z) * phase * path_phase * std::sqrt(w);
 
-
     std::complex<double> Etot_x = E_fwd_lab_x + E_rev_lab_x;
     std::complex<double> Etot_y = E_fwd_lab_y + E_rev_lab_y;
 
     const std::complex<double> I(0.0, 1.0);
-    std::complex<double> E_plus_val  = (Etot_x - I * Etot_y) / std::sqrt(2.0);
+    std::complex<double> E_plus_val = (Etot_x - I * Etot_y) / std::sqrt(2.0);
     std::complex<double> E_minus_val = (Etot_x + I * Etot_y) / std::sqrt(2.0);
 
     // Accumulate coherent intensity contributions
@@ -693,9 +814,9 @@ namespace luminis::core
     I_minus[itheta] += std::norm(E_minus_val);
     I_total[itheta] += std::norm(E_fwd_lab_x + E_rev_lab_x + E_fwd_lab_y + E_rev_lab_y);
 
-    std::complex<double> E_fwd_plus  = (E_fwd_lab_x - I * E_fwd_lab_y) / std::sqrt(2.0);
+    std::complex<double> E_fwd_plus = (E_fwd_lab_x - I * E_fwd_lab_y) / std::sqrt(2.0);
     std::complex<double> E_fwd_minus = (E_fwd_lab_x + I * E_fwd_lab_y) / std::sqrt(2.0);
-    std::complex<double> E_rev_plus  = (E_rev_lab_x - I * E_rev_lab_y) / std::sqrt(2.0);
+    std::complex<double> E_rev_plus = (E_rev_lab_x - I * E_rev_lab_y) / std::sqrt(2.0);
     std::complex<double> E_rev_minus = (E_rev_lab_x + I * E_rev_lab_y) / std::sqrt(2.0);
 
     // Accumulate incoherent intensity contributions

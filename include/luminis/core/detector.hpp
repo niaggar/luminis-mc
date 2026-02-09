@@ -166,6 +166,10 @@ namespace luminis::core
     int N_y;       ///< Number of y bins
     double dx;     ///< x resolution
     double dy;     ///< y resolution
+
+    int N_r;
+    double dr;
+
     CMatrix E_x;    ///< Accumulated E-field x-component
     CMatrix E_y;    ///< Accumulated E-field y-component
     CMatrix E_z;    ///< Accumulated E-field z-component
@@ -176,13 +180,16 @@ namespace luminis::core
     Matrix I_plus;   ///< Accumulated Copolarized Intensity
     Matrix I_minus; ///< Accumulated Crosspolarized Intensity
 
+    std::vector<double> I_rad_plus;
+    std::vector<double> I_rad_minus;
+
     /// @brief Construct spatial detector at z-position with spatial size
     /// @param z Detector z-coordinate
     /// @param x_len Physical x length
     /// @param y_len Physical y length
     /// @param n_x Number of x bins
     /// @param n_y Number of y bins
-    SpatialDetector(double z, double x_len, double y_len, int n_x, int n_y);
+    SpatialDetector(double z, double x_len, double y_len, double r_len, int n_x, int n_y, int n_r);
 
     /// @brief Record photon intersection with detector plane (overrides base)
     /// @param photon Photon to validate and record
@@ -195,7 +202,50 @@ namespace luminis::core
     /// @brief Merge results from another spatial detector
     /// @param other Spatial detector to merge from
     void merge_from(const Detector &other) override;
+
+    std::vector<double> calculate_radial_plus_intensity() const;
+    std::vector<double> calculate_radial_minus_intensity() const;
   };
+
+  struct SpatialTimeDetector : public Detector
+  {
+    int N_t;
+    double dt;
+    double t_max;
+
+    int N_x;       ///< Number of x bins
+    int N_y;       ///< Number of y bins
+    int N_r;
+    double dx;     ///< x resolution
+    double dy;     ///< y resolution
+    double dr;
+
+    std::vector<SpatialDetector> time_bins;
+
+    /// @brief Construct spatial time-resolved detector at z-position with spatial size and time bins
+    /// @param z Detector z-coordinate
+    /// @param x_len Physical x length
+    /// @param y_len Physical y length
+    /// @param n_x Number of x bins
+    /// @param n_y Number of y bins
+    /// @param n_t Number of time bins
+    /// @param dt Time resolution
+    /// @param t_max Maximum time to record
+    SpatialTimeDetector(double z, double x_len, double y_len, double r_len,int n_x, int n_y, int n_r, int n_t, double dt, double t_max);
+
+    /// @brief Record photon intersection with detector plane (overrides base)
+    /// @param photon Photon to validate and record
+    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
+
+    /// @brief Create empty spatial time detector copy for parallel processing
+    /// @return Cloned spatial time detector
+    std::unique_ptr<Detector> clone() const override;
+
+    /// @brief Merge results from another spatial time detector
+    /// @param other Spatial time detector to merge from
+    void merge_from(const Detector &other) override;
+  };
+  
 
   struct SpatialCoherentDetector : public Detector
   {

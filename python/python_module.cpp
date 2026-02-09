@@ -334,8 +334,8 @@ PYBIND11_MODULE(_core, m)
 
   // SpatialDetector bindings
   py::class_<SpatialDetector, Detector>(m, "SpatialDetector")
-      .def(py::init<double, double, double, int, int>(), py::arg("z"),
-           py::arg("x_len"), py::arg("y_len"), py::arg("N_x"), py::arg("N_y"),
+      .def(py::init<double, double, double, double, int, int, int>(), py::arg("z"),
+           py::arg("x_len"), py::arg("y_len"), py::arg("r_len"), py::arg("N_x"), py::arg("N_y"), py::arg("N_r"),
            "Initialize a SpatialDetector at a given z position with spatial "
            "resolution")
       .def_readonly("N_x", &SpatialDetector::N_x)
@@ -349,7 +349,27 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("I_y", &SpatialDetector::I_y)
       .def_readonly("I_z", &SpatialDetector::I_z)
       .def_readonly("I_plus", &SpatialDetector::I_plus)
-      .def_readonly("I_minus", &SpatialDetector::I_minus);
+      .def_readonly("I_minus", &SpatialDetector::I_minus)
+      .def_readonly("I_rad_plus", &SpatialDetector::I_rad_plus)
+      .def_readonly("I_rad_minus", &SpatialDetector::I_rad_minus)
+      .def("calculate_radial_plus_intensity", &SpatialDetector::calculate_radial_plus_intensity,
+           "Calculate the radial intensity profile for the plus polarization")
+      .def("calculate_radial_minus_intensity", &SpatialDetector::calculate_radial_minus_intensity,
+           "Calculate the radial intensity profile for the minus polarization");
+
+  // SpatialTimeDetector bindings
+  py::class_<SpatialTimeDetector, Detector>(m, "SpatialTimeDetector")
+      .def(py::init<double, double, double, double, int, int, int, int, double, double>(),
+           py::arg("z"), py::arg("x_len"), py::arg("y_len"), py::arg("r_len"), py::arg("N_x"), py::arg("N_y"), py::arg("N_r"), py::arg("N_t"), py::arg("dt"), py::arg("t_max"),
+           "Initialize a SpatialTimeDetector at a given z position with spatial resolution")
+      .def_readonly("N_t", &SpatialTimeDetector::N_t)
+      .def_readonly("dt", &SpatialTimeDetector::dt)
+      .def_readonly("t_max", &SpatialTimeDetector::t_max)
+      .def_readonly("N_x", &SpatialTimeDetector::N_x)
+      .def_readonly("N_y", &SpatialTimeDetector::N_y)
+      .def_readonly("dx", &SpatialTimeDetector::dx)
+      .def_readonly("dy", &SpatialTimeDetector::dy)
+      .def_readonly("time_bins", &SpatialTimeDetector::time_bins);
 
   // SpatialCoherentDetector bindings
   py::class_<SpatialCoherentDetector, Detector>(m, "SpatialCoherentDetector")
