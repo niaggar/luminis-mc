@@ -1,4 +1,5 @@
 #pragma once
+#include <complex>
 #include <luminis/math/rng.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/sample/phase.hpp>
@@ -25,7 +26,7 @@ struct Medium {
   virtual double sample_free_path(Rng &rng) const = 0;
   virtual double sample_azimuthal_angle(Rng &rng) const;
   virtual double sample_conditional_azimuthal_angle(Rng &rng, CMatrix& S, CVec2& E, double k, double theta) const;
-  virtual double sample_scattering_angle(Rng &rng) const = 0;
+  virtual double sample_scattering_angle(Rng &rng) const;
   virtual CMatrix scattering_matrix(const double theta, const double phi, const double k) const = 0;
   double light_speed_in_medium() const;
   bool is_inside(const Vec3 &position) const;
@@ -40,7 +41,19 @@ struct SimpleMedium : public Medium {
   SimpleMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium);
 
   double sample_free_path(Rng &rng) const override;
-  double sample_scattering_angle(Rng &rng) const override;
+  CMatrix scattering_matrix(const double theta, const double phi, const double k) const override;
+};
+
+struct MieMedium : public Medium {
+  double mean_free_path; // Mean free path [mm]
+  double n_particle;     // Particle refractive index
+  double n_medium;       // Medium refractive index
+  double radius;         // Radius of the particles [mm]
+  std::complex<double> m; // Relative refractive index m = n_particle / n_medium
+
+  MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium);
+
+  double sample_free_path(Rng &rng) const override;
   CMatrix scattering_matrix(const double theta, const double phi, const double k) const override;
 };
 

@@ -85,4 +85,20 @@ private:
   double a; // Draine parameter
 };
 
+class MiePhaseFunction : public PhaseFunction {
+public:
+  MiePhaseFunction(double wavelength, double radius, double n_particle, double n_medium, int nDiv, double minVal, double maxVal);
+  double sample_cos(double x) const override;
+  double sample_theta(double x) const override;
+  double PDF(double x);
+private:
+  SamplingTable table;
+  double wavelength;
+  double radius;
+  double k;
+  double n_particle;
+  double n_medium;
+  std::complex<double> m; // Relative refractive index
+};
+
 } // namespace luminis::sample

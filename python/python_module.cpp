@@ -154,6 +154,12 @@ PYBIND11_MODULE(_core, m)
            py::arg("a"), py::arg("nDiv"), py::arg("minVal"), py::arg("maxVal"))
       .def("pdf", &DrainePhaseFunction::PDF, py::arg("x"));
 
+  py::class_<MiePhaseFunction, PhaseFunction>(m, "MiePhaseFunction")
+      .def(py::init<double, double, double, double, int, double, double>(),
+           py::arg("wavelength"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("nDiv"),
+           py::arg("minVal"), py::arg("maxVal"))
+      .def("pdf", &MiePhaseFunction::PDF, py::arg("x"));
+
   // Photon bindings
   py::class_<Photon>(m, "Photon")
       .def(py::init<>())
@@ -498,6 +504,16 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("radius", &SimpleMedium::radius)
       .def_readonly("n_particle", &SimpleMedium::n_particle)
       .def_readonly("n_medium", &SimpleMedium::n_medium);
+
+  py::class_<MieMedium, Medium>(m, "MieMedium")
+      .def(py::init<double, double, PhaseFunction *, double, double, double, double>(),
+           py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"),
+           py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"))
+      .def_readonly("mean_free_path", &MieMedium::mean_free_path)
+      .def_readonly("radius", &MieMedium::radius)
+      .def_readonly("n_particle", &MieMedium::n_particle)
+      .def_readonly("n_medium", &MieMedium::n_medium)
+      .def_readonly("m", &MieMedium::m);
 
   // Absorption bindings
   py::class_<Absorption>(m, "Absorption")

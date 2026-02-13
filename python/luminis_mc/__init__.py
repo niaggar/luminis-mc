@@ -22,6 +22,7 @@ from ._core import (
     RayleighDebyePhaseFunction,
     RayleighDebyeEMCPhaseFunction,
     DrainePhaseFunction,
+    MiePhaseFunction,
     form_factor,
     # Photon
     Photon,
@@ -53,6 +54,7 @@ from ._core import (
     # Medium
     Medium,
     SimpleMedium,
+    MieMedium,
     # Absorption
     Absorption,
     AbsorptionTimeDependent,
@@ -106,6 +108,7 @@ __all__ = [
     "RayleighDebyePhaseFunction",
     "RayleighDebyeEMCPhaseFunction",
     "DrainePhaseFunction",
+    "MiePhaseFunction",
     "form_factor",
     # Photon
     "Photon",
@@ -137,6 +140,7 @@ __all__ = [
     # Medium
     "Medium",
     "SimpleMedium",
+    "MieMedium",
     # Absorption
     "Absorption",
     "AbsorptionTimeDependent",
