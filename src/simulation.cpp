@@ -217,28 +217,11 @@ namespace luminis::core
             Enn * (s22 * pow_sin_phi + s11 * pow_cos_phi) +
             2.0 * std::real(Em * std::conj(En)) * (s22 - s11) * sin_phi * cos_phi;
 
-        // if (F < 1e-18)
-        // {
-        //   photon.weight = 0.0;
-        //   photon.alive = false;
-        //   break;
-        // }
-
         // Update polarization components
         const double F_inv_sqrt = 1.0 / std::sqrt(F);
         matmulscalar(F_inv_sqrt, T_current);
         photon.polarization.m = (T_current(0, 0) * Em + T_current(0, 1) * En);
         photon.polarization.n = (T_current(1, 0) * Em + T_current(1, 1) * En);
-
-        const double intensity_unpolarized = 0.5 * (s22 + s11);
-        // if (intensity_unpolarized < 1e-18)
-        // {
-        //   photon.weight = 0.0;
-        //   photon.alive = false;
-        //   break;
-        // }
-
-        const double expected_intensity = F / intensity_unpolarized;
 
         // Update first scatter info for CBS
         if (track_reverse_paths)

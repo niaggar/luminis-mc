@@ -2,10 +2,15 @@
 #include <luminis/log/logger.hpp>
 #include <cmath>
 #include <vector>
+#include "luminis/mie/dmiev.h"
 
 namespace luminis::sample {
 
 double form_factor(const double theta, const double k, const double radius) {
+  if (std::abs(theta) == 0.0) {
+    return 1.0;
+  }
+
   const double u = 2.0 * k * radius * std::sin(theta / 2.0);
   const double numerator = 3 * (std::sin(u) - u * std::cos(u));
   const double denominator = std::pow(u, 3);
@@ -153,7 +158,9 @@ double RayleighDebyeEMCPhaseFunction::PDF(double x) {
   const double volume = (4.0 / 3.0) * M_PI * std::pow(radius, 3);
   const double m = n_particle / n_medium;
   const double a = std::pow(k, 4) * std::pow(m - 1.0, 2) * volume * volume / (4.0 * M_PI);
-  return a * F * F * (1.0 + cos(x)*cos(x));
+  const double intesity = a * F * F * (1.0 + cos(x) * cos(x));
+
+  return intesity * sin(x);
 }
 
 
@@ -182,4 +189,46 @@ double DrainePhaseFunction::PDF(double x) {
 	return (1.0 / 4.0 * M_PI) * hgTerm * draineTerm;
 }
 
+
+
+MiePhaseFunction::MiePhaseFunction(double wavelength, double radius, double n_particle, double n_medium, int nDiv, double minVal, double maxVal) {
+  if (radius <= 0.0) {
+    LLOG_WARN("MiePhaseFunction: radius must be positive, got {}", radius);
+  }
+  if (wavelength <= 0.0) {
+    LLOG_WARN("MiePhaseFunction: wavelength must be positive, got {}", wavelength);
+  }
+
+  this->radius = radius;
+  this->wavelength = wavelength;
+  this->n_particle = n_particle;
+  this->n_medium = n_medium;
+  this->k = 2 * M_PI / wavelength;
+  this->m = std::complex<double>(n_particle / n_medium, 0.0);
+  this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
+
+double MiePhaseFunction::sample_cos(double x) const {
+  return cos(table.Sample(x));
+}
+
+double MiePhaseFunction::sample_theta(double x) const {
+  return table.Sample(x); // Return theta
+}
+
+double MiePhaseFunction::PDF(double x) {
+  std::complex<double> s1;
+  std::complex<double> s2;
+  double mu = std::cos(x);
+  if (mu > 1.0) mu = 1.0;
+  if (mu < -1.0) mu = -1.0;
+  std::complex<double> crefin = m;
+  double sizep = this->k * this->radius;
+
+  amiev(&sizep, &crefin, &mu, &s1, &s2);
+  double intensity = std::norm(s1) + std::norm(s2);
+
+  return intensity * std::sin(x);
+}
+
+} // namespace luminis::sample
