@@ -22,18 +22,18 @@ namespace luminis::core
 
     Medium *medium{nullptr};
     Laser *laser{nullptr};
-    MultiDetector *detector{nullptr};
+    SensorsGroup *detector{nullptr};
     AbsorptionTimeDependent *absorption{nullptr};
 
-    SimConfig(std::size_t n, Medium *m = nullptr, Laser *l = nullptr, MultiDetector *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false); 
-    SimConfig(std::uint64_t s, std::size_t n, Medium *m = nullptr, Laser *l = nullptr, MultiDetector *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
+    SimConfig(std::size_t n, Medium *m = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false); 
+    SimConfig(std::uint64_t s, std::size_t n, Medium *m = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
   };
 
   void run_simulation(const SimConfig &config);
 
   void run_simulation_parallel(const SimConfig &config);
 
-  void run_photon(Photon &photon, Medium &medium, MultiDetector &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths);
+  void run_photon(Photon &photon, Medium &medium, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths);
 
   void coherent_calculation(Photon &photon, Medium &medium);
 

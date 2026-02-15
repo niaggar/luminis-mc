@@ -11,8 +11,8 @@ from ._core import (
     dot,
     cross,
     norm,
-    matmul,
-    matmulscalar,
+    matcmul,
+    matcmulscalar,
     calculate_rotation_angle,
     # Phase functions
     PhaseFunction,
@@ -33,24 +33,15 @@ from ._core import (
     Laser,
     uniform_distribution,
     gaussian_distribution,
-    # Detector
-    Detector,
-    AngleDetector,
-    HistogramDetector,
-    ThetaHistogramDetector,
-    SpatialDetector,
-    SpatialTimeDetector,
-    SpatialCoherentDetector,
-    AngularCoherentDetector,
-    MultiDetector,
-    # Utilities for Detection Conditions
-    AngularSpeckle,
-    SpatialIntensity,
-    DetectionCondition,
-    make_theta_condition,
-    make_phi_condition,
-    make_position_condition,
-    make_events_condition,
+    # Sensors
+    Sensor,
+    PhotonRecordSensor,
+    PlanarFieldSensor,
+    PlanarFluenceSensor,
+    PlanarCBSSensor,
+    FarFieldFluenceSensor,
+    StatisticsSensor,
+    SensorsGroup,
     # Medium
     Medium,
     SimpleMedium,
@@ -71,17 +62,6 @@ from ._core import (
     MetropolisHastings,
     Exponential,
     HardSpheres,
-    # Compute
-    compute_events_histogram,
-    compute_theta_histogram,
-    compute_phi_histogram,
-    compute_speckle,
-    compute_speckle_angledetector,
-    # Save / Load
-    save_recorded_photons,
-    load_recorded_photons,
-    save_angle_detector_fields,
-    load_angle_detector_fields,
 )
 
 __all__ = [
@@ -97,8 +77,8 @@ __all__ = [
     "dot",
     "cross",
     "norm",
-    "matmul",
-    "matmulscalar",
+    "matcmul",
+    "matcmulscalar",
     "calculate_rotation_angle",
     # Phase functions
     "PhaseFunction",
@@ -119,24 +99,15 @@ __all__ = [
     "Laser",
     "uniform_distribution",
     "gaussian_distribution",
-    # Detector
-    "Detector",
-    "AngleDetector",
-    "HistogramDetector",
-    "ThetaHistogramDetector",
-    "SpatialDetector",
-    "SpatialTimeDetector",
-    "SpatialCoherentDetector",
-    "AngularCoherentDetector",
-    "MultiDetector",
-    # Utilities for Detection Conditions
-    "AngularSpeckle",
-    "SpatialIntensity",
-    "DetectionCondition",
-    "make_theta_condition",
-    "make_phi_condition",
-    "make_position_condition",
-    "make_events_condition",
+    # Sensors
+    "Sensor",
+    "PhotonRecordSensor",
+    "PlanarFieldSensor",
+    "PlanarFluenceSensor",
+    "PlanarCBSSensor",
+    "FarFieldFluenceSensor",
+    "StatisticsSensor",
+    "SensorsGroup",
     # Medium
     "Medium",
     "SimpleMedium",
@@ -157,15 +128,4 @@ __all__ = [
     "MetropolisHastings",
     "Exponential",
     "HardSpheres",
-    # Compute
-    "compute_events_histogram",
-    "compute_theta_histogram",
-    "compute_phi_histogram",
-    "compute_speckle",
-    "compute_speckle_angledetector",
-    # Save / Load
-    "save_recorded_photons",
-    "load_recorded_photons",
-    "save_angle_detector_fields",
-    "load_angle_detector_fields",
 ]

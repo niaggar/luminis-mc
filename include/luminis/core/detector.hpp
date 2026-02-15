@@ -1,56 +1,67 @@
 #pragma once
 #include <cstddef>
 #include <luminis/core/photon.hpp>
+#include <luminis/core/medium.hpp>
 #include <luminis/math/vec.hpp>
 #include <vector>
 #include <functional>
+#include <memory>
+#include <map>
 
 using namespace luminis::math;
 
 namespace luminis::core
 {
-
-  using DetectionCondition = std::function<bool(const Photon &)>;
-
-  /// @brief Angular intensity distribution in spherical coordinates
-  struct AngularIntensity
-  {
-    Matrix Ix, Iy, Iz, I_total, Ico, Icros; ///< Intensity components and total
-    int N_theta, N_phi;                     ///< Number of bins
-    double theta_max, phi_max;              ///< Maximum angles (radians)
-    double dtheta, dphi;                    ///< Angular resolution
-
-    AngularIntensity(int n_theta, int n_phi, double theta_max, double phi_max)
-        : N_theta(n_theta), N_phi(n_phi), theta_max(theta_max), phi_max(phi_max),
-          dtheta(theta_max / n_theta), dphi(phi_max / n_phi),
-          Ix(n_theta, n_phi), Iy(n_theta, n_phi), Iz(n_theta, n_phi), I_total(n_theta, n_phi), Ico(n_theta, n_phi), Icros(n_theta, n_phi) {}
+  struct DoubleComparator {
+      bool operator()(double a, double b) const { return a < b - 1e-9; }
   };
 
-  /// @brief Spatial intensity distribution in cartesian coordinates
-  struct SpatialIntensity
+  struct InteractionInfo
   {
-    Matrix Ix, Iy, Iz, I_total, Ico, Icros; ///< Intensity components and total
-    int N_x, N_y;                           ///< Number of bins
-    double x_len, y_len;                    ///< Physical dimensions
-    double dx, dy;                          ///< Spatial resolution
-
-    SpatialIntensity(int n_x, int n_y, double x_len, double y_len)
-        : N_x(n_x), N_y(n_y), x_len(x_len), y_len(y_len),
-          dx(x_len / n_x), dy(y_len / n_y),
-          Ix(n_x, n_y), Iy(n_x, n_y), Iz(n_x, n_y), I_total(n_x, n_y), Ico(n_x, n_y), Icros(n_x, n_y) {}
+    Vec3 intersection_point;
+    std::complex<double> phase;
   };
+
+  // /// @brief Angular intensity distribution in spherical coordinates
+  // struct AngularIntensity
+  // {
+  //   Matrix Ix, Iy, Iz, I_total, Ico, Icros; ///< Intensity components and total
+  //   int N_theta, N_phi;                     ///< Number of bins
+  //   double theta_max, phi_max;              ///< Maximum angles (radians)
+  //   double dtheta, dphi;                    ///< Angular resolution
+
+  //   AngularIntensity(int n_theta, int n_phi, double theta_max, double phi_max)
+  //       : N_theta(n_theta), N_phi(n_phi), theta_max(theta_max), phi_max(phi_max),
+  //         dtheta(theta_max / n_theta), dphi(phi_max / n_phi),
+  //         Ix(n_theta, n_phi), Iy(n_theta, n_phi), Iz(n_theta, n_phi), I_total(n_theta, n_phi), Ico(n_theta, n_phi), Icros(n_theta, n_phi) {}
+  // };
+
+  // /// @brief Spatial intensity distribution in cartesian coordinates
+  // struct SpatialIntensity
+  // {
+  //   Matrix Ix, Iy, Iz, I_total, Ico, Icros; ///< Intensity components and total
+  //   int N_x, N_y;                           ///< Number of bins
+  //   double x_len, y_len;                    ///< Physical dimensions
+  //   double dx, dy;                          ///< Spatial resolution
+
+  //   SpatialIntensity(int n_x, int n_y, double x_len, double y_len)
+  //       : N_x(n_x), N_y(n_y), x_len(x_len), y_len(y_len),
+  //         dx(x_len / n_x), dy(y_len / n_y),
+  //         Ix(n_x, n_y), Iy(n_x, n_y), Iz(n_x, n_y), I_total(n_x, n_y), Ico(n_x, n_y), Icros(n_x, n_y) {}
+  // };
 
   /// @brief Photon detector plane for recording photon hits
-  struct Detector
+  struct Sensor
   {
     u_int id;                                     ///< Unique detector ID
-    Vec3 origin;                                  ///< Detector position
+    Vec3 origin;                                  ///< Sensor position
     Vec3 normal;                                  ///< Surface normal (forward)
     Vec3 backward_normal;                         ///< Surface normal (backward)
     Vec3 n_polarization;                          ///< Polarization basis vector n
     Vec3 m_polarization;                          ///< Polarization basis vector m
-    std::vector<PhotonRecord> recorded_photons{}; ///< Recorded photon data
     std::size_t hits{0};                          ///< Total photon hits
+    bool absorb_photons{true};                  ///< Whether photons are absorbed (terminate) upon detection
+    bool estimator_enabled{true};                 ///< Whether photons are partially absorbed (weight reduced) upon detection
 
     // Detection filters
     bool filter_theta_enabled = false;
@@ -63,24 +74,36 @@ namespace luminis::core
     double filter_phi_min = 0.0;
     double filter_phi_max = 0.0;
 
+    bool filter_position_enabled = false;
+    double filter_x_min = 0.0;
+    double filter_x_max = 0.0;
+    double filter_y_min = 0.0;
+    double filter_y_max = 0.0;
+
     /// @brief Construct detector at z-position
-    /// @param z Detector z-coordinate
-    Detector(double z);
-    Detector(const Detector &) = delete;
-    Detector &operator=(const Detector &) = delete;
-    Detector(Detector &&) = default;
-    Detector &operator=(Detector &&) = default;
+    /// @param z Sensor z-coordinate
+    Sensor(double z);
+    virtual ~Sensor() = default;
+    Sensor(const Sensor &) = delete;
+    Sensor &operator=(const Sensor &) = delete;
+    Sensor(Sensor &&) = default;
+    Sensor &operator=(Sensor &&) = default;
 
     /// @brief Record photon intersection with detector plane
     /// @param photon Photon to validate and record
-    virtual bool record_hit(Photon &photon, std::function<void()> coherent_calculation);
+    virtual void process_hit(Photon &photon, InteractionInfo &info) = 0;
+
+    /// @brief Process photon contribution for estimator mode (partial absorption)
+    /// @param photon Photon to validate and process
+    /// @param medium Medium through which the photon is propagating
+    virtual void process_estimation(const Photon &photon, const Medium &medium);
 
     /// @brief Create empty detector copy for parallel processing
-    virtual std::unique_ptr<Detector> clone() const;
+    virtual std::unique_ptr<Sensor> clone() const = 0;
 
     /// @brief Merge results from another detector
-    /// @param other Detector to merge from
-    virtual void merge_from(const Detector &other);
+    /// @param other Sensor to merge from
+    virtual void merge_from(const Sensor &other) = 0;
 
     /// @brief Set detection condition for theta angle
     /// @param min Minimum angle (rads)
@@ -92,271 +115,171 @@ namespace luminis::core
     /// @param max Maximum angle (rads)
     void set_phi_limit(double min, double max);
 
+    /// @brief Set detection condition for position
+    /// @param x_min Minimum x-coordinate
+    /// @param x_max Maximum x-coordinate
+    /// @param y_min Minimum y-coordinate
+    /// @param y_max Maximum y-coordinate
+    void set_position_limit(double x_min, double x_max, double y_min, double y_max);
+
     /// @brief Validate all detection conditions
-    /// @param photon Photon to validate
-    /// @return True if all conditions are met
-    bool check_conditions(const Photon &photon) const;
+    /// @param hit_point Point of intersection on the detector
+    /// @param hit_direction Direction of the photon at the hit point
+    /// @return True none of the conditions are violated, false if any condition is violated
+    bool check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction) const;
+
+    /// @brief Enable or disable estimator mode (partial absorption)
+    /// @param enabled If true, the photon will contribute to the detector although it have not reached the detector plane.
+    void set_estimator_mode(bool enabled);
   };
 
-  /// @brief Angular detector for recording scattered light field
-  struct AngleDetector : public Detector
+  struct PhotonRecordSensor : public Sensor
   {
-    int N_theta;   ///< Number of theta bins
-    int N_phi;     ///< Number of phi bins
-    double dtheta; ///< Theta resolution
-    double dphi;   ///< Phi resolution
-    CMatrix E_x;   ///< Accumulated E-field x-component
-    CMatrix E_y;   ///< Accumulated E-field y-component
-    CMatrix E_z;   ///< Accumulated E-field z-component
+    std::vector<PhotonRecord> recorded_photons{};
 
-    /// @brief Construct speckle detector at z-position with speckle size
-    /// @param z Detector z-coordinate
-    /// @param n_theta Number of theta bins
-    /// @param n_phi Number of phi bins
-    AngleDetector(double z, int n_theta, int n_phi);
-
-    /// @brief Record photon intersection with detector plane (overrides base)
-    /// @param photon Photon to validate and record
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
-
-    /// @brief Create empty speckle detector copy for parallel processing
-    /// @return Cloned speckle detector
-    std::unique_ptr<Detector> clone() const override;
-
-    /// @brief Merge results from another speckle detector
-    /// @param other Speckle detector to merge from
-    void merge_from(const Detector &other) override;
+    PhotonRecordSensor(double z);
+    std::unique_ptr<Sensor> clone() const override;
+    void merge_from(const Sensor &other) override;
+    void process_hit(Photon &photon, InteractionInfo &info) override;
   };
 
-  /// @brief Histogram detector for recording photon event counts
-  struct HistogramDetector : public Detector
+  struct PlanarFieldSensor : public Sensor
   {
-    std::vector<int> histogram;
-    u_int max_events{0};
+    CMatrix Ex, Ey;
+    int N_x, N_y;
+    double len_x, len_y;
+    double dx, dy;
 
-    HistogramDetector(double z, u_int n_bins)
-        : Detector(z), histogram(n_bins, 0) {}
-
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
-
-    std::unique_ptr<Detector> clone() const override;
-
-    void merge_from(const Detector &other) override;
+    PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy);
+    std::unique_ptr<Sensor> clone() const override;
+    void merge_from(const Sensor &other) override;
+    void process_hit(Photon &photon, InteractionInfo &info) override;
+    void process_estimation(const Photon &photon, const Medium &medium) override;
   };
 
-  /// @brief Theta Histogram detector for recording photon theta angle counts
-  struct ThetaHistogramDetector : public Detector
-  {
-    std::vector<int> histogram;
-
-    ThetaHistogramDetector(double z, u_int n_bins)
-        : Detector(z), histogram(n_bins, 0) {}
-
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
-
-    std::unique_ptr<Detector> clone() const override;
-
-    void merge_from(const Detector &other) override;
-  };
-
-  /// @brief Spatial detector for recording spatial intensity distribution
-  struct SpatialDetector : public Detector
-  {
-    int N_x;       ///< Number of x bins
-    int N_y;       ///< Number of y bins
-    double dx;     ///< x resolution
-    double dy;     ///< y resolution
-
-    int N_r;
-    double dr;
-
-    CMatrix E_x;    ///< Accumulated E-field x-component
-    CMatrix E_y;    ///< Accumulated E-field y-component
-    CMatrix E_z;    ///< Accumulated E-field z-component
-
-    Matrix I_x;    ///< Accumulated Intensity x-component
-    Matrix I_y;    ///< Accumulated Intensity y-component
-    Matrix I_z;    ///< Accumulated Intensity z-component
-    Matrix I_plus;   ///< Accumulated Copolarized Intensity
-    Matrix I_minus; ///< Accumulated Crosspolarized Intensity
-
-    std::vector<double> I_rad_plus;
-    std::vector<double> I_rad_minus;
-
-    /// @brief Construct spatial detector at z-position with spatial size
-    /// @param z Detector z-coordinate
-    /// @param x_len Physical x length
-    /// @param y_len Physical y length
-    /// @param n_x Number of x bins
-    /// @param n_y Number of y bins
-    SpatialDetector(double z, double x_len, double y_len, double r_len, int n_x, int n_y, int n_r);
-
-    /// @brief Record photon intersection with detector plane (overrides base)
-    /// @param photon Photon to validate and record
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
-
-    /// @brief Create empty spatial detector copy for parallel processing
-    /// @return Cloned spatial detector
-    std::unique_ptr<Detector> clone() const override;
-
-    /// @brief Merge results from another spatial detector
-    /// @param other Spatial detector to merge from
-    void merge_from(const Detector &other) override;
-
-    std::vector<double> calculate_radial_plus_intensity() const;
-    std::vector<double> calculate_radial_minus_intensity() const;
-  };
-
-  struct SpatialTimeDetector : public Detector
+  struct PlanarFluenceSensor : public Sensor
   {
     int N_t;
-    double dt;
-    double t_max;
+    int N_x, N_y;
+    double len_x, len_y, len_t;
+    double dx, dy, dt;
+    std::vector<Matrix> S0_t, S1_t, S2_t, S3_t;
 
-    int N_x;       ///< Number of x bins
-    int N_y;       ///< Number of y bins
-    int N_r;
-    double dx;     ///< x resolution
-    double dy;     ///< y resolution
-    double dr;
-
-    std::vector<SpatialDetector> time_bins;
-
-    /// @brief Construct spatial time-resolved detector at z-position with spatial size and time bins
-    /// @param z Detector z-coordinate
-    /// @param x_len Physical x length
-    /// @param y_len Physical y length
-    /// @param n_x Number of x bins
-    /// @param n_y Number of y bins
-    /// @param n_t Number of time bins
-    /// @param dt Time resolution
-    /// @param t_max Maximum time to record
-    SpatialTimeDetector(double z, double x_len, double y_len, double r_len,int n_x, int n_y, int n_r, int n_t, double dt, double t_max);
-
-    /// @brief Record photon intersection with detector plane (overrides base)
-    /// @param photon Photon to validate and record
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
-
-    /// @brief Create empty spatial time detector copy for parallel processing
-    /// @return Cloned spatial time detector
-    std::unique_ptr<Detector> clone() const override;
-
-    /// @brief Merge results from another spatial time detector
-    /// @param other Spatial time detector to merge from
-    void merge_from(const Detector &other) override;
-  };
-  
-
-  struct SpatialCoherentDetector : public Detector
-  {
-    int N_x;   ///< Number of x bins
-    int N_y;     ///< Number of y bins
-    double dx; ///< x resolution
-    double dy;   ///< y resolution
-    Matrix I_x;   ///< Accumulated Intensity x-component
-    Matrix I_y;   ///< Accumulated Intensity y-component
-    Matrix I_z;   ///< Accumulated Intensity z-component
-
-    Matrix I_inco_x;   ///< Accumulated Incoherent Intensity x-component
-    Matrix I_inco_y;   ///< Accumulated Incoherent Intensity y-component
-    Matrix I_inco_z;   ///< Accumulated Incoherent Intensity z-component
-
-    std::vector<double> I_x_theta;
-    std::vector<double> I_y_theta;
-    std::vector<double> I_z_theta;
-
-    std::vector<double> I_inco_x_theta;
-    std::vector<double> I_inco_y_theta;
-    std::vector<double> I_inco_z_theta;
-
-    /// @brief Construct spatial coherent detector at z-position with spatial size
-    /// @param z Detector z-coordinate
-    /// @param x_len Physical x length
-    /// @param y_len Physical y length
-    /// @param n_x Number of x bins
-    /// @param n_y Number of y bins
-    SpatialCoherentDetector(double z, double x_len, double y_len, int n_x, int n_y);
-
-    /// @brief Record photon intersection with detector plane (overrides base)
-    /// @param photon Photon to validate and record
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
-
-    /// @brief Create empty spatial detector copy for parallel processing
-    /// @return Cloned spatial detector
-    std::unique_ptr<Detector> clone() const override;
-
-    /// @brief Merge results from another spatial detector
-    /// @param other Spatial detector to merge from
-    void merge_from(const Detector &other) override;
+    PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt);
+    std::unique_ptr<Sensor> clone() const override;
+    void merge_from(const Sensor &other) override;
+    void process_hit(Photon &photon, InteractionInfo &info) override;
+    void process_estimation(const Photon &photon, const Medium &medium) override;
   };
 
-  struct AngularCoherentDetector : public Detector
+  struct PlanarCBSSensor : public Sensor
   {
-    int N_theta;   ///< Number of theta bins
-    double dtheta; ///< Theta resolution
-    std::vector<double> I_x;   ///< Accumulated Intensity x-component
-    std::vector<double> I_y;   ///< Accumulated Intensity y-component
-    std::vector<double> I_z;   ///< Accumulated Intensity z-component
-    std::vector<double> I_plus;   ///< Accumulated Coherent Intensity
-    std::vector<double> I_minus; ///< Accumulated Crossed Intensity
-    std::vector<double> I_total; ///< Accumulated Total Intensity
+    int N_x, N_y;
+    double len_x, len_y;
+    double dx, dy;
+    Matrix S0, S1, S2, S3;
 
-    std::vector<double> I_inco_x;   ///< Accumulated Incoherent Intensity x-component
-    std::vector<double> I_inco_y;   ///< Accumulated Incoherent Intensity y-component
-    std::vector<double> I_inco_z;   ///< Accumulated Incoherent Intensity z-component
-    std::vector<double> I_inco_plus;   ///< Accumulated Incoherent Coherent Intensity
-    std::vector<double> I_inco_minus; ///< Accumulated Incoherent Crossed Intensity
-    std::vector<double> I_inco_total; ///< Accumulated Incoherent Total Intensity
+    PlanarCBSSensor(double len_x, double len_y, double dx, double dy);
+    std::unique_ptr<Sensor> clone() const override;
+    void merge_from(const Sensor &other) override;
+    void process_hit(Photon &photon, InteractionInfo &info) override;
+  };
 
-    /// @brief Construct angular coherent detector at z-position with angular size
-    /// @param z Detector z-coordinate
-    /// @param n_theta Number of theta bins
-    AngularCoherentDetector(double z, int n_theta, double max_theta);
+  struct FarFieldFluenceSensor : public Sensor
+  {
+    int N_theta, N_phi;
+    double theta_max, phi_max;
+    double dtheta, dphi;
+    Matrix S0, S1, S2, S3;
 
-    /// @brief Record photon intersection with detector plane (overrides base)
-    /// @param photon Photon to validate and record
-    bool record_hit(Photon &photon, std::function<void()> coherent_calculation) override;
+    FarFieldFluenceSensor(double z, double theta_max, double phi_max, int n_theta, int n_phi);
+    std::unique_ptr<Sensor> clone() const override;
+    void merge_from(const Sensor &other) override;
+    void process_hit(Photon &photon, InteractionInfo &info) override;
+  };
 
-    /// @brief Create empty angular detector copy for parallel processing
-    /// @return Cloned angular detector
-    std::unique_ptr<Detector> clone() const override;
+  struct StatisticsSensor : public Sensor
+  {
+    std::vector<int> events_histogram;
+    std::vector<int> theta_histogram;
+    std::vector<int> phi_histogram;
+    std::vector<int> depth_histogram;
+    std::vector<int> time_histogram;
+    std::vector<int> weight_histogram;
 
-    /// @brief Merge results from another angular detector
-    /// @param other Angular detector to merge from
-    void merge_from(const Detector &other) override;
+    // Settings for histograms
+    bool events_histogram_bins_set = false;
+    int max_events = 0;
+    bool theta_histogram_bins_set = false;
+    double min_theta = 0.0;
+    double max_theta = 0.0;
+    int n_bins_theta = 0;
+    double dtheta = 0.0;
+    bool phi_histogram_bins_set = false;
+    double min_phi = 0.0;
+    double max_phi = 0.0;
+    int n_bins_phi = 0;
+    double dphi = 0.0;
+    bool depth_histogram_bins_set = false;
+    double max_depth = 0.0;
+    int n_bins_depth = 0;
+    double ddepth = 0.0;
+    bool time_histogram_bins_set = false;
+    double max_time = 0.0;
+    int n_bins_time = 0;
+    double dtime = 0.0;
+    bool weight_histogram_bins_set = false;
+    double max_weight = 0.0;
+    int n_bins_weight = 0;
+    double dweight = 0.0;
+
+    StatisticsSensor(double z);
+
+    void set_events_histogram_bins(int max_events);
+    void set_theta_histogram_bins(double min_theta, double max_theta, int n_bins);
+    void set_phi_histogram_bins(double min_phi, double max_phi, int n_bins);
+    void set_depth_histogram_bins(double max_depth, int n_bins);
+    void set_time_histogram_bins(double max_time, int n_bins);
+    void set_weight_histogram_bins(double max_weight, int n_bins);
+
+    std::unique_ptr<Sensor> clone() const override;
+    void merge_from(const Sensor &other) override;
+    void process_hit(Photon &photon, InteractionInfo &info) override;
   };
 
   /// @brief Collection of multiple detectors
-  struct MultiDetector
+  struct SensorsGroup
   {
-    std::vector<std::unique_ptr<Detector>> detectors; ///< Collection of detectors
+    std::vector<std::unique_ptr<Sensor>> detectors;
+    std::map<double, std::vector<Sensor*>, DoubleComparator> z_layers;
+    std::vector<Sensor*> active_estimators;
 
-    MultiDetector() = default;
-    MultiDetector(const MultiDetector &) = delete;
-    MultiDetector &operator=(const MultiDetector &) = delete;
-    MultiDetector(MultiDetector &&) = default;
-    MultiDetector &operator=(MultiDetector &&) = default;
+    SensorsGroup() = default;
+    SensorsGroup(const SensorsGroup &) = delete;
+    SensorsGroup &operator=(const SensorsGroup &) = delete;
+    SensorsGroup(SensorsGroup &&) = default;
+    SensorsGroup &operator=(SensorsGroup &&) = default;
 
     /// @brief Add a detector to the multi-detector
-    /// @param detector Detector to add
-    void add_detector(std::unique_ptr<Detector> detector);
+    /// @param detector Sensor to add
+    void add_detector(std::unique_ptr<Sensor> detector);
 
     /// @brief Record hit by all detectors
     /// @param photon Photon to record
     bool record_hit(Photon &photon, std::function<void()> coherent_calculation);
 
+    /// @brief Process estimator contribution by all detectors
+    /// @param photon Photon to process
+    /// @param medium Medium through which the photon is propagating
+    void run_estimators(const Photon &photon, const Medium &medium);
+
     /// @brief Merge results from another multi-detector
     /// @param other Multi-detector to merge from
-    void merge_from(const MultiDetector &other);
+    void merge_from(const SensorsGroup &other);
 
     /// @brief Clone multi-detector
     /// @return Cloned multi-detector
-    std::unique_ptr<MultiDetector> clone() const;
+    std::unique_ptr<SensorsGroup> clone() const;
   };
-
-  DetectionCondition make_theta_condition(double min_theta, double max_theta);
-  DetectionCondition make_phi_condition(double min_phi, double max_phi);
-  DetectionCondition make_position_condition(double min_x, double max_x, double min_y, double max_y);
-  DetectionCondition make_events_condition(uint min_events, uint max_events);
 
 } // namespace luminis::core

@@ -12,14 +12,15 @@
 
 namespace luminis::core
 {
+  const int MAX_EVENTS = 1000;
 
   using luminis::math::mix_seed;
   using luminis::math::Rng;
 
-  SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, MultiDetector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+  SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
       : n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
-  SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, MultiDetector *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+  SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
       : seed(s), n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
   void run_simulation(const SimConfig &config)
@@ -49,7 +50,7 @@ namespace luminis::core
     LLOG_INFO("Running simulation with {} threads for {} photons", n_threads, config.n_photons);
 
     // Create thread-local detectors and absorptions
-    std::vector<std::unique_ptr<MultiDetector>> thread_detectors;
+    std::vector<std::unique_ptr<SensorsGroup>> thread_detectors;
     thread_detectors.reserve(n_threads);
     std::vector<AbsorptionTimeDependent> thread_absorptions;
     if (config.absorption)
@@ -84,7 +85,7 @@ namespace luminis::core
         oss << "Thread " << t << " (id " << std::this_thread::get_id() << ") processing " << my_count << " photons with seed " << thread_seed;
         LLOG_INFO(oss.str());
 
-        MultiDetector& det = *thread_detectors[t];
+        SensorsGroup& det = *thread_detectors[t];
         AbsorptionTimeDependent* abs_ptr = nullptr;
         if (config.absorption) abs_ptr = &thread_absorptions[t];
 
@@ -126,17 +127,17 @@ namespace luminis::core
     LLOG_INFO("Parallel simulation finished");
   }
 
-  void run_photon(Photon &photon, Medium &medium, MultiDetector &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths)
+  void run_photon(Photon &photon, Medium &medium, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths)
   {
     const uint first_event = 0;
 
     // Update incident direction for CBS
-    photon.n_0 = photon.n;
-    photon.s_0 = photon.dir;
-    photon.s_1 = photon.dir;
-    photon.s_n2 = photon.dir;
-    photon.s_n1 = photon.dir;
-    photon.s_n = photon.dir;
+    // photon.n_0 = photon.n;
+    // photon.s_0 = photon.dir;
+    // photon.s_1 = photon.dir;
+    // photon.s_n2 = photon.dir;
+    // photon.s_n1 = photon.dir;
+    // photon.s_n = photon.dir;
     photon.initial_polarization = photon.polarization;
 
     // Main photon propagation loop
@@ -146,19 +147,20 @@ namespace luminis::core
       const double step = medium.sample_free_path(rng);
       photon.opticalpath += step;
       photon.prev_pos = photon.pos;
-      photon.pos = photon.pos + photon.dir * step;
+      photon.pos.x += photon.P_local(2, 0) * step;
+      photon.pos.y += photon.P_local(2, 1) * step;
+      photon.pos.z += photon.P_local(2, 2) * step;
 
       // Check for detector hit
-      if (photon.events != first_event)
+      const bool hit = detector.record_hit(photon, [&photon, &medium, track_reverse_paths]() { if (track_reverse_paths && photon.events > 1) coherent_calculation(photon, medium); });
+      if (hit)
       {
-        const bool hit = detector.record_hit(photon, [&photon, &medium, track_reverse_paths]() { if (track_reverse_paths && photon.events > 1) coherent_calculation(photon, medium); });
-        if (hit)
-        {
-          photon.alive = false;
-          break;
-        }
+        photon.alive = false;
+        break;
       }
 
+      // Check if photon is still inside the medium
+      // TODO: Implement boundary interactions and multiple media
       const bool is_inside = medium.is_inside(photon.pos);
       if (!is_inside)
       {
@@ -166,27 +168,39 @@ namespace luminis::core
         break;
       }
 
-      // Scatter the photon
+      // Run estimators for current photon state
+      detector.run_estimators(photon, medium);
+
+      // Sample scattering angle
       const double theta = medium.sample_scattering_angle(rng);
 
       // Get scattering matrix
       CMatrix S_matrix = medium.scattering_matrix(theta, 0, photon.k);
 
-      // const double phi = medium.sample_azimuthal_angle(rng);
+      // Sample azimuthal angle
       const double phi = medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
+
+      // Precompute trigonometric values for scattering
       const double cos_theta = std::cos(theta);
       const double sin_theta = std::sin(theta);
       const double cos_phi = std::cos(phi);
       const double sin_phi = std::sin(phi);
 
-      // Update photon direction
-      const Vec3 old_dir = photon.dir;
-      const Vec3 old_m = photon.m;
-      const Vec3 old_n = photon.n;
+      Matrix A_update = Matrix(3, 3);
+      A_update(0, 0) = cos_theta * cos_phi;
+      A_update(0, 1) = cos_theta * sin_phi;
+      A_update(0, 2) = -sin_theta;
 
-      photon.m = old_m * cos_theta * cos_phi + old_n * cos_theta * sin_phi - old_dir * sin_theta;
-      photon.n = old_m * -1 * sin_phi + old_n * cos_phi;
-      photon.dir = old_m * sin_theta * cos_phi + old_n * sin_theta * sin_phi + old_dir * cos_theta;
+      A_update(1, 0) = -sin_phi;
+      A_update(1, 1) = cos_phi;
+      A_update(1, 2) = 0;
+
+      A_update(2, 0) = sin_theta * cos_phi;
+      A_update(2, 1) = sin_theta * sin_phi;
+      A_update(2, 2) = cos_theta;
+
+      // Update local scattering plane basis
+      matmul(A_update, photon.P_local, photon.P_local);
 
       // Update photon polarization if needed
       if (photon.polarized)
@@ -198,7 +212,7 @@ namespace luminis::core
         R(1, 0) = -sin_phi;
         R(1, 1) = cos_phi;
         CMatrix T_current = CMatrix(2, 2);
-        matmul(S_matrix, R, T_current);
+        matcmul(S_matrix, R, T_current);
 
         // Calculate normalization factor F (m=1, n=2)
         const std::complex<double> Em = photon.polarization.m;
@@ -219,32 +233,32 @@ namespace luminis::core
 
         // Update polarization components
         const double F_inv_sqrt = 1.0 / std::sqrt(F);
-        matmulscalar(F_inv_sqrt, T_current);
+        matcmulscalar(F_inv_sqrt, T_current);
         photon.polarization.m = (T_current(0, 0) * Em + T_current(0, 1) * En);
         photon.polarization.n = (T_current(1, 0) * Em + T_current(1, 1) * En);
 
         // Update first scatter info for CBS
         if (track_reverse_paths)
         {
-          if (photon.events == first_event)
-          {
-            photon.r_0 = photon.pos;
-            photon.s_1 = photon.dir;
-            photon.s_n = photon.dir;
-            photon.s_n1 = photon.s_0;
-            photon.s_n2 = photon.s_0;
-          }
-          else
-          {
-            photon.r_n = photon.pos;
-            photon.s_n2 = photon.s_n1;
-            photon.s_n1 = photon.s_n;
-            photon.s_n = photon.dir;
+          // if (photon.events == first_event)
+          // {
+          //   photon.r_0 = photon.pos;
+          //   photon.s_1 = photon.dir;
+          //   photon.s_n = photon.dir;
+          //   photon.s_n1 = photon.s_0;
+          //   photon.s_n2 = photon.s_0;
+          // }
+          // else
+          // {
+          //   photon.r_n = photon.pos;
+          //   photon.s_n2 = photon.s_n1;
+          //   photon.s_n1 = photon.s_n;
+          //   photon.s_n = photon.dir;
 
-            // Update matrix T
-            matmul(photon.matrix_T_buffer, photon.matrix_T, photon.matrix_T);
-            photon.matrix_T_buffer.data.swap(T_current.data);
-          }
+          //   // Update matrix T
+          //   matcmul(photon.matrix_T_buffer, photon.matrix_T, photon.matrix_T);
+          //   photon.matrix_T_buffer.data.swap(T_current.data);
+          // }
         }
       }
 
@@ -273,6 +287,11 @@ namespace luminis::core
           break;
         }
       }
+
+      if (photon.events > MAX_EVENTS) {
+        photon.alive = false;
+        break;
+      }
     }
 
     LLOG_DEBUG("Photon terminated after {} events, final weight: {}, optical path: {}", photon.events, photon.weight, photon.opticalpath);
@@ -280,136 +299,136 @@ namespace luminis::core
 
   void coherent_calculation(Photon &photon, Medium &medium)
   {
-    if (photon.coherent_path_calculated)
-      return;
+    // if (photon.coherent_path_calculated)
+    //   return;
 
-    photon.coherent_path_calculated = true;
+    // photon.coherent_path_calculated = true;
 
-    Vec3 s_0 = photon.s_0;
-    Vec3 s_1 = photon.s_1;
-    Vec3 s_n2 = photon.s_n2;
-    Vec3 s_n1 = photon.s_n1;
-    Vec3 s_n = photon.s_n;
-    Vec3 n_0 = photon.n_0; // Polarización inicial
+    // Vec3 s_0 = photon.s_0;
+    // Vec3 s_1 = photon.s_1;
+    // Vec3 s_n2 = photon.s_n2;
+    // Vec3 s_n1 = photon.s_n1;
+    // Vec3 s_n = photon.s_n;
+    // Vec3 n_0 = photon.n_0; // Polarización inicial
 
-    // --- CÁLCULO SEGURO DE NORMALES ---
-    // Usamos un epsilon pequeño para detectar colinealidad
-    const double EPSILON = 1e-12;
+    // // --- CÁLCULO SEGURO DE NORMALES ---
+    // // Usamos un epsilon pequeño para detectar colinealidad
+    // const double EPSILON = 1e-12;
 
-    Vec3 n_1 = cross(s_0, s_1);
-    bool n_1_valid = (dot(n_1, n_1) > EPSILON);
+    // Vec3 n_1 = cross(s_0, s_1);
+    // bool n_1_valid = (dot(n_1, n_1) > EPSILON);
 
-    Vec3 n_prime = cross(s_0, s_n1 * (-1.0));
-    bool n_prime_valid = (dot(n_prime, n_prime) > EPSILON);
+    // Vec3 n_prime = cross(s_0, s_n1 * (-1.0));
+    // bool n_prime_valid = (dot(n_prime, n_prime) > EPSILON);
 
-    Vec3 n_n1 = cross(s_n1 * (-1.0), s_n2 * (-1.0));
-    double phi_n = 0.0;
-    if (n_prime_valid)
-    {
-      phi_n = calculate_rotation_angle(n_0, n_prime);
-    }
-    if (std::isnan(phi_n))
-      phi_n = 0.0;
+    // Vec3 n_n1 = cross(s_n1 * (-1.0), s_n2 * (-1.0));
+    // double phi_n = 0.0;
+    // if (n_prime_valid)
+    // {
+    //   phi_n = calculate_rotation_angle(n_0, n_prime);
+    // }
+    // if (std::isnan(phi_n))
+    //   phi_n = 0.0;
 
-    double phi_n_prime = 0.0;
-    if (n_prime_valid && n_1_valid)
-    {
-      phi_n_prime = calculate_rotation_angle(n_prime, n_1 * (-1.0));
-    }
-    if (std::isnan(phi_n_prime))
-      phi_n_prime = 0.0;
+    // double phi_n_prime = 0.0;
+    // if (n_prime_valid && n_1_valid)
+    // {
+    //   phi_n_prime = calculate_rotation_angle(n_prime, n_1 * (-1.0));
+    // }
+    // if (std::isnan(phi_n_prime))
+    //   phi_n_prime = 0.0;
 
-    double phi_1_prime = 0.0;
-    if (n_1_valid)
-    {
-      phi_1_prime = calculate_rotation_angle(n_1 * (-1.0), n_n1);
-    }
-    if (std::isnan(phi_1_prime))
-      phi_1_prime = 0.0;
+    // double phi_1_prime = 0.0;
+    // if (n_1_valid)
+    // {
+    //   phi_1_prime = calculate_rotation_angle(n_1 * (-1.0), n_n1);
+    // }
+    // if (std::isnan(phi_1_prime))
+    //   phi_1_prime = 0.0;
 
-    auto safe_acos_dot = [](Vec3 a, Vec3 b)
-    {
-      double d = dot(a, b);
-      if (d > 1.0)
-        d = 1.0;
-      if (d < -1.0)
-        d = -1.0;
-      return std::acos(d);
-    };
+    // auto safe_acos_dot = [](Vec3 a, Vec3 b)
+    // {
+    //   double d = dot(a, b);
+    //   if (d > 1.0)
+    //     d = 1.0;
+    //   if (d < -1.0)
+    //     d = -1.0;
+    //   return std::acos(d);
+    // };
 
-    double theta_n = safe_acos_dot(s_n1 * (-1.0), s_0);
-    double theta_1 = safe_acos_dot(s_n, s_1 * (-1.0));
+    // double theta_n = safe_acos_dot(s_n1 * (-1.0), s_0);
+    // double theta_1 = safe_acos_dot(s_n, s_1 * (-1.0));
 
-    // Rotation matrices
-    CMatrix R_n(2, 2);
-    R_n(0, 0) = std::cos(phi_n);
-    R_n(0, 1) = std::sin(phi_n);
-    R_n(1, 0) = -std::sin(phi_n);
-    R_n(1, 1) = std::cos(phi_n);
-    CMatrix R_n_prime(2, 2);
-    R_n_prime(0, 0) = std::cos(phi_n_prime);
-    R_n_prime(0, 1) = std::sin(phi_n_prime);
-    R_n_prime(1, 0) = -std::sin(phi_n_prime);
-    R_n_prime(1, 1) = std::cos(phi_n_prime);
-    CMatrix R_1_prime(2, 2);
-    R_1_prime(0, 0) = std::cos(phi_1_prime);
-    R_1_prime(0, 1) = std::sin(phi_1_prime);
-    R_1_prime(1, 0) = -std::sin(phi_1_prime);
-    R_1_prime(1, 1) = std::cos(phi_1_prime);
+    // // Rotation matrices
+    // CMatrix R_n(2, 2);
+    // R_n(0, 0) = std::cos(phi_n);
+    // R_n(0, 1) = std::sin(phi_n);
+    // R_n(1, 0) = -std::sin(phi_n);
+    // R_n(1, 1) = std::cos(phi_n);
+    // CMatrix R_n_prime(2, 2);
+    // R_n_prime(0, 0) = std::cos(phi_n_prime);
+    // R_n_prime(0, 1) = std::sin(phi_n_prime);
+    // R_n_prime(1, 0) = -std::sin(phi_n_prime);
+    // R_n_prime(1, 1) = std::cos(phi_n_prime);
+    // CMatrix R_1_prime(2, 2);
+    // R_1_prime(0, 0) = std::cos(phi_1_prime);
+    // R_1_prime(0, 1) = std::sin(phi_1_prime);
+    // R_1_prime(1, 0) = -std::sin(phi_1_prime);
+    // R_1_prime(1, 1) = std::cos(phi_1_prime);
 
-    // Scattering matrices
-    CMatrix S_n = medium.scattering_matrix(theta_n, 0, photon.k);
-    CMatrix S_1 = medium.scattering_matrix(theta_1, 0, photon.k);
+    // // Scattering matrices
+    // CMatrix S_n = medium.scattering_matrix(theta_n, 0, photon.k);
+    // CMatrix S_1 = medium.scattering_matrix(theta_1, 0, photon.k);
 
-    // Auxiliary matrix Q
-    CMatrix Q(2, 2);
-    Q(0, 0) = 1;
-    Q(0, 1) = 0;
-    Q(1, 0) = 0;
-    Q(1, 1) = -1;
+    // // Auxiliary matrix Q
+    // CMatrix Q(2, 2);
+    // Q(0, 0) = 1;
+    // Q(0, 1) = 0;
+    // Q(1, 0) = 0;
+    // Q(1, 1) = -1;
 
-    // Calculate reversed path matrix
-    CMatrix T_forward_transposed = CMatrix(2, 2);
-    T_forward_transposed(0, 0) = photon.matrix_T(0, 0);
-    T_forward_transposed(0, 1) = photon.matrix_T(1, 0);
-    T_forward_transposed(1, 0) = photon.matrix_T(0, 1);
-    T_forward_transposed(1, 1) = photon.matrix_T(1, 1);
+    // // Calculate reversed path matrix
+    // CMatrix T_forward_transposed = CMatrix(2, 2);
+    // T_forward_transposed(0, 0) = photon.matrix_T(0, 0);
+    // T_forward_transposed(0, 1) = photon.matrix_T(1, 0);
+    // T_forward_transposed(1, 0) = photon.matrix_T(0, 1);
+    // T_forward_transposed(1, 1) = photon.matrix_T(1, 1);
 
-    // LLOG_INFO("CBS forward path matrix T_forward:");
-    // LLOG_INFO("[[{}+i{}, {}+i{}],", photon.matrix_T(0,0).real(), photon.matrix_T(0,0).imag(), photon.matrix_T(0,1).real(), photon.matrix_T(0,1).imag());
-    // LLOG_INFO(" [{}+i{}, {}+i{}]]", photon.matrix_T(1,0).real(), photon.matrix_T(1,0).imag(), photon.matrix_T(1,1).real(), photon.matrix_T(1,1).imag());
+    // // LLOG_INFO("CBS forward path matrix T_forward:");
+    // // LLOG_INFO("[[{}+i{}, {}+i{}],", photon.matrix_T(0,0).real(), photon.matrix_T(0,0).imag(), photon.matrix_T(0,1).real(), photon.matrix_T(0,1).imag());
+    // // LLOG_INFO(" [{}+i{}, {}+i{}]]", photon.matrix_T(1,0).real(), photon.matrix_T(1,0).imag(), photon.matrix_T(1,1).real(), photon.matrix_T(1,1).imag());
 
-    CMatrix J_reversed = CMatrix::identity(2);
-    matmul(S_n, R_n, J_reversed);
-    matmul(R_n_prime, J_reversed, J_reversed);
-    matmul(Q, J_reversed, J_reversed);
-    matmul(T_forward_transposed, J_reversed, J_reversed);
-    matmul(Q, J_reversed, J_reversed);
-    matmul(R_1_prime, J_reversed, J_reversed);
-    matmul(S_1, J_reversed, J_reversed);
+    // CMatrix J_reversed = CMatrix::identity(2);
+    // matcmul(S_n, R_n, J_reversed);
+    // matcmul(R_n_prime, J_reversed, J_reversed);
+    // matcmul(Q, J_reversed, J_reversed);
+    // matcmul(T_forward_transposed, J_reversed, J_reversed);
+    // matcmul(Q, J_reversed, J_reversed);
+    // matcmul(R_1_prime, J_reversed, J_reversed);
+    // matcmul(S_1, J_reversed, J_reversed);
 
-    // LLOG_INFO("CBS reversed path matrix T_reversed:");
-    // LLOG_INFO("[[{}+i{}, {}+i{}],", J_reversed(0,0).real(), J_reversed(0,0).imag(), J_reversed(0,1).real(), J_reversed(0,1).imag());
-    // LLOG_INFO(" [{}+i{}, {}+i{}]]", J_reversed(1,0).real(), J_reversed(1,0).imag(), J_reversed(1,1).real(), J_reversed(1,1).imag());
+    // // LLOG_INFO("CBS reversed path matrix T_reversed:");
+    // // LLOG_INFO("[[{}+i{}, {}+i{}],", J_reversed(0,0).real(), J_reversed(0,0).imag(), J_reversed(0,1).real(), J_reversed(0,1).imag());
+    // // LLOG_INFO(" [{}+i{}, {}+i{}]]", J_reversed(1,0).real(), J_reversed(1,0).imag(), J_reversed(1,1).real(), J_reversed(1,1).imag());
 
-    CVec2 E_reversed;
-    const std::complex<double> Em0 = photon.initial_polarization.m;
-    const std::complex<double> En0 = photon.initial_polarization.n;
-    E_reversed.m = J_reversed(0, 0) * Em0 + J_reversed(0, 1) * En0;
-    E_reversed.n = J_reversed(1, 0) * Em0 + J_reversed(1, 1) * En0;
+    // CVec2 E_reversed;
+    // const std::complex<double> Em0 = photon.initial_polarization.m;
+    // const std::complex<double> En0 = photon.initial_polarization.n;
+    // E_reversed.m = J_reversed(0, 0) * Em0 + J_reversed(0, 1) * En0;
+    // E_reversed.n = J_reversed(1, 0) * Em0 + J_reversed(1, 1) * En0;
 
-    // LLOG_INFO("CBS forward path polarization: m = {}+i{}, n = {}+i{}", photon.polarization.m.real(), photon.polarization.m.imag(), photon.polarization.n.real(), photon.polarization.n.imag());
-    // LLOG_INFO("CBS reversed path polarization: m = {}+i{}, n = {}+i{}", E_reversed.m.real(), E_reversed.m.imag(), E_reversed.n.real(), E_reversed.n.imag());
+    // // LLOG_INFO("CBS forward path polarization: m = {}+i{}, n = {}+i{}", photon.polarization.m.real(), photon.polarization.m.imag(), photon.polarization.n.real(), photon.polarization.n.imag());
+    // // LLOG_INFO("CBS reversed path polarization: m = {}+i{}, n = {}+i{}", E_reversed.m.real(), E_reversed.m.imag(), E_reversed.n.real(), E_reversed.n.imag());
 
-    double mag_sq = std::norm(E_reversed.m) + std::norm(E_reversed.n);
-    if (mag_sq > 1e-20)
-    {
-      double inv_norm = 1.0 / std::sqrt(mag_sq);
-      E_reversed.m *= inv_norm;
-      E_reversed.n *= inv_norm;
-    }
+    // double mag_sq = std::norm(E_reversed.m) + std::norm(E_reversed.n);
+    // if (mag_sq > 1e-20)
+    // {
+    //   double inv_norm = 1.0 / std::sqrt(mag_sq);
+    //   E_reversed.m *= inv_norm;
+    //   E_reversed.n *= inv_norm;
+    // }
 
-    photon.polarization_reverse = E_reversed;
+    // photon.polarization_reverse = E_reversed;
   }
 
 } // namespace luminis::core

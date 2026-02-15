@@ -92,7 +92,7 @@ namespace luminis::core
   }
 
 
-  MieMedium::MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium)
+  MieMedium::MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelenght)
       : Medium(absorption, scattering, phase_func)
   {
     mean_free_path = mfp;
@@ -100,6 +100,9 @@ namespace luminis::core
     this->n_particle = n_particle;
     this->n_medium = n_medium;
     this->m = std::complex<double>(n_particle/n_medium, 0);
+    this->wavelength = wavelenght;
+
+    precompute_scattering_tables(wavelenght, 2 * M_PI * radius / wavelenght, 1000);
   }
   double MieMedium::sample_free_path(Rng &rng) const
   {
@@ -109,13 +112,9 @@ namespace luminis::core
   {
     std::complex<double> s1;
     std::complex<double> s2;
-    double mu = std::cos(theta);
-    if (mu > 1.0) mu = 1.0;
-    if (mu < -1.0) mu = -1.0;
-    std::complex<double> crefin = m;
-    double sizep = k * this->radius;
 
-    amiev(&sizep, &crefin, &mu, &s1, &s2);
+    s1 = S1_table.Sample(theta);
+    s2 = S2_table.Sample(theta);
 
     CMatrix res(2, 2);
     res(0, 0) = s2;
@@ -123,6 +122,50 @@ namespace luminis::core
     res(1, 0) = std::complex<double>(0, 0);
     res(1, 1) = s1;
     return res;
+
+    // double mu = std::cos(theta);
+    // if (mu > 1.0) mu = 1.0;
+    // if (mu < -1.0) mu = -1.0;
+    // std::complex<double> crefin = m;
+    // double sizep = k * this->radius;
+
+    // amiev(&sizep, &crefin, &mu, &s1, &s2);
+
+    // CMatrix res(2, 2);
+    // res(0, 0) = s2;
+    // res(0, 1) = std::complex<double>(0, 0);
+    // res(1, 0) = std::complex<double>(0, 0);
+    // res(1, 1) = s1;
+    // return res;
+  }
+
+  void MieMedium::precompute_scattering_tables(double wavelength, double size_parameter, std::size_t n_samples)
+  {
+    std::vector<double> theta_values(n_samples);
+    std::vector<std::complex<double>> s1_values(n_samples);
+    std::vector<std::complex<double>> s2_values(n_samples);
+
+    std::complex<double>* s1tab = new std::complex<double>[n_samples];
+		std::complex<double>* s2tab = new std::complex<double>[n_samples];
+    double *mulist = new double[n_samples];
+    
+    for (std::size_t i = 0; i < n_samples; ++i)
+    {
+      double theta = (static_cast<double>(i) / (n_samples - 1)) * M_PI;
+      mulist[i] = std::cos(theta);
+    }
+
+    miev(size_parameter, m, n_samples, mulist, s1tab, s2tab);
+
+    for (std::size_t i = 0; i < n_samples; ++i)
+    {
+      theta_values[i] = std::acos(mulist[i]);
+      s1_values[i] = s1tab[i];
+      s2_values[i] = s2tab[i];
+    }
+
+    S1_table.initialize(theta_values, s1_values);
+    S2_table.initialize(theta_values, s2_values);
   }
 
 } // namespace luminis::core
