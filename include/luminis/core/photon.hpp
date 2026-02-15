@@ -14,9 +14,9 @@ namespace luminis::core
     Vec3 prev_pos{0, 0, 0};
     Vec3 pos{0, 0, 0};
     Vec3 detected_pos{0, 0, 0};
-    Vec3 dir{Z_UNIT_VEC3};
-    Vec3 m{X_UNIT_VEC3};
-    Vec3 n{Y_UNIT_VEC3};
+    // Vec3 dir{Z_UNIT_VEC3};
+    // Vec3 m{X_UNIT_VEC3};
+    // Vec3 n{Y_UNIT_VEC3};
 
     uint events{0};
     double penetration_depth{0.0};
@@ -27,6 +27,8 @@ namespace luminis::core
     double launch_time{0.0};
     double velocity{1.0}; // Speed of light in medium [mm/ns]
     double weight{1.0};
+
+    Matrix P_local = Matrix(3, 3); // Local scattering plane basis
 
     bool polarized{true};
     CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};

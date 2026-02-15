@@ -10,28 +10,94 @@
 
 namespace luminis::core
 {
-  // MultiDetector implementation
-  void MultiDetector::add_detector(std::unique_ptr<Detector> detector)
+  // SensorsGroup implementation
+  void SensorsGroup::add_detector(std::unique_ptr<Sensor> detector)
   {
     u_int new_id = static_cast<u_int>(detectors.size());
     detector->id = new_id;
+    double z = detector->origin.z;
+
+    if (detector->estimator_enabled)
+    {
+      active_estimators.push_back(detector.get());
+    }
+
+    z_layers[z].push_back(detector.get());
     detectors.push_back(std::move(detector));
   }
 
-  bool MultiDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
+  bool SensorsGroup::record_hit(Photon &photon, std::function<void()> coherent_calculation)
   {
-    bool hit_recorded = false;
-    for (const auto &detector : detectors)
+    bool photon_killed = false;
+
+    double z1 = photon.prev_pos.z;
+    double z2 = photon.pos.z;
+    if (std::abs(z2 - z1) < 1e-12)
+      return false;
+
+    double z_min = std::min(z1, z2);
+    double z_max = std::max(z1, z2);
+
+    auto it_start = z_layers.lower_bound(z_min);
+    auto it_end = z_layers.upper_bound(z_max);
+
+    for (auto it = it_start; it != it_end; ++it)
     {
-      if (detector->record_hit(photon, coherent_calculation))
+      double z_plane = it->first;
+      bool crosses = (z_plane >= z_min) && (z_plane <= z_max);
+
+      if (crosses)
       {
-        hit_recorded = true;
+        const Vec3 xn = photon.prev_pos;
+        const Vec3 xf = photon.pos;
+        const Vec3 d = xf - xn;
+        const Vec3 detector_normal{0, 0, 1};
+        const Vec3 detector_origin{0, 0, z_plane};
+
+        const double denom = dot(d, detector_normal);
+        const double t = dot(detector_origin - xn, detector_normal) / denom;
+
+        const Vec3 hit_point = xn + d * t;
+        const double correction_distance = luminis::math::norm(hit_point - xf);
+        double opticalpath_correction = photon.opticalpath;
+        if (correction_distance > 0)
+        {
+          opticalpath_correction -= correction_distance;
+        }
+
+        InteractionInfo info;
+        info.intersection_point = hit_point;
+        info.phase = std::exp(std::complex<double>(0, photon.k * opticalpath_correction));
+
+        for (Sensor *det : it->second)
+        {
+          Vec3 direction = {photon.P_local(2, 0), photon.P_local(2, 1), photon.P_local(2, 2)};
+          const bool valid_photon = det->check_conditions(hit_point, direction);
+          if (valid_photon)
+          {
+            coherent_calculation();
+            det->process_hit(photon, info);
+            if (det->absorb_photons)
+            {
+              photon_killed = true;
+            }
+          }
+        }
       }
     }
-    return hit_recorded;
+
+    return photon_killed;
   }
 
-  void MultiDetector::merge_from(const MultiDetector &other)
+  void SensorsGroup::run_estimators(const Photon &photon, const Medium &medium)
+  {
+    for (Sensor *sensor : active_estimators)
+    {
+      sensor->process_estimation(photon, medium);
+    }
+  }
+
+  void SensorsGroup::merge_from(const SensorsGroup &other)
   {
     for (const auto &det_other : other.detectors)
     {
@@ -42,14 +108,14 @@ namespace luminis::core
       }
       else
       {
-        LLOG_WARN("MultiDetector merge_from: Detector ID {} not found in destination", det_id);
+        LLOG_WARN("SensorsGroup merge_from: Sensor ID {} not found in destination", det_id);
       }
     }
   }
 
-  std::unique_ptr<MultiDetector> MultiDetector::clone() const
+  std::unique_ptr<SensorsGroup> SensorsGroup::clone() const
   {
-    auto multi_det = std::make_unique<MultiDetector>();
+    auto multi_det = std::make_unique<SensorsGroup>();
     for (const auto &detector : detectors)
     {
       multi_det->add_detector(detector->clone());
@@ -57,8 +123,8 @@ namespace luminis::core
     return multi_det;
   }
 
-  // Detector implementation
-  Detector::Detector(double z)
+  // Sensor implementation
+  Sensor::Sensor(double z)
   {
     origin = {0, 0, z};
     normal = Z_UNIT_VEC3;
@@ -67,77 +133,7 @@ namespace luminis::core
     n_polarization = Y_UNIT_VEC3;
   }
 
-  std::unique_ptr<Detector> Detector::clone() const
-  {
-    auto det = std::make_unique<Detector>(origin.z);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void Detector::merge_from(const Detector &other)
-  {
-    hits += other.hits;
-    recorded_photons.insert(recorded_photons.end(),
-                            other.recorded_photons.begin(),
-                            other.recorded_photons.end());
-  }
-
-  bool Detector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    const Vec3 xn = photon.prev_pos;
-    const Vec3 xf = photon.pos;
-    const Vec3 d = xf - xn;
-
-    const double denom = dot(d, normal);
-    if (std::abs(denom) < 1e-6)
-      return false;
-
-    const double t = dot(origin - xn, normal) / denom;
-    if (t < 0 || t > 1)
-      return false;
-
-    const Vec3 hit_point = xn + d * t;
-    const double correction_distance = luminis::math::norm(hit_point - xf);
-    if (correction_distance > 0)
-    {
-      photon.opticalpath -= correction_distance;
-    }
-    hits += 1;
-    photon.detected_pos = hit_point;
-
-    PhotonRecord photon_rec{};
-    photon_rec.events = photon.events;
-    photon_rec.penetration_depth = photon.penetration_depth;
-    photon_rec.launch_time = photon.launch_time;
-    photon_rec.arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
-    photon_rec.opticalpath = photon.opticalpath;
-    photon_rec.weight = photon.weight;
-    photon_rec.k = photon.k;
-    photon_rec.position_detector = photon.detected_pos;
-    photon_rec.position_first_scattering = photon.r_0;
-    photon_rec.position_last_scattering = photon.r_n;
-    photon_rec.direction = photon.dir;
-    photon_rec.m = photon.m;
-    photon_rec.n = photon.n;
-    photon_rec.polarization_forward = photon.polarization;
-    photon_rec.polarization_reverse = CVec2{std::complex<double>(0, 0), std::complex<double>(0, 0)};
-
-    recorded_photons.push_back(photon_rec);
-    return true;
-  }
-
-  void Detector::set_theta_limit(double min, double max)
+  void Sensor::set_theta_limit(double min, double max)
   {
     filter_theta_enabled = true;
     filter_theta_min = min;
@@ -148,313 +144,756 @@ namespace luminis::core
     _cache_cos_theta_max = std::max(c1, c2);
   }
 
-  void Detector::set_phi_limit(double min, double max)
+  void Sensor::set_phi_limit(double min, double max)
   {
     filter_phi_enabled = true;
     filter_phi_min = min;
     filter_phi_max = max;
   }
 
-  bool Detector::check_conditions(const Photon &photon) const
+  void Sensor::set_position_limit(double x_min, double x_max, double y_min, double y_max)
+  {
+    filter_position_enabled = true;
+    filter_x_min = x_min;
+    filter_x_max = x_max;
+    filter_y_min = y_min;
+    filter_y_max = y_max;
+  }
+
+  bool Sensor::check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction) const
   {
     if (filter_theta_enabled)
     {
-      const double costtheta = -1 * photon.dir.z;
+      const double costtheta = -1 * hit_direction.z;
       if (costtheta < _cache_cos_theta_min || costtheta > _cache_cos_theta_max)
         return false;
     }
 
     if (filter_phi_enabled)
     {
-      double phi = std::atan2(photon.dir.y, photon.dir.x);
+      double phi = std::atan2(hit_direction.y, hit_direction.x);
       if (phi < 0)
         phi += 2.0 * M_PI;
       if (phi < filter_phi_min || phi > filter_phi_max)
         return false;
     }
 
+    if (filter_position_enabled)
+    {
+      if (hit_point.x < filter_x_min || hit_point.x > filter_x_max)
+        return false;
+      if (hit_point.y < filter_y_min || hit_point.y > filter_y_max)
+        return false;
+    }
+
     return true;
   }
 
-  // AngleDetector implementation
-  AngleDetector::AngleDetector(double z, int n_theta, int n_phi)
-      : Detector(z),
-        N_theta(n_theta),
-        N_phi(n_phi),
-        dtheta((M_PI / 2.0) / n_theta),
-        dphi((2.0 * M_PI) / n_phi),
-        E_x(n_theta, n_phi),
-        E_y(n_theta, n_phi),
-        E_z(n_theta, n_phi)
+  void Sensor::process_estimation(const Photon &photon, const Medium &medium)
+  {
+    // Default implementation does nothing, can be overridden by specific sensors
+  }
+
+  // PhotonRecordSensor implementation
+  PhotonRecordSensor::PhotonRecordSensor(double z) : Sensor(z)
   {
   }
 
-  bool AngleDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
+  std::unique_ptr<Sensor> PhotonRecordSensor::clone() const
   {
-    if (photon.pos.z > 0)
-      return false;
+    auto det = std::make_unique<PhotonRecordSensor>(origin.z);
+    det->filter_theta_enabled = filter_theta_enabled;
+    det->filter_theta_min = filter_theta_min;
+    det->filter_theta_max = filter_theta_max;
+    det->_cache_cos_theta_min = _cache_cos_theta_min;
+    det->_cache_cos_theta_max = _cache_cos_theta_max;
+    det->filter_phi_enabled = filter_phi_enabled;
+    det->filter_phi_min = filter_phi_min;
+    det->filter_phi_max = filter_phi_max;
+    det->filter_position_enabled = filter_position_enabled;
+    det->filter_x_min = filter_x_min;
+    det->filter_x_max = filter_x_max;
+    det->filter_y_min = filter_y_min;
+    det->filter_y_max = filter_y_max;
+    return det;
+  }
 
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
+  void PhotonRecordSensor::merge_from(const Sensor &other)
+  {
+    const auto &o = dynamic_cast<const PhotonRecordSensor &>(other);
+    hits += o.hits;
+    recorded_photons.insert(recorded_photons.end(), o.recorded_photons.begin(), o.recorded_photons.end());
+  }
 
-    // Get angles
-    const Vec3 u = photon.dir;
-    const double costtheta = -1 * u.z;
-    const double theta = std::acos(costtheta);
-    double phi = std::atan2(u.y, u.x);
+  void PhotonRecordSensor::process_hit(Photon &photon, InteractionInfo &info)
+  {
+    hits += 1;
+
+    PhotonRecord photon_rec{};
+    photon_rec.events = photon.events;
+    photon_rec.penetration_depth = photon.penetration_depth;
+    photon_rec.launch_time = photon.launch_time;
+    photon_rec.arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+    photon_rec.opticalpath = photon.opticalpath;
+    photon_rec.weight = photon.weight;
+    photon_rec.k = photon.k;
+    photon_rec.position_detector = info.intersection_point;
+    photon_rec.position_first_scattering = photon.r_0;
+    photon_rec.position_last_scattering = photon.r_n;
+    // photon_rec.direction = photon.dir;
+    // photon_rec.m = photon.m;
+    // photon_rec.n = photon.n;
+    photon_rec.polarization_forward = photon.polarization;
+    photon_rec.polarization_reverse = photon.polarization_reverse;
+
+    recorded_photons.push_back(photon_rec);
+  }
+
+  // PlanarFieldSensor implementation
+  PlanarFieldSensor::PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy) : Sensor(z)
+  {
+    this->len_x = len_x;
+    this->len_y = len_y;
+    this->dx = dx;
+    this->dy = dy;
+
+    N_x = static_cast<int>(std::ceil(len_x / dx));
+    N_y = static_cast<int>(std::ceil(len_y / dy));
+
+    Ex = CMatrix(N_x, N_y);
+    Ey = CMatrix(N_x, N_y);
+
+    const double half_len_x = 0.5 * len_x;
+    const double half_len_y = 0.5 * len_y;
+    set_position_limit(-half_len_x, half_len_x, -half_len_y, half_len_y);
+  }
+
+  std::unique_ptr<Sensor> PlanarFieldSensor::clone() const
+  {
+    auto det = std::make_unique<PlanarFieldSensor>(origin.z, len_x, len_y, dx, dy);
+    det->filter_theta_enabled = filter_theta_enabled;
+    det->filter_theta_min = filter_theta_min;
+    det->filter_theta_max = filter_theta_max;
+    det->_cache_cos_theta_min = _cache_cos_theta_min;
+    det->_cache_cos_theta_max = _cache_cos_theta_max;
+    det->filter_phi_enabled = filter_phi_enabled;
+    det->filter_phi_min = filter_phi_min;
+    det->filter_phi_max = filter_phi_max;
+    det->filter_position_enabled = filter_position_enabled;
+    det->filter_x_min = filter_x_min;
+    det->filter_x_max = filter_x_max;
+    det->filter_y_min = filter_y_min;
+    det->filter_y_max = filter_y_max;
+    return det;
+  }
+
+  void PlanarFieldSensor::merge_from(const Sensor &other)
+  {
+    const auto &o = dynamic_cast<const PlanarFieldSensor &>(other);
+    hits += o.hits;
+    for (int i = 0; i < N_x; ++i)
+    {
+      for (int j = 0; j < N_y; ++j)
+      {
+        Ex(i, j) += o.Ex(i, j);
+        Ey(i, j) += o.Ey(i, j);
+      }
+    }
+  }
+
+  void PlanarFieldSensor::process_hit(Photon &photon, InteractionInfo &info)
+  {
+    const double x = info.intersection_point.x;
+    const double y = info.intersection_point.y;
+    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+
+    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+      return;
+
+    const double w_sqrt = std::sqrt(photon.weight);
+    const std::complex<double> Em_local_photon = photon.polarization.m;
+    const std::complex<double> En_local_photon = photon.polarization.n;
+
+    Matrix P = photon.P_local;
+    Ex(x_idx, y_idx) += (Em_local_photon * P(0, 0) + En_local_photon * P(1, 0)) * info.phase * w_sqrt;
+    Ey(x_idx, y_idx) += (Em_local_photon * P(0, 1) + En_local_photon * P(1, 1)) * info.phase * w_sqrt;
+
+    hits += 1;
+  }
+
+  void PlanarFieldSensor::process_estimation(const Photon &photon, const Medium &medium)
+  {
+    const double x = photon.pos.x;
+    const double y = photon.pos.y;
+    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+      return;
+
+    // Local base of the detector plane
+    double ud = 0;
+    double vd = 0;
+    double wd = 1;
+
+    Matrix Pold = photon.P_local;
+    Matrix Q = Matrix(3, 3);
+    Matrix A = Matrix(3, 3);
+
+    double mu = Pold(2, 0) * ud + Pold(2, 1) * vd + Pold(2, 2) * wd; // Cosine of angle between photon direction and detector normal
+    double nu = sqrt(1 - mu * mu);                                   // Sine of the same angle
+    double F = 1;
+
+    std::complex<double> E1old = photon.polarization.m;
+    std::complex<double> E2old = photon.polarization.n;
+    std::complex<double> Ed1;
+    std::complex<double> Ed2;
+    Vec3 p;
+
+    if (std::abs(1 - mu) < 1e-11)
+    {
+      // Photon is on the same direction as the detector normal
+      Q = Pold;
+
+      CMatrix Smatrix = medium.scattering_matrix(1.0, 0.0, photon.k);
+      double s2 = std::norm(Smatrix(0, 0));
+      double s1 = std::norm(Smatrix(1, 1));
+
+      F = (s2 + s1) / 2.0;
+      Ed1 = E1old * s2 / sqrt(F);
+      Ed2 = E2old * s1 / sqrt(F);
+    }
+    else if (std::abs(1 + mu) < 1e-11)
+    {
+      // Photon is on the opposite direction of the detector normal
+      Q = Pold;
+      Q(1, 0) *= -1;
+      Q(1, 1) *= -1;
+      Q(1, 2) *= -1;
+      Q(2, 0) *= -1;
+      Q(2, 1) *= -1;
+      Q(2, 2) *= -1;
+
+      CMatrix Smatrix = medium.scattering_matrix(M_PI, 0.0, photon.k);
+      double s2 = std::norm(Smatrix(0, 0));
+      double s1 = std::norm(Smatrix(1, 1));
+
+      F = (s2 + s1) / 2.0;
+      Ed1 = E1old * s2 / sqrt(F);
+      Ed2 = E2old * s1 / sqrt(F);
+    }
+    else
+    {
+      // Cross product to find the rotation axis and angle
+      p = {
+          (Pold(2, 1) * wd - Pold(2, 2) * vd) / nu,
+          (Pold(2, 2) * ud - Pold(2, 0) * wd) / nu,
+          (Pold(2, 0) * vd - Pold(2, 1) * ud) / nu};
+
+      // Dot product to find the cosine and sine of the rotation angle
+      double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
+      double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z; // n dot p
+
+      A(0, 0) = mu * cosphi;
+      A(0, 1) = mu * sinphi;
+      A(0, 2) = -nu;
+      A(1, 0) = -sinphi;
+      A(1, 1) = cosphi;
+      A(1, 2) = 0;
+      A(2, 0) = nu * cosphi;
+      A(2, 1) = nu * sinphi;
+      A(2, 2) = mu;
+
+      matmul(A, Pold, Q);
+
+      double theta = std::acos(mu);
+      CMatrix Smatrix = medium.scattering_matrix(theta, 0, photon.k);
+      double s2 = std::norm(Smatrix(0, 0));
+      double s1 = std::norm(Smatrix(1, 1));
+
+      double s2sq = std::norm(Smatrix(0, 0));
+      double s1sq = std::norm(Smatrix(1, 1));
+
+      double e1sq = std::norm(E1old);
+      double e2sq = std::norm(E2old);
+      double e12 = (E1old * conj(E2old)).real();
+
+      F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
+      Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
+      Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
+    }
+
+    double deposit = 0.0;
+    double z = photon.pos.z;
+    double zd = origin.z;
+    double weight = photon.weight;
+    double csca = 1.0;
+
+    if (photon.events == 0)
+      /* ballistic light */
+			if (std::abs(1 - mu) < 1e-11) 
+				deposit = weight * exp(-fabs((z - zd) / wd));
+			else
+				deposit = 0;
+		else																												
+			deposit = weight * F / csca * exp(-fabs((z - zd) / wd));
+		
+    double t = photon.launch_time + (photon.opticalpath / photon.velocity);
+    double td = t + fabs((z - zd) / wd);
+
+
+    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
+    std::complex<double> Ex = (Ed1 * Q(0,0) + Ed2 * Q(1,0)) * phase;
+    std::complex<double> Ey = (Ed1 * Q(0,1) + Ed2 * Q(1,1)) * phase;
+
+    this->Ex(x_idx, y_idx) += Ex * sqrt(deposit);
+    this->Ey(x_idx, y_idx) += Ey * sqrt(deposit);
+    hits += 1;
+  }
+
+  // PlanarFluenceSensor implementation
+  PlanarFluenceSensor::PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt) : Sensor(z)
+  {
+    this->len_x = len_x;
+    this->len_y = len_y;
+    this->len_t = len_t;
+    this->dx = dx;
+    this->dy = dy;
+    this->dt = dt;
+
+    if (dt == 0)
+    {
+      N_t = 1;
+    }
+    else
+    {
+      N_t = static_cast<int>(std::ceil(len_t / dt));
+    }
+
+    N_x = static_cast<int>(std::ceil(len_x / dx));
+    N_y = static_cast<int>(std::ceil(len_y / dy));
+
+    S0_t.resize(N_t, Matrix(N_x, N_y));
+    S1_t.resize(N_t, Matrix(N_x, N_y));
+    S2_t.resize(N_t, Matrix(N_x, N_y));
+    S3_t.resize(N_t, Matrix(N_x, N_y));
+
+    const double half_len_x = 0.5 * len_x;
+    const double half_len_y = 0.5 * len_y;
+    set_position_limit(-half_len_x, half_len_x, -half_len_y, half_len_y);
+  }
+
+  std::unique_ptr<Sensor> PlanarFluenceSensor::clone() const
+  {
+    auto det = std::make_unique<PlanarFluenceSensor>(origin.z, len_x, len_y, len_t, dx, dy, dt);
+    det->filter_theta_enabled = filter_theta_enabled;
+    det->filter_theta_min = filter_theta_min;
+    det->filter_theta_max = filter_theta_max;
+    det->_cache_cos_theta_min = _cache_cos_theta_min;
+    det->_cache_cos_theta_max = _cache_cos_theta_max;
+    det->filter_phi_enabled = filter_phi_enabled;
+    det->filter_phi_min = filter_phi_min;
+    det->filter_phi_max = filter_phi_max;
+    det->filter_position_enabled = filter_position_enabled;
+    det->filter_x_min = filter_x_min;
+    det->filter_x_max = filter_x_max;
+    det->filter_y_min = filter_y_min;
+    det->filter_y_max = filter_y_max;
+    return det;
+  }
+
+  void PlanarFluenceSensor::merge_from(const Sensor &other)
+  {
+    const auto &o = dynamic_cast<const PlanarFluenceSensor &>(other);
+    hits += o.hits;
+    for (int t = 0; t < N_t; ++t)
+    {
+      for (int i = 0; i < N_x; ++i)
+      {
+        for (int j = 0; j < N_y; ++j)
+        {
+          S0_t[t](i, j) += o.S0_t[t](i, j);
+          S1_t[t](i, j) += o.S1_t[t](i, j);
+          S2_t[t](i, j) += o.S2_t[t](i, j);
+          S3_t[t](i, j) += o.S3_t[t](i, j);
+        }
+      }
+    }
+  }
+
+  void PlanarFluenceSensor::process_hit(Photon &photon, InteractionInfo &info)
+  {
+    int t_idx;
+    if (dt == 0)
+    {
+      t_idx = 0;
+    }
+    else
+    {
+      double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+      if (arrival_time < 0 || arrival_time >= len_t)
+        return;
+      t_idx = static_cast<int>(arrival_time / dt);
+    }
+
+    const double x = info.intersection_point.x;
+    const double y = info.intersection_point.y;
+    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+      return;
+
+    const double w_sqrt = std::sqrt(photon.weight);
+    const std::complex<double> Em_local_photon = photon.polarization.m * info.phase * w_sqrt;
+    const std::complex<double> En_local_photon = photon.polarization.n * info.phase * w_sqrt;
+
+    Matrix P = photon.P_local;
+    const std::complex<double> E_det_x = (Em_local_photon * P(0, 0) + En_local_photon * P(1, 0)) * -1.0;
+    const std::complex<double> E_det_y = (Em_local_photon * P(0, 1) + En_local_photon * P(1, 1));
+
+    const double S0_contribution = std::norm(E_det_x) + std::norm(E_det_y);
+    const double S1_contribution = std::norm(E_det_x) - std::norm(E_det_y);
+    const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
+    const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
+
+    S0_t[t_idx](x_idx, y_idx) += S0_contribution;
+    S1_t[t_idx](x_idx, y_idx) += S1_contribution;
+    S2_t[t_idx](x_idx, y_idx) += S2_contribution;
+    S3_t[t_idx](x_idx, y_idx) += S3_contribution;
+
+    hits += 1;
+  }
+
+  void PlanarFluenceSensor::process_estimation(const Photon &photon, const Medium &medium)
+  {
+        const double x = photon.pos.x;
+    const double y = photon.pos.y;
+    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+      return;
+
+    // Local base of the detector plane
+    double ud = 0;
+    double vd = 0;
+    double wd = 1;
+
+    Matrix Pold = photon.P_local;
+    Matrix Q = Matrix(3, 3);
+    Matrix A = Matrix(3, 3);
+
+    double mu = Pold(2, 0) * ud + Pold(2, 1) * vd + Pold(2, 2) * wd; // Cosine of angle between photon direction and detector normal
+    double nu = sqrt(1 - mu * mu);                                   // Sine of the same angle
+    double F = 1;
+
+    std::complex<double> E1old = photon.polarization.m;
+    std::complex<double> E2old = photon.polarization.n;
+    std::complex<double> Ed1;
+    std::complex<double> Ed2;
+    Vec3 p;
+
+    if (std::abs(1 - mu) < 1e-11)
+    {
+      // Photon is on the same direction as the detector normal
+      Q = Pold;
+
+      CMatrix Smatrix = medium.scattering_matrix(1.0, 0.0, photon.k);
+      double s2 = std::norm(Smatrix(0, 0));
+      double s1 = std::norm(Smatrix(1, 1));
+
+      F = (s2 + s1) / 2.0;
+      Ed1 = E1old * s2 / sqrt(F);
+      Ed2 = E2old * s1 / sqrt(F);
+    }
+    else if (std::abs(1 + mu) < 1e-11)
+    {
+      // Photon is on the opposite direction of the detector normal
+      Q = Pold;
+      Q(1, 0) *= -1;
+      Q(1, 1) *= -1;
+      Q(1, 2) *= -1;
+      Q(2, 0) *= -1;
+      Q(2, 1) *= -1;
+      Q(2, 2) *= -1;
+
+      CMatrix Smatrix = medium.scattering_matrix(M_PI, 0.0, photon.k);
+      double s2 = std::norm(Smatrix(0, 0));
+      double s1 = std::norm(Smatrix(1, 1));
+
+      F = (s2 + s1) / 2.0;
+      Ed1 = E1old * s2 / sqrt(F);
+      Ed2 = E2old * s1 / sqrt(F);
+    }
+    else
+    {
+      // Cross product to find the rotation axis and angle
+      p = {
+          (Pold(2, 1) * wd - Pold(2, 2) * vd) / nu,
+          (Pold(2, 2) * ud - Pold(2, 0) * wd) / nu,
+          (Pold(2, 0) * vd - Pold(2, 1) * ud) / nu};
+
+      // Dot product to find the cosine and sine of the rotation angle
+      double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
+      double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z; // n dot p
+
+      A(0, 0) = mu * cosphi;
+      A(0, 1) = mu * sinphi;
+      A(0, 2) = -nu;
+      A(1, 0) = -sinphi;
+      A(1, 1) = cosphi;
+      A(1, 2) = 0;
+      A(2, 0) = nu * cosphi;
+      A(2, 1) = nu * sinphi;
+      A(2, 2) = mu;
+
+      matmul(A, Pold, Q);
+
+      double theta = std::acos(mu);
+      CMatrix Smatrix = medium.scattering_matrix(theta, 0, photon.k);
+      double s2 = std::norm(Smatrix(0, 0));
+      double s1 = std::norm(Smatrix(1, 1));
+
+      double s2sq = std::norm(Smatrix(0, 0));
+      double s1sq = std::norm(Smatrix(1, 1));
+
+      double e1sq = std::norm(E1old);
+      double e2sq = std::norm(E2old);
+      double e12 = (E1old * conj(E2old)).real();
+
+      F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
+      Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
+      Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
+    }
+
+    double deposit = 0.0;
+    double z = photon.pos.z;
+    double zd = origin.z;
+    double weight = photon.weight;
+    double csca = 1.0;
+
+    if (photon.events == 0)
+      /* ballistic light */
+			if (std::abs(1 - mu) < 1e-11) 
+				deposit = weight * exp(-fabs((z - zd) / wd));
+			else
+				deposit = 0;
+		else																												
+			deposit = weight * F / csca * exp(-fabs((z - zd) / wd));
+		
+    double t = photon.launch_time + (photon.opticalpath / photon.velocity);
+    double td = t + fabs((z - zd) / wd);
+
+
+    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
+    std::complex<double> Ex = (Ed1 * Q(0,0) + Ed2 * Q(1,0)) * phase * -1.0;
+    std::complex<double> Ey = (Ed1 * Q(0,1) + Ed2 * Q(1,1)) * phase;
+
+    const double S0_contribution = std::norm(Ex) + std::norm(Ey);
+    const double S1_contribution = std::norm(Ex) - std::norm(Ey);
+    const double S2_contribution = 2.0 * std::real(Ex * std::conj(Ey));
+    const double S3_contribution = 2.0 * std::imag(Ex * std::conj(Ey));
+
+    S0_t[0](x_idx, y_idx) += S0_contribution * deposit;
+    S1_t[0](x_idx, y_idx) += S1_contribution * deposit;
+    S2_t[0](x_idx, y_idx) += S2_contribution * deposit;
+    S3_t[0](x_idx, y_idx) += S3_contribution * deposit;
+
+    hits += 1;
+  }
+
+  // PlanarCBSSensor implementation
+  PlanarCBSSensor::PlanarCBSSensor(double len_x, double len_y, double dx, double dy) : Sensor(0.0)
+  {
+    this->len_x = len_x;
+    this->len_y = len_y;
+    this->dx = dx;
+    this->dy = dy;
+
+    N_x = static_cast<int>(std::ceil(len_x / dx));
+    N_y = static_cast<int>(std::ceil(len_y / dy));
+
+    S0 = Matrix(N_x, N_y);
+    S1 = Matrix(N_x, N_y);
+    S2 = Matrix(N_x, N_y);
+    S3 = Matrix(N_x, N_y);
+
+    const double half_len_x = 0.5 * len_x;
+    const double half_len_y = 0.5 * len_y;
+
+    set_position_limit(-half_len_x, half_len_x, -half_len_y, half_len_y);
+  }
+
+  std::unique_ptr<Sensor> PlanarCBSSensor::clone() const
+  {
+    auto det = std::make_unique<PlanarCBSSensor>(len_x, len_y, dx, dy);
+    det->filter_theta_enabled = filter_theta_enabled;
+    det->filter_theta_min = filter_theta_min;
+    det->filter_theta_max = filter_theta_max;
+    det->_cache_cos_theta_min = _cache_cos_theta_min;
+    det->_cache_cos_theta_max = _cache_cos_theta_max;
+    det->filter_phi_enabled = filter_phi_enabled;
+    det->filter_phi_min = filter_phi_min;
+    det->filter_phi_max = filter_phi_max;
+    det->filter_position_enabled = filter_position_enabled;
+    det->filter_x_min = filter_x_min;
+    det->filter_x_max = filter_x_max;
+    det->filter_y_min = filter_y_min;
+    det->filter_y_max = filter_y_max;
+    return det;
+  }
+
+  void PlanarCBSSensor::merge_from(const Sensor &other)
+  {
+    const auto &o = dynamic_cast<const PlanarCBSSensor &>(other);
+    hits += o.hits;
+    for (int i = 0; i < N_x; ++i)
+    {
+      for (int j = 0; j < N_y; ++j)
+      {
+        S0(i, j) += o.S0(i, j);
+        S1(i, j) += o.S1(i, j);
+        S2(i, j) += o.S2(i, j);
+        S3(i, j) += o.S3(i, j);
+      }
+    }
+  }
+
+  void PlanarCBSSensor::process_hit(Photon &photon, InteractionInfo &info)
+  {
+    const double x = info.intersection_point.x;
+    const double y = info.intersection_point.y;
+    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+      return;
+
+    const double w_sqrt = std::sqrt(photon.weight);
+
+    // Vec3 qb = (photon.dir + photon.s_0) * photon.k;
+    // Vec3 delta_r = photon.r_n - photon.r_0;
+    // std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
+
+    // Vec3 n_0 = photon.n_0;
+    // Vec3 s_0 = photon.s_0;
+    // Vec3 m_0 = cross(n_0, s_0);
+
+    // CVec2 E_fwd_local = photon.polarization;
+    // CVec2 E_rev_local = photon.polarization_reverse;
+
+    // std::complex<double> E_fwd_lab_x = (E_fwd_local.m * photon.m.x + E_fwd_local.n * photon.n.x) * info.phase * w_sqrt;
+    // std::complex<double> E_fwd_lab_y = (E_fwd_local.m * photon.m.y + E_fwd_local.n * photon.n.y) * info.phase * w_sqrt;
+
+    // std::complex<double> E_rev_lab_x = (E_rev_local.m * m_0.x + E_rev_local.n * n_0.x) * info.phase * path_phase * w_sqrt;
+    // std::complex<double> E_rev_lab_y = (E_rev_local.m * m_0.y + E_rev_local.n * n_0.y) * info.phase * path_phase * w_sqrt;
+
+    // std::complex<double> E_total_x = E_fwd_lab_x + E_rev_lab_x;
+    // std::complex<double> E_total_y = E_fwd_lab_y + E_rev_lab_y;
+
+    // const double S0_contribution = std::norm(E_total_x) + std::norm(E_total_y);
+    // const double S1_contribution = std::norm(E_total_x) - std::norm(E_total_y);
+    // const double S2_contribution = 2.0 * std::real(E_total_x * std::conj(E_total_y));
+    // const double S3_contribution = 2.0 * std::imag(E_total_x * std::conj(E_total_y));
+
+    // S0(x_idx, y_idx) += S0_contribution;
+    // S1(x_idx, y_idx) += S1_contribution;
+    // S2(x_idx, y_idx) += S2_contribution;
+    // S3(x_idx, y_idx) += S3_contribution;
+
+    hits += 1;
+  }
+
+  // FarFieldFluenceSensor implementation
+  FarFieldFluenceSensor::FarFieldFluenceSensor(double z, double theta_max, double phi_max, int n_theta, int n_phi) : Sensor(z)
+  {
+    this->theta_max = theta_max;
+    this->phi_max = phi_max;
+    this->N_theta = n_theta;
+    this->N_phi = n_phi;
+
+    dtheta = theta_max / N_theta;
+    dphi = phi_max / N_phi;
+
+    S0 = Matrix(N_theta, N_phi);
+    S1 = Matrix(N_theta, N_phi);
+    S2 = Matrix(N_theta, N_phi);
+    S3 = Matrix(N_theta, N_phi);
+
+    set_theta_limit(0, theta_max);
+    set_phi_limit(0, phi_max);
+  }
+
+  std::unique_ptr<Sensor> FarFieldFluenceSensor::clone() const
+  {
+    auto det = std::make_unique<FarFieldFluenceSensor>(origin.z, theta_max, phi_max, N_theta, N_phi);
+    det->filter_theta_enabled = filter_theta_enabled;
+    det->filter_theta_min = filter_theta_min;
+    det->filter_theta_max = filter_theta_max;
+    det->_cache_cos_theta_min = _cache_cos_theta_min;
+    det->_cache_cos_theta_max = _cache_cos_theta_max;
+    det->filter_phi_enabled = filter_phi_enabled;
+    det->filter_phi_min = filter_phi_min;
+    det->filter_phi_max = filter_phi_max;
+    return det;
+  }
+
+  void FarFieldFluenceSensor::merge_from(const Sensor &other)
+  {
+    const auto &o = dynamic_cast<const FarFieldFluenceSensor &>(other);
+    hits += o.hits;
+    for (int i = 0; i < N_theta; ++i)
+    {
+      for (int j = 0; j < N_phi; ++j)
+      {
+        S0(i, j) += o.S0(i, j);
+        S1(i, j) += o.S1(i, j);
+        S2(i, j) += o.S2(i, j);
+        S3(i, j) += o.S3(i, j);
+      }
+    }
+  }
+
+  void FarFieldFluenceSensor::process_hit(Photon &photon, InteractionInfo &info)
+  {
+    Matrix P = photon.P_local;
+    const Vec3 dir = {P(2, 0), P(2, 1), P(2, 2)};
+    const double theta = std::acos(-dir.z);
+    double phi = std::atan2(dir.y, dir.x);
     if (phi < 0)
       phi += 2.0 * M_PI;
 
-    // Determine bins
-    const int itheta = std::min(static_cast<int>(std::floor((theta / (M_PI / 2.0)) * N_theta)), N_theta - 1);
-    const int iphi = std::min(static_cast<int>(std::floor((phi / (2.0 * M_PI)) * N_phi)), N_phi - 1);
+    const int theta_idx = static_cast<int>(theta / dtheta);
+    const int phi_idx = static_cast<int>(phi / dphi);
+    if (theta_idx < 0 || theta_idx >= N_theta || phi_idx < 0 || phi_idx >= N_phi)
+      return;
 
-    // Compute local field contribution
-    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * photon.opticalpath));
-    std::complex<double> Em_local_photon = photon.polarization.m * phase * std::sqrt(photon.weight);
-    std::complex<double> En_local_photon = photon.polarization.n * phase * std::sqrt(photon.weight);
+    const double w_sqrt = std::sqrt(photon.weight);
+    const std::complex<double> Em_local_photon = photon.polarization.m * info.phase * w_sqrt;
+    const std::complex<double> En_local_photon = photon.polarization.n * info.phase * w_sqrt;
 
-    // Accumulate field contributions
-    E_x(itheta, iphi) += Em_local_photon * photon.m.x + En_local_photon * photon.n.x;
-    E_y(itheta, iphi) += Em_local_photon * photon.m.y + En_local_photon * photon.n.y;
-    E_z(itheta, iphi) += Em_local_photon * photon.m.z + En_local_photon * photon.n.z;
-    return true;
-  }
+    const std::complex<double> E_det_x = (Em_local_photon * P(0, 0) + En_local_photon * P(0, 1));
+    const std::complex<double> E_det_y = (Em_local_photon * P(1, 0) + En_local_photon * P(1, 1));
 
-  std::unique_ptr<Detector> AngleDetector::clone() const
-  {
-    auto det = std::make_unique<AngleDetector>(origin.z, N_theta, N_phi);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
+    const double S0_contribution = std::norm(E_det_x) + std::norm(E_det_y);
+    const double S1_contribution = std::norm(E_det_x) - std::norm(E_det_y);
+    const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
+    const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
 
-  void AngleDetector::merge_from(const Detector &other)
-  {
-    const AngleDetector &other_speckle = dynamic_cast<const AngleDetector &>(other);
-    hits += other_speckle.hits;
-
-    for (int itheta = 0; itheta < N_theta; ++itheta)
-    {
-      for (int iphi = 0; iphi < N_phi; ++iphi)
-      {
-        E_x(itheta, iphi) += other_speckle.E_x(itheta, iphi);
-        E_y(itheta, iphi) += other_speckle.E_y(itheta, iphi);
-        E_z(itheta, iphi) += other_speckle.E_z(itheta, iphi);
-      }
-    }
-  }
-
-  // HistogramDetector implementation
-  bool HistogramDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    if (photon.pos.z > 0)
-      return false;
-
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    int event = static_cast<int>(photon.events);
-    if (event >= 0 && event < static_cast<int>(histogram.size()))
-    {
-      histogram[event] += 1;
-      hits += 1;
-    }
-
-    return true;
-  }
-
-  std::unique_ptr<Detector> HistogramDetector::clone() const
-  {
-    auto det = std::make_unique<HistogramDetector>(origin.z, histogram.size());
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void HistogramDetector::merge_from(const Detector &other)
-  {
-    const HistogramDetector &other_hist = dynamic_cast<const HistogramDetector &>(other);
-    hits += other_hist.hits;
-    for (size_t i = 0; i < histogram.size(); ++i)
-    {
-      histogram[i] += other_hist.histogram[i];
-    }
-  }
-
-  // ThetaHistogramDetector implementation
-  bool ThetaHistogramDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    if (photon.pos.z > 0)
-      return false;
-
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    const Vec3 u = photon.dir;
-    const double costtheta = -1 * u.z;
-    const double theta = std::acos(costtheta);
-
-    const int itheta = std::min(static_cast<int>(std::floor((theta / (M_PI / 2.0)) * histogram.size())), static_cast<int>(histogram.size() - 1));
-    histogram[itheta] += 1;
-    hits += 1;
-
-    return true;
-  }
-
-  std::unique_ptr<Detector> ThetaHistogramDetector::clone() const
-  {
-    auto det = std::make_unique<ThetaHistogramDetector>(origin.z, histogram.size());
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void ThetaHistogramDetector::merge_from(const Detector &other)
-  {
-    const ThetaHistogramDetector &other_hist = dynamic_cast<const ThetaHistogramDetector &>(other);
-    hits += other_hist.hits;
-    for (size_t i = 0; i < histogram.size(); ++i)
-    {
-      histogram[i] += other_hist.histogram[i];
-    }
-  }
-
-  // SpatialDetector implementation
-  SpatialDetector::SpatialDetector(double z, double x_len, double y_len, double r_len, int n_x, int n_y, int n_r)
-      : Detector(z)
-  {
-    N_x = n_x;
-    N_y = n_y;
-    N_r = n_r;
-    dr = r_len / N_r;
-    dx = x_len / n_x;
-    dy = y_len / n_y;
-    E_x = CMatrix(n_x, n_y);
-    E_y = CMatrix(n_x, n_y);
-    E_z = CMatrix(n_x, n_y);
-    I_x = Matrix(n_x, n_y);
-    I_y = Matrix(n_x, n_y);
-    I_z = Matrix(n_x, n_y);
-    I_plus = Matrix(n_x, n_y);
-    I_minus = Matrix(n_x, n_y);
-    I_rad_plus.resize(N_r, 0.0);
-    I_rad_minus.resize(N_r, 0.0);
-  }
-
-  bool SpatialDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    const Vec3 xn = photon.prev_pos;
-    const Vec3 xf = photon.pos;
-    const Vec3 d = xf - xn;
-
-    const double denom = dot(d, normal);
-    if (std::abs(denom) < 1e-6)
-      return false;
-
-    const double t = dot(origin - xn, normal) / denom;
-    if (t < 0 || t > 1)
-      return false;
-
-    const Vec3 hit_point = xn + d * t;
-    const double correction_distance = luminis::math::norm(hit_point - xf);
-    if (correction_distance > 0)
-    {
-      photon.opticalpath -= correction_distance;
-    }
-
-    const double length_x = N_x * dx;
-    const double length_y = N_y * dy;
-    const double min_x = -0.5 * length_x;
-    const double min_y = -0.5 * length_y;
-    const double max_x = 0.5 * length_x;
-    const double max_y = 0.5 * length_y;
-
-    // Validate position within detector area
-    if (hit_point.x < min_x || hit_point.x >= max_x || hit_point.y < min_y || hit_point.y >= max_y)
-    {
-      return false;
-    }
-
-    // Determine bins
-    const int ix = std::min(static_cast<int>(std::floor(((hit_point.x - min_x) / length_x) * N_x)), N_x - 1);
-    const int iy = std::min(static_cast<int>(std::floor(((hit_point.y - min_y) / length_y) * N_y)), N_y - 1);
-
-    if (ix < 0 || ix >= N_x || iy < 0 || iy >= N_y)
-      return false;
+    S0(theta_idx, phi_idx) += S0_contribution;
+    S1(theta_idx, phi_idx) += S1_contribution;
+    S2(theta_idx, phi_idx) += S2_contribution;
+    S3(theta_idx, phi_idx) += S3_contribution;
 
     hits += 1;
-    photon.detected_pos = hit_point;
-
-    const double w = photon.weight;
-
-    // Compute local field contribution
-    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * photon.opticalpath));
-    std::complex<double> Em_local_photon = photon.polarization.m * phase * std::sqrt(photon.weight);
-    std::complex<double> En_local_photon = photon.polarization.n * phase * std::sqrt(photon.weight);
-
-    std::complex<double> E_det_x = (Em_local_photon * photon.m.x + En_local_photon * photon.n.x);
-    std::complex<double> E_det_y = (Em_local_photon * photon.m.y + En_local_photon * photon.n.y);
-    std::complex<double> E_det_z = (Em_local_photon * photon.m.z + En_local_photon * photon.n.z);
-
-    const std::complex<double> I_imag(0.0, 1.0);
-    std::complex<double> E_plus_val = (E_det_x - I_imag * E_det_y) / std::sqrt(2.0);
-    std::complex<double> E_minus_val = (E_det_x + I_imag * E_det_y) / std::sqrt(2.0);
-
-    // Accumulate field contributions
-    E_x(ix, iy) += Em_local_photon * photon.m.x + En_local_photon * photon.n.x;
-    E_y(ix, iy) += Em_local_photon * photon.m.y + En_local_photon * photon.n.y;
-    E_z(ix, iy) += Em_local_photon * photon.m.z + En_local_photon * photon.n.z;
-
-    I_x(ix, iy) += std::norm(E_det_x);
-    I_y(ix, iy) += std::norm(E_det_y);
-    I_z(ix, iy) += std::norm(E_det_z);
-    I_plus(ix, iy) += std::norm(E_plus_val);
-    I_minus(ix, iy) += std::norm(E_minus_val);
-
-    // Radial bins
-    double r = std::sqrt(hit_point.x * hit_point.x + hit_point.y * hit_point.y);
-    int ir = static_cast<int>(r / dr);
-    if (ir < N_r)
-    {
-      I_rad_plus[ir] += std::norm(E_plus_val);
-      I_rad_minus[ir] += std::norm(E_minus_val);
-    }
-
-    return true;
   }
 
-  std::unique_ptr<Detector> SpatialDetector::clone() const
+  // StatisticsSensor implementation
+  StatisticsSensor::StatisticsSensor(double z) : Sensor(z)
   {
-    const double x_len = N_x * dx;
-    const double y_len = N_y * dy;
-    const double r_len = N_r * dr;
-    auto det = std::make_unique<SpatialDetector>(origin.z, x_len, y_len, r_len, N_x, N_y, N_r);
+  }
+
+  std::unique_ptr<Sensor> StatisticsSensor::clone() const
+  {
+    auto det = std::make_unique<StatisticsSensor>(origin.z);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -463,449 +902,226 @@ namespace luminis::core
     det->filter_phi_enabled = filter_phi_enabled;
     det->filter_phi_min = filter_phi_min;
     det->filter_phi_max = filter_phi_max;
+    det->filter_position_enabled = filter_position_enabled;
+    det->filter_x_min = filter_x_min;
+    det->filter_x_max = filter_x_max;
+    det->filter_y_min = filter_y_min;
+    det->filter_y_max = filter_y_max;
+
+    det->events_histogram_bins_set = events_histogram_bins_set;
+    det->max_events = max_events;
+    det->theta_histogram_bins_set = theta_histogram_bins_set;
+    det->min_theta = min_theta;
+    det->max_theta = max_theta;
+    det->n_bins_theta = n_bins_theta;
+    det->dtheta = dtheta;
+    det->phi_histogram_bins_set = phi_histogram_bins_set;
+    det->min_phi = min_phi;
+    det->max_phi = max_phi;
+    det->n_bins_phi = n_bins_phi;
+    det->dphi = dphi;
+    det->depth_histogram_bins_set = depth_histogram_bins_set;
+    det->max_depth = max_depth;
+    det->n_bins_depth = n_bins_depth;
+    det->ddepth = ddepth;
+    det->time_histogram_bins_set = time_histogram_bins_set;
+    det->max_time = max_time;
+    det->n_bins_time = n_bins_time;
+    det->dtime = dtime;
+    det->weight_histogram_bins_set = weight_histogram_bins_set;
+    det->max_weight = max_weight;
+    det->n_bins_weight = n_bins_weight;
+    det->dweight = dweight;
+
+    if (events_histogram_bins_set)
+    {
+      det->events_histogram.resize(max_events, 0);
+    }
+    if (theta_histogram_bins_set)
+    {
+      det->theta_histogram.resize(n_bins_theta, 0);
+    }
+    if (phi_histogram_bins_set)
+    {
+      det->phi_histogram.resize(n_bins_phi, 0);
+    }
+    if (depth_histogram_bins_set)
+    {
+      det->depth_histogram.resize(n_bins_depth, 0);
+    }
+    if (time_histogram_bins_set)
+    {
+      det->time_histogram.resize(n_bins_time, 0);
+    }
+    if (weight_histogram_bins_set)
+    {
+      det->weight_histogram.resize(n_bins_weight, 0);
+    }
     return det;
   }
 
-  void SpatialDetector::merge_from(const Detector &other)
+  void StatisticsSensor::merge_from(const Sensor &other)
   {
-    const SpatialDetector &other_spatial = dynamic_cast<const SpatialDetector &>(other);
-    hits += other_spatial.hits;
+    const auto &o = dynamic_cast<const StatisticsSensor &>(other);
+    hits += o.hits;
 
-    for (int ix = 0; ix < N_x; ++ix)
+    if (events_histogram_bins_set && o.events_histogram_bins_set)
     {
-      for (int iy = 0; iy < N_y; ++iy)
+      for (size_t i = 0; i < events_histogram.size(); ++i)
       {
-        E_x(ix, iy) += other_spatial.E_x(ix, iy);
-        E_y(ix, iy) += other_spatial.E_y(ix, iy);
-        E_z(ix, iy) += other_spatial.E_z(ix, iy);
-        I_x(ix, iy) += other_spatial.I_x(ix, iy);
-        I_y(ix, iy) += other_spatial.I_y(ix, iy);
-        I_z(ix, iy) += other_spatial.I_z(ix, iy);
-        I_plus(ix, iy) += other_spatial.I_plus(ix, iy);
-        I_minus(ix, iy) += other_spatial.I_minus(ix, iy);
+        events_histogram[i] += o.events_histogram[i];
       }
     }
-
-    for (int ir = 0; ir < N_r; ++ir)
+    if (theta_histogram_bins_set && o.theta_histogram_bins_set)
     {
-      I_rad_plus[ir] += other_spatial.I_rad_plus[ir];
-      I_rad_minus[ir] += other_spatial.I_rad_minus[ir];
-    }
-  }
-
-  std::vector<double> SpatialDetector::calculate_radial_plus_intensity() const
-  {
-    std::vector<double> radial_intensity(N_r, 0.0);
-    for (int ir = 0; ir < N_r; ++ir)
-    {
-      double r_inner = ir * dr;
-      double r_outer = (ir + 1) * dr;
-      double area = M_PI * (r_outer * r_outer - r_inner * r_inner);
-      if (area > 0)
+      for (size_t i = 0; i < theta_histogram.size(); ++i)
       {
-        radial_intensity[ir] = I_rad_plus[ir] / area;
+        theta_histogram[i] += o.theta_histogram[i];
       }
     }
-    return radial_intensity;
-  }
-
-  std::vector<double> SpatialDetector::calculate_radial_minus_intensity() const
-  {
-    std::vector<double> radial_intensity(N_r, 0.0);
-    for (int ir = 0; ir < N_r; ++ir)
+    if (phi_histogram_bins_set && o.phi_histogram_bins_set)
     {
-      double r_inner = ir * dr;
-      double r_outer = (ir + 1) * dr;
-      double area = M_PI * (r_outer * r_outer - r_inner * r_inner);
-      if (area > 0)
+      for (size_t i = 0; i < phi_histogram.size(); ++i)
       {
-        radial_intensity[ir] = I_rad_minus[ir] / area;
+        phi_histogram[i] += o.phi_histogram[i];
       }
     }
-    return radial_intensity;
-  }
-
-  // SpatialTimeDetector implementation
-  SpatialTimeDetector::SpatialTimeDetector(double z, double x_len, double y_len, double r_len,int n_x, int n_y, int n_r, int n_t, double dt, double t_max)
-      : Detector(z)
-  {
-    N_x = n_x;
-    N_y = n_y;
-    N_r = n_r;
-    N_t = n_t;
-    dx = x_len / n_x;
-    dy = y_len / n_y;
-    dr = r_len / n_r;
-    this->dt = dt;
-    this->t_max = t_max;
-    time_bins.reserve(N_t);
-    for (int i = 0; i < N_t; ++i)
+    if (depth_histogram_bins_set && o.depth_histogram_bins_set)
     {
-      time_bins.push_back(SpatialDetector(z, x_len, y_len, r_len, n_x, n_y, n_r));
-    }
-  }
-
-  bool SpatialTimeDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    const double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
-    if (arrival_time < 0 || arrival_time >= t_max)
-      return false;
-
-    int time_bin_index = static_cast<int>(arrival_time / dt);
-    if (time_bin_index < 0 || time_bin_index >= N_t)
-      return false;
-
-    return time_bins[time_bin_index].record_hit(photon, coherent_calculation);
-  }
-
-  std::unique_ptr<Detector> SpatialTimeDetector::clone() const
-  {
-    const double x_len = N_x * dx;
-    const double y_len = N_y * dy;
-    const double r_len = N_r * dr;
-    auto det = std::make_unique<SpatialTimeDetector>(origin.z, x_len, y_len, r_len, N_x, N_y, N_r, N_t, dt, t_max);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void SpatialTimeDetector::merge_from(const Detector &other)
-  {
-    const SpatialTimeDetector &other_time = dynamic_cast<const SpatialTimeDetector &>(other);
-    hits += other_time.hits;
-
-    for (int i = 0; i < N_t; ++i)
-    {
-      time_bins[i].merge_from(other_time.time_bins[i]);
-    }
-  }
-
-  // SpatialCoherentDetector implementation
-  SpatialCoherentDetector::SpatialCoherentDetector(double z, double x_len, double y_len, int n_x, int n_y)
-      : Detector(z)
-  {
-    N_x = n_x;
-    N_y = n_y;
-    dx = x_len / n_x;
-    dy = y_len / n_y;
-    I_x = Matrix(N_x, N_y);
-    I_y = Matrix(N_x, N_y);
-    I_z = Matrix(N_x, N_y);
-    I_inco_x = Matrix(N_x, N_y);
-    I_inco_y = Matrix(N_x, N_y);
-    I_inco_z = Matrix(N_x, N_y);
-
-    I_x_theta.resize(200, 0.0);
-    I_y_theta.resize(200, 0.0);
-    I_z_theta.resize(200, 0.0);
-
-    I_inco_x_theta.resize(200, 0.0);
-    I_inco_y_theta.resize(200, 0.0);
-    I_inco_z_theta.resize(200, 0.0);
-  }
-
-  bool SpatialCoherentDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    if (photon.events < 2)
-      return false;
-
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    const Vec3 xn = photon.prev_pos;
-    const Vec3 xf = photon.pos;
-    const Vec3 d = xf - xn;
-
-    const double denom = dot(d, normal);
-    if (std::abs(denom) < 1e-6)
-      return false;
-
-    const double t = dot(origin - xn, normal) / denom;
-    if (t < 0 || t > 1)
-      return false;
-
-    const Vec3 hit_point = xn + d * t;
-    const double correction_distance = luminis::math::norm(hit_point - xf);
-    if (correction_distance > 0)
-    {
-      photon.opticalpath -= correction_distance;
-    }
-    hits += 1;
-    photon.detected_pos = hit_point;
-
-    const double length_x = N_x * dx;
-    const double length_y = N_y * dy;
-    const double min_x = -0.5 * length_x;
-    const double min_y = -0.5 * length_y;
-    const double max_x = 0.5 * length_x;
-    const double max_y = 0.5 * length_y;
-
-    // Validate position within detector area
-    if (photon.detected_pos.x < min_x || photon.detected_pos.x >= max_x || photon.detected_pos.y < min_y || photon.detected_pos.y >= max_y)
-    {
-      return false;
-    }
-
-    // Determine bins
-    const int ix = std::min(static_cast<int>(std::floor(((photon.detected_pos.x - min_x) / length_x) * N_x)), N_x - 1);
-    const int iy = std::min(static_cast<int>(std::floor(((photon.detected_pos.y - min_y) / length_y) * N_y)), N_y - 1);
-
-    if (ix < 0 || ix >= N_x || iy < 0 || iy >= N_y)
-      return false;
-
-    coherent_calculation();
-
-    // Compute intensity contribution
-    double w = photon.weight;
-
-    Vec3 qb = (photon.dir + photon.s_0) * photon.k;
-    Vec3 delta_r = photon.r_n - photon.r_0;
-    std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
-    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * photon.opticalpath));
-
-    Vec3 n_0 = photon.n_0;
-    Vec3 s_0 = photon.s_0;
-    Vec3 m_0 = cross(n_0, s_0);
-
-    CVec2 E_fwd_local = photon.polarization;
-    CVec2 E_rev_local = photon.polarization_reverse;
-
-    std::complex<double> E_fwd_lab_x = (E_fwd_local.m * photon.m.x + E_fwd_local.n * photon.n.x) * phase * std::sqrt(w);
-    std::complex<double> E_fwd_lab_y = (E_fwd_local.m * photon.m.y + E_fwd_local.n * photon.n.y) * phase * std::sqrt(w);
-    std::complex<double> E_fwd_lab_z = (E_fwd_local.m * photon.m.z + E_fwd_local.n * photon.n.z) * phase * std::sqrt(w);
-
-    std::complex<double> E_rev_lab_x = (E_rev_local.m * m_0.x + E_rev_local.n * n_0.x) * phase * path_phase * std::sqrt(w);
-    std::complex<double> E_rev_lab_y = (E_rev_local.m * m_0.y + E_rev_local.n * n_0.y) * phase * path_phase * std::sqrt(w);
-    std::complex<double> E_rev_lab_z = (E_rev_local.m * m_0.z + E_rev_local.n * n_0.z) * phase * path_phase * std::sqrt(w);
-
-    // Accumulate coherent intensity contributions
-    I_x(ix, iy) += std::norm(E_fwd_lab_x + E_rev_lab_x);
-    I_y(ix, iy) += std::norm(E_fwd_lab_y + E_rev_lab_y);
-    I_z(ix, iy) += std::norm(E_fwd_lab_z + E_rev_lab_z);
-
-    // Accumulate incoherent intensity contributions
-    I_inco_x(ix, iy) += std::norm(E_fwd_lab_x) + std::norm(E_rev_lab_x);
-    I_inco_y(ix, iy) += std::norm(E_fwd_lab_y) + std::norm(E_rev_lab_y);
-    I_inco_z(ix, iy) += std::norm(E_fwd_lab_z) + std::norm(E_rev_lab_z);
-    return true;
-  }
-
-  std::unique_ptr<Detector> SpatialCoherentDetector::clone() const
-  {
-    auto det = std::make_unique<SpatialCoherentDetector>(origin.z, N_x * dx, N_y * dy, N_x, N_y);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void SpatialCoherentDetector::merge_from(const Detector &other)
-  {
-    const SpatialCoherentDetector &other_spatial = dynamic_cast<const SpatialCoherentDetector &>(other);
-    hits += other_spatial.hits;
-
-    for (int ix = 0; ix < N_x; ++ix)
-    {
-      for (int iy = 0; iy < N_y; ++iy)
+      for (size_t i = 0; i < depth_histogram.size(); ++i)
       {
-        I_x(ix, iy) += other_spatial.I_x(ix, iy);
-        I_y(ix, iy) += other_spatial.I_y(ix, iy);
-        I_z(ix, iy) += other_spatial.I_z(ix, iy);
-        I_inco_x(ix, iy) += other_spatial.I_inco_x(ix, iy);
-        I_inco_y(ix, iy) += other_spatial.I_inco_y(ix, iy);
-        I_inco_z(ix, iy) += other_spatial.I_inco_z(ix, iy);
+        depth_histogram[i] += o.depth_histogram[i];
+      }
+    }
+    if (time_histogram_bins_set && o.time_histogram_bins_set)
+    {
+      for (size_t i = 0; i < time_histogram.size(); ++i)
+      {
+        time_histogram[i] += o.time_histogram[i];
+      }
+    }
+    if (weight_histogram_bins_set && o.weight_histogram_bins_set)
+    {
+      for (size_t i = 0; i < weight_histogram.size(); ++i)
+      {
+        weight_histogram[i] += o.weight_histogram[i];
       }
     }
   }
 
-  // AngularCoherentDetector implementation
-  AngularCoherentDetector::AngularCoherentDetector(double z, int n_theta, double max_theta)
-      : Detector(z)
+  void StatisticsSensor::process_hit(Photon &photon, InteractionInfo &info)
   {
-    N_theta = n_theta;
-    dtheta = max_theta / n_theta;
-    I_x = std::vector<double>(N_theta, 0.0);
-    I_y = std::vector<double>(N_theta, 0.0);
-    I_z = std::vector<double>(N_theta, 0.0);
-    I_plus = std::vector<double>(N_theta, 0.0);
-    I_minus = std::vector<double>(N_theta, 0.0);
-    I_total = std::vector<double>(N_theta, 0.0);
-
-    I_inco_x = std::vector<double>(N_theta, 0.0);
-    I_inco_y = std::vector<double>(N_theta, 0.0);
-    I_inco_z = std::vector<double>(N_theta, 0.0);
-    I_inco_plus = std::vector<double>(N_theta, 0.0);
-    I_inco_minus = std::vector<double>(N_theta, 0.0);
-    I_inco_total = std::vector<double>(N_theta, 0.0);
-
-    set_theta_limit(0.0, max_theta);
-  }
-
-  bool AngularCoherentDetector::record_hit(Photon &photon, std::function<void()> coherent_calculation)
-  {
-    if (photon.pos.z > 0)
-      return false;
-    if (photon.events < 2)
-      return false;
-
-    const bool valid = check_conditions(photon);
-    if (!valid)
-      return false;
-
-    const Vec3 u = photon.dir;
-    const double costtheta = -1 * u.z;
-    const double theta = std::acos(costtheta);
-
-    const int itheta = std::min(static_cast<int>(std::floor(N_theta * (theta / filter_theta_max))), N_theta - 1);
-
-    coherent_calculation();
-
-    // Compute intensity contribution
-    double w = photon.weight;
-
-    Vec3 qb = (photon.s_n + photon.s_0) * photon.k;
-    Vec3 delta_r = photon.r_n - photon.r_0;
-    std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
-    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * photon.opticalpath));
-
-    Vec3 n_0 = photon.n_0;
-    Vec3 s_0 = photon.s_0;
-    Vec3 m_0 = cross(n_0, s_0);
-
-    CVec2 E_fwd_local = photon.polarization;
-    CVec2 E_rev_local = photon.polarization_reverse;
-
-    std::complex<double> E_fwd_lab_x = (E_fwd_local.m * photon.m.x + E_fwd_local.n * photon.n.x) * phase * std::sqrt(w);
-    std::complex<double> E_fwd_lab_y = (E_fwd_local.m * photon.m.y + E_fwd_local.n * photon.n.y) * phase * std::sqrt(w);
-    std::complex<double> E_fwd_lab_z = (E_fwd_local.m * photon.m.z + E_fwd_local.n * photon.n.z) * phase * std::sqrt(w);
-
-    std::complex<double> E_rev_lab_x = (E_rev_local.m * m_0.x + E_rev_local.n * n_0.x) * phase * path_phase * std::sqrt(w);
-    std::complex<double> E_rev_lab_y = (E_rev_local.m * m_0.y + E_rev_local.n * n_0.y) * phase * path_phase * std::sqrt(w);
-    std::complex<double> E_rev_lab_z = (E_rev_local.m * m_0.z + E_rev_local.n * n_0.z) * phase * path_phase * std::sqrt(w);
-
-    std::complex<double> Etot_x = E_fwd_lab_x + E_rev_lab_x;
-    std::complex<double> Etot_y = E_fwd_lab_y + E_rev_lab_y;
-
-    const std::complex<double> I(0.0, 1.0);
-    std::complex<double> E_plus_val = (Etot_x - I * Etot_y) / std::sqrt(2.0);
-    std::complex<double> E_minus_val = (Etot_x + I * Etot_y) / std::sqrt(2.0);
-
-    // Accumulate coherent intensity contributions
-    I_x[itheta] += std::norm(E_fwd_lab_x + E_rev_lab_x);
-    I_y[itheta] += std::norm(E_fwd_lab_y + E_rev_lab_y);
-    I_z[itheta] += std::norm(E_fwd_lab_z + E_rev_lab_z);
-    I_plus[itheta] += std::norm(E_plus_val);
-    I_minus[itheta] += std::norm(E_minus_val);
-    I_total[itheta] += std::norm(E_fwd_lab_x + E_rev_lab_x + E_fwd_lab_y + E_rev_lab_y);
-
-    std::complex<double> E_fwd_plus = (E_fwd_lab_x - I * E_fwd_lab_y) / std::sqrt(2.0);
-    std::complex<double> E_fwd_minus = (E_fwd_lab_x + I * E_fwd_lab_y) / std::sqrt(2.0);
-    std::complex<double> E_rev_plus = (E_rev_lab_x - I * E_rev_lab_y) / std::sqrt(2.0);
-    std::complex<double> E_rev_minus = (E_rev_lab_x + I * E_rev_lab_y) / std::sqrt(2.0);
-
-    // Accumulate incoherent intensity contributions
-    I_inco_x[itheta] += std::norm(E_fwd_lab_x) + std::norm(E_rev_lab_x);
-    I_inco_y[itheta] += std::norm(E_fwd_lab_y) + std::norm(E_rev_lab_y);
-    I_inco_z[itheta] += std::norm(E_fwd_lab_z) + std::norm(E_rev_lab_z);
-    I_inco_plus[itheta] += std::norm(E_fwd_plus) + std::norm(E_rev_plus);
-    I_inco_minus[itheta] += std::norm(E_fwd_minus) + std::norm(E_rev_minus);
-    I_inco_total[itheta] += std::norm(E_fwd_lab_x) + std::norm(E_rev_lab_x) + std::norm(E_fwd_lab_y) + std::norm(E_rev_lab_y);
-
-    hits += 1;
-    return true;
-  }
-
-  std::unique_ptr<Detector> AngularCoherentDetector::clone() const
-  {
-    auto det = std::make_unique<AngularCoherentDetector>(origin.z, N_theta, filter_theta_max);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void AngularCoherentDetector::merge_from(const Detector &other)
-  {
-    const AngularCoherentDetector &other_angular = dynamic_cast<const AngularCoherentDetector &>(other);
-    hits += other_angular.hits;
-
-    for (int itheta = 0; itheta < N_theta; ++itheta)
+    if (events_histogram_bins_set)
     {
-      I_x[itheta] += other_angular.I_x[itheta];
-      I_y[itheta] += other_angular.I_y[itheta];
-      I_z[itheta] += other_angular.I_z[itheta];
-      I_plus[itheta] += other_angular.I_plus[itheta];
-      I_minus[itheta] += other_angular.I_minus[itheta];
-      I_total[itheta] += other_angular.I_total[itheta];
-
-      I_inco_x[itheta] += other_angular.I_inco_x[itheta];
-      I_inco_y[itheta] += other_angular.I_inco_y[itheta];
-      I_inco_z[itheta] += other_angular.I_inco_z[itheta];
-      I_inco_plus[itheta] += other_angular.I_inco_plus[itheta];
-      I_inco_minus[itheta] += other_angular.I_inco_minus[itheta];
-      I_inco_total[itheta] += other_angular.I_inco_total[itheta];
+      int events = photon.events;
+      if (events >= 0 && events < max_events)
+      {
+        events_histogram[events]++;
+      }
     }
-  }
-
-  // Detection condition factories
-  DetectionCondition make_theta_condition(double min_theta, double max_theta)
-  {
-    return [min_theta, max_theta](const Photon &photon)
+    if (theta_histogram_bins_set)
     {
-      const Vec3 u = photon.dir;
-      const double costtheta = -1 * u.z;
-      const double theta = std::acos(costtheta);
-      return (theta >= min_theta && theta <= max_theta);
-    };
-  };
-
-  DetectionCondition make_phi_condition(double min_phi, double max_phi)
-  {
-    return [min_phi, max_phi](const Photon &photon)
+      double theta = std::acos(-photon.P_local(2, 2));
+      if (theta >= min_theta && theta < max_theta)
+      {
+        int idx = static_cast<int>((theta - min_theta) / dtheta);
+        theta_histogram[idx]++;
+      }
+    }
+    if (phi_histogram_bins_set)
     {
-      const Vec3 u = photon.dir;
-      double phi = std::atan2(u.y, u.x);
+      double phi = std::atan2(photon.P_local(2, 1), photon.P_local(2, 0));
       if (phi < 0)
         phi += 2.0 * M_PI;
-      return (phi >= min_phi && phi <= max_phi);
-    };
-  };
-
-  DetectionCondition make_position_condition(double min_x, double max_x, double min_y, double max_y)
-  {
-    return [min_x, max_x, min_y, max_y](const Photon &photon)
+      if (phi >= min_phi && phi < max_phi)
+      {
+        int idx = static_cast<int>((phi - min_phi) / dphi);
+        phi_histogram[idx]++;
+      }
+    }
+    if (depth_histogram_bins_set)
     {
-      const Vec3 pos = photon.pos;
-      return (pos.x >= min_x && pos.x <= max_x && pos.y >= min_y && pos.y <= max_y);
-    };
-  };
-
-  DetectionCondition make_events_condition(uint min_events, uint max_events)
-  {
-    return [min_events, max_events](const Photon &photon)
+      double depth = photon.penetration_depth;
+      if (depth >= 0 && depth < max_depth)
+      {
+        int idx = static_cast<int>(depth / ddepth);
+        depth_histogram[idx]++;
+      }
+    }
+    if (time_histogram_bins_set)
     {
-      return (photon.events >= min_events && photon.events <= max_events);
-    };
-  };
+      double time = photon.launch_time + (photon.opticalpath / photon.velocity);
+      if (time >= 0 && time < max_time)
+      {
+        int idx = static_cast<int>(time / dtime);
+        time_histogram[idx]++;
+      }
+    }
+    if (weight_histogram_bins_set)
+    {
+      double weight = photon.weight;
+      if (weight >= 0 && weight < max_weight)
+      {
+        int idx = static_cast<int>(weight / dweight);
+        weight_histogram[idx]++;
+      }
+    }
+
+    hits += 1;
+  }
+
+  void StatisticsSensor::set_events_histogram_bins(int max_events)
+  {
+    this->max_events = max_events;
+    events_histogram_bins_set = true;
+    events_histogram.resize(max_events, 0);
+  }
+
+  void StatisticsSensor::set_theta_histogram_bins(double min_theta, double max_theta, int n_bins)
+  {
+    this->min_theta = min_theta;
+    this->max_theta = max_theta;
+    this->n_bins_theta = n_bins;
+    dtheta = (max_theta - min_theta) / n_bins;
+    theta_histogram_bins_set = true;
+    theta_histogram.resize(n_bins, 0);
+  }
+
+  void StatisticsSensor::set_phi_histogram_bins(double min_phi, double max_phi, int n_bins)
+  {
+    this->min_phi = min_phi;
+    this->max_phi = max_phi;
+    this->n_bins_phi = n_bins;
+    dphi = (max_phi - min_phi) / n_bins;
+    phi_histogram_bins_set = true;
+    phi_histogram.resize(n_bins, 0);
+  }
+
+  void StatisticsSensor::set_depth_histogram_bins(double max_depth, int n_bins)
+  {
+    this->max_depth = max_depth;
+    this->n_bins_depth = n_bins;
+    ddepth = max_depth / n_bins;
+    depth_histogram_bins_set = true;
+    depth_histogram.resize(n_bins, 0);
+  }
+
+  void StatisticsSensor::set_time_histogram_bins(double max_time, int n_bins)
+  {
+    this->max_time = max_time;
+    this->n_bins_time = n_bins;
+    dtime = max_time / n_bins;
+    time_histogram_bins_set = true;
+    time_histogram.resize(n_bins, 0);
+  }
+
+  void StatisticsSensor::set_weight_histogram_bins(double max_weight, int n_bins)
+  {
+    this->max_weight = max_weight;
+    this->n_bins_weight = n_bins;
+    dweight = max_weight / n_bins;
+    weight_histogram_bins_set = true;
+    weight_histogram.resize(n_bins, 0);
+  }
+
 } // namespace luminis::core

@@ -49,12 +49,18 @@ struct MieMedium : public Medium {
   double n_particle;     // Particle refractive index
   double n_medium;       // Medium refractive index
   double radius;         // Radius of the particles [mm]
+  double wavelength;       // Wavelength of light [mm]
   std::complex<double> m; // Relative refractive index m = n_particle / n_medium
 
-  MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium);
+  DataTable S1_table; // Precomputed table for s1(theta)
+  DataTable S2_table; // Precomputed table for s2(theta)
+
+  MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength);
 
   double sample_free_path(Rng &rng) const override;
   CMatrix scattering_matrix(const double theta, const double phi, const double k) const override;
+
+  void precompute_scattering_tables(double wavelength, double size_parameter, std::size_t n_samples = 1000);
 };
 
 } // namespace luminis::core

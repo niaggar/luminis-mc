@@ -25,7 +25,7 @@ double norm(const Vec3 &v) {
   return std::sqrt(dot(v, v));
 }
 
-void matmul(const CMatrix &A, const CMatrix &B, CMatrix &C) {
+void matcmul(const CMatrix &A, const CMatrix &B, CMatrix &C) {
   if (A.cols != B.rows || A.rows != C.rows || B.cols != C.cols) {
     LLOG_ERROR("CMatrix multiplication dimension mismatch");
     std::exit(EXIT_FAILURE);
@@ -44,7 +44,26 @@ void matmul(const CMatrix &A, const CMatrix &B, CMatrix &C) {
   C.data.swap(C_temp.data);
 }
 
-void matmulscalar(const double &scalar, CMatrix &A) {
+void matmul(const Matrix &A, const Matrix &B, Matrix &C) {
+  if (A.cols != B.rows || A.rows != C.rows || B.cols != C.cols) {
+    LLOG_ERROR("Matrix multiplication dimension mismatch");
+    std::exit(EXIT_FAILURE);
+  }
+
+  Matrix C_temp(A.rows, B.cols);
+
+  for (uint i = 0; i < A.rows; ++i) {
+    for (uint j = 0; j < B.cols; ++j) {
+      C_temp(i, j) = 0.0;
+      for (uint k = 0; k < A.cols; ++k) {
+        C_temp(i, j) += A(i, k) * B(k, j);
+      }
+    }
+  }
+  C.data.swap(C_temp.data);
+}
+
+void matcmulscalar(const double &scalar, CMatrix &A) {
   for (uint i = 0; i < A.rows; ++i) {
     for (uint j = 0; j < A.cols; ++j) {
       A(i, j) *= scalar;

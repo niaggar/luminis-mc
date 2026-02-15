@@ -1,21 +1,12 @@
 from luminis_mc import (
-    Laser,
     SimpleMedium,
     MieMedium,
-    MultiDetector,
-    HistogramDetector,
-    SpatialDetector,
-    SpatialTimeDetector,
-    AbsorptionTimeDependent,
-    SimConfig,
     RayleighDebyeEMCPhaseFunction,
     MiePhaseFunction,
-    CVec2,
-    Vec3,
     Rng,
 )
-from luminis_mc import LogLevel, LaserSource
-from luminis_mc import run_simulation_parallel, set_log_level
+from luminis_mc import LogLevel
+from luminis_mc import set_log_level
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -26,9 +17,6 @@ set_log_level(LogLevel.info)
 start_time = time.time()
 
 # Global frame of reference
-m_global = Vec3(1, 0, 0)
-n_global = Vec3(0, 1, 0)
-s_global = Vec3(0, 0, 1)
 light_speed = 1
 
 # Medium parameters in micrometers
@@ -38,13 +26,10 @@ wavelength_real = 0.6328
 n_particle_real = 1.34
 n_medium_real = 1.33
 
-
 mean_free_path_sim = 1.0
 inv_mfp_sim = 1 / mean_free_path_sim
 mu_absortion_sim = 0.05 * inv_mfp_sim
 mu_scattering_sim = inv_mfp_sim - mu_absortion_sim
-
-
 
 size_parameter = 2 * np.pi * radius_real * n_medium_real / wavelength_real
 condition_1 = np.abs(n_particle_real / n_medium_real - 1)
@@ -61,17 +46,7 @@ thetaMin = 0.0
 thetaMax = np.pi
 nDiv = 1000
 
-# Laser parameters
-origin = Vec3(0, 0, 0)
-
-polarization = CVec2(1/np.sqrt(2), -1j/np.sqrt(2))  # Circular Right polarization
-# polarization = CVec2(1/np.sqrt(2), 1j/np.sqrt(2))   # Circular Left polarization
-laser_radius = 0.5 * mean_free_path_sim
-laser_type = LaserSource.Gaussian
-
-
 rng_test = Rng()
-laser_source = Laser(origin, polarization, wavelength_real, laser_radius, laser_type)
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
 mie_phase_function = MiePhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
@@ -79,9 +54,6 @@ mie_medium = MieMedium(mu_absortion_sim, mu_scattering_sim, mie_phase_function, 
 
 anysotropy = phase_function.get_anisotropy_factor(rng_test)
 mie_anysotropy = mie_phase_function.get_anisotropy_factor(rng_test)
-
-
-
 
 
 print("CONDITIONS FOR RAYLEIGH-DEBYE APPROXIMATION:")
@@ -116,12 +88,6 @@ print(f"Tiempo de cálculo de las matrices de dispersión: {d_matrix:.4f} segund
 
 s2_abs_values = np.abs(scattering_matrices[:, 0, 0])
 s1_abs_values = np.abs(scattering_matrices[:, 1, 1])
-
-# test_matrix = np.array(medium.scattering_matrix(0.00001, 0, k))
-# print(test_matrix, "Primera matriz de dispersión")
-# print(np.abs(test_matrix[0,0]), "S2 elemento de la primera matriz")
-# print(test_matrix[1,1], "S1 elemento de la primera matriz")
-
 
 mus = np.random.default_rng().random(5_000_000)
 theta_emc = np.array([phase_function.sample_theta(x) for x in mus])
