@@ -40,8 +40,15 @@ from ._core import (
     PlanarFluenceSensor,
     PlanarCBSSensor,
     FarFieldFluenceSensor,
+    FarFieldCBSSensor,
     StatisticsSensor,
     SensorsGroup,
+    # Results
+    StokesMatrixProcessed,
+    StokesRadialProcessed,
+    FarFieldCBSProcessed,
+    FarFieldCBSRadialProcessed,
+    postprocess_farfield_cbs,
     # Medium
     Medium,
     SimpleMedium,
@@ -64,7 +71,12 @@ from ._core import (
     HardSpheres,
 )
 
+from .manager import Experiment, ResultsLoader
+
 __all__ = [
+    # Manager
+    "Experiment",
+    "ResultsLoader",
     # RNG
     "Rng",
     # Math
@@ -106,8 +118,15 @@ __all__ = [
     "PlanarFluenceSensor",
     "PlanarCBSSensor",
     "FarFieldFluenceSensor",
+    "FarFieldCBSSensor",
     "StatisticsSensor",
     "SensorsGroup",
+    # Results
+    "StokesMatrixProcessed",
+    "StokesRadialProcessed",
+    "FarFieldCBSProcessed",
+    "FarFieldCBSRadialProcessed",
+    "postprocess_farfield_cbs",
     # Medium
     "Medium",
     "SimpleMedium",

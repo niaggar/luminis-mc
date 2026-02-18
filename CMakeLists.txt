@@ -48,13 +48,15 @@ add_library(_core_c
     src/medium.cpp
     src/phase.cpp
     src/photon.cpp
-    src/rng.cpp
     src/simulation.cpp
     src/table.cpp
     src/absortion.cpp
     src/meanfreepath.cpp
     src/vec.cpp
+    src/rng.cpp
+    src/utils.cpp
     src/core.cpp
+    src/results.cpp
 )
 
 # [NUEVO] Linkeamos la librería de Mie (_core_c ahora puede llamar a Fortran)

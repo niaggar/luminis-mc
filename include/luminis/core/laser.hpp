@@ -39,7 +39,7 @@ struct Laser {
   double time_offset{0.0}; // in ps
 
 
-  Laser(Vec3 position, CVec2 polarization, double wavelength, double sigma, LaserSource source_type);
+  Laser(std::complex<double> m_state, std::complex<double> n_state, double wavelength, double sigma, LaserSource source_type);
 
   void set_temporal_profile(TemporalProfile profile, double pulse_duration = 0.0, double repetition_rate = 0.0, double time_offset = 0.0) {
     temporal_profile = profile;

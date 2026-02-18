@@ -14,9 +14,6 @@ namespace luminis::core
     Vec3 prev_pos{0, 0, 0};
     Vec3 pos{0, 0, 0};
     Vec3 detected_pos{0, 0, 0};
-    // Vec3 dir{Z_UNIT_VEC3};
-    // Vec3 m{X_UNIT_VEC3};
-    // Vec3 n{Y_UNIT_VEC3};
 
     uint events{0};
     double penetration_depth{0.0};
@@ -38,19 +35,18 @@ namespace luminis::core
     bool coherent_path_calculated{false};
     CVec2 initial_polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
-    Vec3 n_0{0, 0, 0};  // Incident position
-    Vec3 s_0{0, 0, 0};  // Incident direction (s_in)
-    Vec3 s_1{0, 0, 0};  // Direction after 1st scatter
-    Vec3 s_n2{0, 0, 0}; // Direction after second last scatter
-    Vec3 s_n1{0, 0, 0}; // Direction after last scatter
-    Vec3 s_n{0, 0, 0};  // Direction last scatter
+    Matrix P0 = Matrix(3, 3);   // Initial scattering plane basis
+    Matrix P1 = Matrix(3, 3);   // Scattering plane basis after first scatter
+    Matrix Pn2 = Matrix(3, 3);  // Scattering plane basis after second last scatte
+    Matrix Pn1 = Matrix(3, 3);  // Scattering plane basis after last scatter
+    Matrix Pn = Matrix(3, 3);   // Scattering plane basis after last scatter
 
     Vec3 r_0{0, 0, 0}; // Position first scatter
     Vec3 r_n{0, 0, 0}; // Position last scatter
 
     CMatrix matrix_T = CMatrix::identity(2); // Total Jones matrix
-    CMatrix matrix_T_buffer = CMatrix::identity(2);
-    ; // Buffer for Jones matrix updates
+    CMatrix matrix_T_buffer = CMatrix::identity(2); // Buffer for Jones matrix updates
+    bool has_T_prev{false}; // Flag to indicate if previous T matrix is available
 
     Photon() = default;
     Photon(const Vec3 &p, const Vec3 &d, const Vec3 &m, const Vec3 &n, const double wl);
