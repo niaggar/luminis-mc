@@ -33,7 +33,7 @@ light_speed = 1
 mean_free_path_real = 2.8
 radius_real = 0.8
 wavelength_real = 0.6328
-n_particle_real = 1.34
+n_particle_real = 1.59
 n_medium_real = 1.33
 
 mean_free_path_sim = 1.0
@@ -49,7 +49,7 @@ condition_2 = size_parameter * condition_1
 thetaMin = 0.0
 thetaMax = np.pi
 nDiv = 1000
-n_photons = 5_000_000
+n_photons = 5_000
 
 # Laser parameters
 origin = Vec3(0, 0, 0)
@@ -230,3 +230,6 @@ NN = int(len_x_sensor / pixel_size)
 HW = len_x_sensor / 2
 plot_figure_5_corrected(I_insta_x, I_ave_x, NN, HW)
 plot_figure_5_corrected(I_insta_y, I_ave_y, NN, HW)
+
+
+

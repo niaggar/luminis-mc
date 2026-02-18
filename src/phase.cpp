@@ -46,7 +46,9 @@ double PhaseFunction::sample_phi_conditional(double theta, CMatrix& S, CVec2& E,
       if (rng.uniform()*Fmax <= Fclamped) return phi;
     }
 }
-std::array<double, 2> PhaseFunction::get_anisotropy_factor(Rng& rng, std::size_t nSamples) const {
+std::array<double, 2> PhaseFunction::get_anisotropy_factor(std::size_t nSamples) const {
+  Rng rng = Rng();
+
   double sum = 0.0;
   double sum_sq = 0.0;
   for (std::size_t i = 0; i < nSamples; ++i) {

@@ -17,7 +17,7 @@ public:
   virtual double sample_phi_conditional(double theta, CMatrix& S, CVec2& E, double k, Rng& rng) const;
   virtual double sample_cos(double x) const = 0;
   virtual double sample_theta(double x) const = 0;
-  std::array<double, 2> get_anisotropy_factor(Rng& rng, std::size_t n_samples = 200000) const;
+  std::array<double, 2> get_anisotropy_factor(std::size_t n_samples = 200000) const;
 };
 
 class UniformPhaseFunction : public PhaseFunction {

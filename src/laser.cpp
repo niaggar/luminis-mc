@@ -26,10 +26,10 @@ math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center, const doubl
   };
 }
 
-Laser::Laser(Vec3 position, CVec2 polarization, double wavelength, double sigma, LaserSource source_type)
+Laser::Laser(std::complex<double> m_state, std::complex<double> n_state, double wavelength, double sigma, LaserSource source_type)
 {
-  this->position = {position.x, position.y, position.z + GEOMETRY_EPSILON};
-  this->polarization = polarization;
+  this->position = {0, 0, GEOMETRY_EPSILON};
+  this->polarization = CVec2(m_state, n_state);
   this->wavelength = wavelength;
   this->sigma = sigma;
   this->source_type = source_type;

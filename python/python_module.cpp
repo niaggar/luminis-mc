@@ -5,6 +5,7 @@
 #include <luminis/core/simulation.hpp>
 #include <luminis/core/absortion.hpp>
 #include <luminis/core/core.hpp>
+#include <luminis/core/results.hpp>
 #include <luminis/log/logger.hpp>
 #include <luminis/math/rng.hpp>
 #include <luminis/sample/phase.hpp>
@@ -120,7 +121,7 @@ PYBIND11_MODULE(_core, m)
            py::arg("rng"),
            "Sample the azimuthal angle phi conditioned on theta")
       .def("get_anisotropy_factor", &PhaseFunction::get_anisotropy_factor,
-           py::arg("rng"), py::arg("n_samples") = 200000,
+           py::arg("n_samples") = 200000,
            "Estimate the anisotropy factor g using Monte Carlo sampling");
 
   py::class_<UniformPhaseFunction, PhaseFunction>(m, "UniformPhaseFunction")
@@ -180,12 +181,11 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("weight", &Photon::weight)
       .def_readwrite("polarized", &Photon::polarized)
       .def_readwrite("polarization", &Photon::polarization)
-      .def_readonly("n_0", &Photon::n_0)
-      .def_readonly("s_0", &Photon::s_0)
-      .def_readonly("s_1", &Photon::s_1)
-      .def_readonly("s_n2", &Photon::s_n2)
-      .def_readonly("s_n1", &Photon::s_n1)
-      .def_readonly("s_n", &Photon::s_n)
+      .def_readonly("P0", &Photon::P0)
+      .def_readonly("P1", &Photon::P1)
+      .def_readonly("Pn2", &Photon::Pn2)
+      .def_readonly("Pn1", &Photon::Pn1)
+      .def_readonly("Pn", &Photon::Pn)
       .def_readonly("r_0", &Photon::r_0)
       .def_readonly("r_n", &Photon::r_n)
       .def_readonly("matrix_T", &Photon::matrix_T)
@@ -229,8 +229,8 @@ PYBIND11_MODULE(_core, m)
       .export_values();
 
   py::class_<Laser>(m, "Laser")
-      .def(py::init<Vec3, CVec2, double, double, LaserSource>(),
-           py::arg("position"), py::arg("polarization"), py::arg("wavelength"),
+      .def(py::init<std::complex<double>, std::complex<double>, double, double, LaserSource>(),
+           py::arg("m_state"), py::arg("n_state"), py::arg("wavelength"),
            py::arg("sigma"), py::arg("source_type"),
            "Initialize a Laser source with given parameters")
       .def_readwrite("position", &Laser::position)
@@ -298,14 +298,14 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
       .def(py::init<double>(),
-        py::arg("z"),
-        "Initialize a Sensor at a given z position")
+           py::arg("z"),
+           "Initialize a Sensor at a given z position")
       .def_readonly("recorded_photons", &PhotonRecordSensor::recorded_photons);
 
   py::class_<PlanarFieldSensor, Sensor>(m, "PlanarFieldSensor")
       .def(py::init<double, double, double, double, double>(),
-        py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"),
-        "Initialize a Sensor at a given z position")
+           py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"),
+           "Initialize a Sensor at a given z position")
       .def_readonly("N_x", &PlanarFieldSensor::N_x)
       .def_readonly("N_y", &PlanarFieldSensor::N_y)
       .def_readonly("dx", &PlanarFieldSensor::dx)
@@ -317,8 +317,8 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<PlanarFluenceSensor, Sensor>(m, "PlanarFluenceSensor")
       .def(py::init<double, double, double, double, double, double, double>(),
-        py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("len_t"), py::arg("dx"), py::arg("dy"), py::arg("dt"),
-        "Initialize a Sensor at a given z position")
+           py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("len_t"), py::arg("dx"), py::arg("dy"), py::arg("dt"),
+           "Initialize a Sensor at a given z position")
       .def_readonly("N_x", &PlanarFluenceSensor::N_x)
       .def_readonly("N_y", &PlanarFluenceSensor::N_y)
       .def_readonly("N_t", &PlanarFluenceSensor::N_t)
@@ -335,8 +335,8 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<PlanarCBSSensor, Sensor>(m, "PlanarCBSSensor")
       .def(py::init<double, double, double, double>(),
-        py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"),
-        "Initialize a Sensor at a given z position")
+           py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"),
+           "Initialize a Sensor at a given z position")
       .def_readonly("N_x", &PlanarCBSSensor::N_x)
       .def_readonly("N_y", &PlanarCBSSensor::N_y)
       .def_readonly("len_x", &PlanarCBSSensor::len_x)
@@ -350,8 +350,8 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<FarFieldFluenceSensor, Sensor>(m, "FarFieldFluenceSensor")
       .def(py::init<double, double, double, int, int>(),
-        py::arg("z"), py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"),
-        "Initialize a Sensor at a given z position")
+           py::arg("z"), py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"),
+           "Initialize a Sensor at a given z position")
       .def_readonly("N_theta", &FarFieldFluenceSensor::N_theta)
       .def_readonly("N_phi", &FarFieldFluenceSensor::N_phi)
       .def_readonly("theta_max", &FarFieldFluenceSensor::theta_max)
@@ -363,10 +363,29 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S2", &FarFieldFluenceSensor::S2)
       .def_readonly("S3", &FarFieldFluenceSensor::S3);
 
+  py::class_<FarFieldCBSSensor, Sensor>(m, "FarFieldCBSSensor")
+      .def(py::init<double, double, int, int>(),
+           py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"),
+           "Initialize a Sensor at a given z position")
+      .def_readonly("N_theta", &FarFieldCBSSensor::N_theta)
+      .def_readonly("N_phi", &FarFieldCBSSensor::N_phi)
+      .def_readonly("theta_max", &FarFieldCBSSensor::theta_max)
+      .def_readonly("phi_max", &FarFieldCBSSensor::phi_max)
+      .def_readonly("dtheta", &FarFieldCBSSensor::dtheta)
+      .def_readonly("dphi", &FarFieldCBSSensor::dphi)
+      .def_readonly("S0_coh", &FarFieldCBSSensor::S0_coh)
+      .def_readonly("S1_coh", &FarFieldCBSSensor::S1_coh)
+      .def_readonly("S2_coh", &FarFieldCBSSensor::S2_coh)
+      .def_readonly("S3_coh", &FarFieldCBSSensor::S3_coh)
+      .def_readonly("S0_incoh", &FarFieldCBSSensor::S0_incoh)
+      .def_readonly("S1_incoh", &FarFieldCBSSensor::S1_incoh)
+      .def_readonly("S2_incoh", &FarFieldCBSSensor::S2_incoh)
+      .def_readonly("S3_incoh", &FarFieldCBSSensor::S3_incoh);
+
   py::class_<StatisticsSensor, Sensor>(m, "StatisticsSensor")
       .def(py::init<double>(),
-        py::arg("z"),
-        "Initialize a Sensor at a given z position")
+           py::arg("z"),
+           "Initialize a Sensor at a given z position")
       .def_readonly("events_histogram", &StatisticsSensor::events_histogram)
       .def_readonly("theta_histogram", &StatisticsSensor::theta_histogram)
       .def_readonly("phi_histogram", &StatisticsSensor::phi_histogram)
@@ -374,61 +393,32 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("time_histogram", &StatisticsSensor::time_histogram)
       .def_readonly("weight_histogram", &StatisticsSensor::weight_histogram);
 
-
   // Calculations results
-  // py::class_<AngularIntensity>(m, "AngularSpeckle")
-  //     .def_readonly("Ix", &AngularIntensity::Ix)
-  //     .def_readonly("Iy", &AngularIntensity::Iy)
-  //     .def_readonly("Iz", &AngularIntensity::Iz)
-  //     .def_readonly("I_total", &AngularIntensity::I_total)
-  //     .def_readonly("Ico", &AngularIntensity::Ico)
-  //     .def_readonly("Icros", &AngularIntensity::Icros)
-  //     .def_readonly("N_theta", &AngularIntensity::N_theta)
-  //     .def_readonly("N_phi", &AngularIntensity::N_phi)
-  //     .def_readonly("theta_max", &AngularIntensity::theta_max)
-  //     .def_readonly("phi_max", &AngularIntensity::phi_max)
-  //     .def_readonly("dtheta", &AngularIntensity::dtheta)
-  //     .def_readonly("dphi", &AngularIntensity::dphi);
+  py::class_<StokesMatrixProcessed>(m, "StokesMatrixProcessed")
+      .def_readonly("S0", &StokesMatrixProcessed::S0)
+      .def_readonly("S1", &StokesMatrixProcessed::S1)
+      .def_readonly("S2", &StokesMatrixProcessed::S2)
+      .def_readonly("S3", &StokesMatrixProcessed::S3);
 
-  // py::class_<SpatialIntensity>(m, "SpatialIntensity")
-  //     .def_readonly("Ix", &SpatialIntensity::Ix)
-  //     .def_readonly("Iy", &SpatialIntensity::Iy)
-  //     .def_readonly("Iz", &SpatialIntensity::Iz)
-  //     .def_readonly("I_total", &SpatialIntensity::I_total)
-  //     .def_readonly("Ico", &SpatialIntensity::Ico)
-  //     .def_readonly("Icros", &SpatialIntensity::Icros)
-  //     .def_readonly("N_x", &SpatialIntensity::N_x)
-  //     .def_readonly("N_y", &SpatialIntensity::N_y)
-  //     .def_readonly("x_len", &SpatialIntensity::x_len)
-  //     .def_readonly("y_len", &SpatialIntensity::y_len)
-  //     .def_readonly("dx", &SpatialIntensity::dx)
-  //     .def_readonly("dy", &SpatialIntensity::dy);
+  py::class_<StokesRadialProcessed>(m, "StokesRadialProcessed")
+      .def_readonly("S0", &StokesRadialProcessed::S0)
+      .def_readonly("S1", &StokesRadialProcessed::S1)
+      .def_readonly("S2", &StokesRadialProcessed::S2)
+      .def_readonly("S3", &StokesRadialProcessed::S3);
 
-  // TODO: Think if its necesary to have methods to study PhotonRecordSensor
-  // m.def("compute_events_histogram", &compute_events_histogram,
-  //       py::arg("detector"), py::arg("min_theta"), py::arg("max_theta"),
-  //       py::return_value_policy::take_ownership,
-  //       "Compute the events histogram from the detector data");
+  py::class_<FarFieldCBSProcessed>(m, "FarFieldCBSProcessed")
+      .def_readonly("coherent", &FarFieldCBSProcessed::coherent)
+      .def_readonly("incoherent", &FarFieldCBSProcessed::incoherent)
+      .def_readonly("dOmega", &FarFieldCBSProcessed::dOmega);
 
-  // m.def("compute_theta_histogram", &compute_theta_histogram,
-  //       py::arg("detector"), py::arg("min_theta"), py::arg("max_theta"), py::arg("n_bins"),
-  //       py::return_value_policy::take_ownership,
-  //       "Compute the theta histogram from the detector data");
+  py::class_<FarFieldCBSRadialProcessed>(m, "FarFieldCBSRadialProcessed")
+      .def_readonly("coherent", &FarFieldCBSRadialProcessed::coherent)
+      .def_readonly("incoherent", &FarFieldCBSRadialProcessed::incoherent)
+      .def_readonly("theta_center", &FarFieldCBSRadialProcessed::theta_center);
 
-  // m.def("compute_phi_histogram", &compute_phi_histogram,
-  //       py::arg("detector"), py::arg("min_phi"), py::arg("max_phi"), py::arg("n_bins"),
-  //       py::return_value_policy::take_ownership,
-  //       "Compute the phi histogram from the detector data");
-
-  // m.def("compute_speckle", &compute_speckle,
-  //       py::arg("detector"), py::arg("n_theta"), py::arg("n_phi"),
-  //       py::return_value_policy::take_ownership,
-  //       "Compute the angular speckle pattern from the detector data");
-
-  // m.def("compute_speckle_angledetector", &compute_speckle_angledetector,
-  //       py::arg("angledetector"),
-  //       py::return_value_policy::take_ownership,
-  //       "Compute the angular speckle pattern from the detector data");
+  m.def("postprocess_farfield_cbs", &postprocess_farfield_cbs,
+        py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_solid_angle") = true, py::arg("normalize_per_photon") = true, py::arg("eps") = 1e-30,
+        "Calculate the Stokes matrix from a list of photon records");
 
   // Medium bindings
   py::class_<Medium>(m, "Medium")
@@ -616,22 +606,4 @@ PYBIND11_MODULE(_core, m)
            "Initialize the hard sphere distribution with given radius and density")
       .def("evaluate", &HardSpheres::evaluate, py::arg("x"),
            "Evaluate the hard sphere distribution at x");
-
-  // Save and read data
-  // TODO: Think if its necessary to have functions to save and load the recorded photons from the detectors, or if it's better to just access the recorded_photons attribute directly from Python and handle saving/loading there.
-  // m.def("save_recorded_photons", &save_recorded_photons,
-  //       py::arg("filename"), py::arg("detector"),
-  //       "Save recorded photons from the detector to a file");
-
-  // m.def("load_recorded_photons", &load_recorded_photons,
-  //       py::arg("filename"), py::arg("detector"),
-  //       "Load recorded photons into the detector from a file");
-
-  // m.def("save_angle_detector_fields", &save_angle_detector_fields,
-  //       py::arg("filename"), py::arg("angledetector"),
-  //       "Save the fields of the angle detector to a file");
-
-  // m.def("load_angle_detector_fields", &load_angle_detector_fields,
-  //       py::arg("filename"), py::arg("angledetector"),
-  //       "Load the fields of the angle detector from a file");
 }

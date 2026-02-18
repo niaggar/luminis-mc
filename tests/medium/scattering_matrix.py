@@ -21,9 +21,9 @@ light_speed = 1
 
 # Medium parameters in micrometers
 mean_free_path_real = 2.8
-radius_real = 0.8
-wavelength_real = 0.6328
-n_particle_real = 1.34
+radius_real = 0.1
+wavelength_real = 0.532
+n_particle_real = 1.59
 n_medium_real = 1.33
 
 mean_free_path_sim = 1.0
@@ -50,7 +50,7 @@ rng_test = Rng()
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
 mie_phase_function = MiePhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
 medium = SimpleMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
-mie_medium = MieMedium(mu_absortion_sim, mu_scattering_sim, mie_phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
+mie_medium = MieMedium(mu_absortion_sim, mu_scattering_sim, mie_phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real, wavelength_real)
 
 anysotropy = phase_function.get_anisotropy_factor(rng_test)
 mie_anysotropy = mie_phase_function.get_anisotropy_factor(rng_test)
@@ -137,7 +137,7 @@ plt.semilogy(theta_test, phase_function_values, label='Phase Function')
 count, bins, ignored = plt.hist(theta_emc, bins=100, density=True, color='lightgray', label='Muestreo MC')
 plt.xlabel('Scattering Angle (radians)')
 plt.ylabel('Phase Function Value')
-plt.title('Rayleigh-Debye Phase Function')
+plt.title('Mie Phase Function')
 plt.legend()
 plt.grid()
 
