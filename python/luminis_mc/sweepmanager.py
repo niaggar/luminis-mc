@@ -145,8 +145,8 @@ class SweepManager:
             Wraps any exception raised inside *run_fn*, after marking the
             run as ``"failed"`` in the manifest.
         """
-        run_folder = self.runs_dir / f"{run_id:04d}_{run_name}"
-        run_folder.mkdir(parents=True, exist_ok=True)
+        # run_folder = self.runs_dir / f"{run_id:04d}_{run_name}"
+        # run_folder.mkdir(parents=True, exist_ok=True)
 
         t0     = time.time()
         status = "ok"
@@ -155,14 +155,14 @@ class SweepManager:
         record = {
             "run_id":     run_id,
             "run_name":   run_name,
-            "path":       str(run_folder),
+            "path":       f"{run_id:04d}_{run_name}",
             "started_at": datetime.now().isoformat(timespec="seconds"),
         }
         self._append_manifest({**record, "status": "started"})
 
         try:
             # Each run gets its own Experiment rooted inside runs_dir.
-            exp = Experiment(name=run_folder.name, base_dir=str(self.runs_dir))
+            exp = Experiment(name=f"{run_id:04d}_{run_name}", base_dir=str(self.runs_dir))
             run_fn(exp)
             exp.close()
         except Exception as e:
