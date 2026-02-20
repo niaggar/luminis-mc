@@ -297,14 +297,14 @@ PYBIND11_MODULE(_core, m)
            "Set the detection limits for the position on the sensor plane");
 
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
-      .def(py::init<double>(),
-           py::arg("z"),
+      .def(py::init<double, bool>(),
+           py::arg("z"), py::arg("absorb") = true,
            "Initialize a Sensor at a given z position")
       .def_readonly("recorded_photons", &PhotonRecordSensor::recorded_photons);
 
   py::class_<PlanarFieldSensor, Sensor>(m, "PlanarFieldSensor")
-      .def(py::init<double, double, double, double, double>(),
-           py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"),
+      .def(py::init<double, double, double, double, double, bool, bool>(),
+           py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"), py::arg("absorb") = true, py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_x", &PlanarFieldSensor::N_x)
       .def_readonly("N_y", &PlanarFieldSensor::N_y)
@@ -316,8 +316,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("Ey", &PlanarFieldSensor::Ey);
 
   py::class_<PlanarFluenceSensor, Sensor>(m, "PlanarFluenceSensor")
-      .def(py::init<double, double, double, double, double, double, double>(),
-           py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("len_t"), py::arg("dx"), py::arg("dy"), py::arg("dt"),
+      .def(py::init<double, double, double, double, double, double, double, bool, bool>(),
+           py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("len_t"), py::arg("dx"), py::arg("dy"), py::arg("dt"), py::arg("absorb") = true, py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_x", &PlanarFluenceSensor::N_x)
       .def_readonly("N_y", &PlanarFluenceSensor::N_y)
@@ -334,8 +334,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S3_t", &PlanarFluenceSensor::S3_t);
 
   py::class_<PlanarCBSSensor, Sensor>(m, "PlanarCBSSensor")
-      .def(py::init<double, double, double, double>(),
-           py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"),
+      .def(py::init<double, double, double, double, bool>(),
+           py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"), py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_x", &PlanarCBSSensor::N_x)
       .def_readonly("N_y", &PlanarCBSSensor::N_y)
@@ -349,8 +349,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S3", &PlanarCBSSensor::S3);
 
   py::class_<FarFieldFluenceSensor, Sensor>(m, "FarFieldFluenceSensor")
-      .def(py::init<double, double, double, int, int>(),
-           py::arg("z"), py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"),
+      .def(py::init<double, double, int, int, bool>(),
+           py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"), py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_theta", &FarFieldFluenceSensor::N_theta)
       .def_readonly("N_phi", &FarFieldFluenceSensor::N_phi)
@@ -364,8 +364,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S3", &FarFieldFluenceSensor::S3);
 
   py::class_<FarFieldCBSSensor, Sensor>(m, "FarFieldCBSSensor")
-      .def(py::init<double, double, int, int>(),
-           py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"),
+      .def(py::init<double, double, int, int, bool>(),
+           py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"), py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_theta", &FarFieldCBSSensor::N_theta)
       .def_readonly("N_phi", &FarFieldCBSSensor::N_phi)
@@ -381,21 +381,56 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S1_incoh", &FarFieldCBSSensor::S1_incoh)
       .def_readonly("S2_incoh", &FarFieldCBSSensor::S2_incoh)
       .def_readonly("S3_incoh", &FarFieldCBSSensor::S3_incoh)
-      .def_readwrite("use_partial_photon", &FarFieldCBSSensor::use_partial_photon)
       .def_readwrite("theta_pp_max", &FarFieldCBSSensor::theta_pp_max)
       .def_readwrite("theta_stride", &FarFieldCBSSensor::theta_stride)
       .def_readwrite("phi_stride", &FarFieldCBSSensor::phi_stride);
 
   py::class_<StatisticsSensor, Sensor>(m, "StatisticsSensor")
-      .def(py::init<double>(),
-           py::arg("z"),
+      .def(py::init<double, bool>(),
+           py::arg("z"), py::arg("absorb") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("events_histogram", &StatisticsSensor::events_histogram)
       .def_readonly("theta_histogram", &StatisticsSensor::theta_histogram)
       .def_readonly("phi_histogram", &StatisticsSensor::phi_histogram)
       .def_readonly("depth_histogram", &StatisticsSensor::depth_histogram)
       .def_readonly("time_histogram", &StatisticsSensor::time_histogram)
-      .def_readonly("weight_histogram", &StatisticsSensor::weight_histogram);
+      .def_readonly("weight_histogram", &StatisticsSensor::weight_histogram)
+      .def_readonly("events_histogram_bins_set", &StatisticsSensor::events_histogram_bins_set)
+      .def_readonly("theta_histogram_bins_set", &StatisticsSensor::theta_histogram_bins_set)
+      .def_readonly("phi_histogram_bins_set", &StatisticsSensor::phi_histogram_bins_set)
+      .def_readonly("depth_histogram_bins_set", &StatisticsSensor::depth_histogram_bins_set)
+      .def_readonly("time_histogram_bins_set", &StatisticsSensor::time_histogram_bins_set)
+      .def_readonly("weight_histogram_bins_set", &StatisticsSensor::weight_histogram_bins_set)
+      .def_readonly("max_events", &StatisticsSensor::max_events)
+      .def_readonly("min_theta", &StatisticsSensor::min_theta)
+      .def_readonly("max_theta", &StatisticsSensor::max_theta)
+      .def_readonly("n_bins_theta", &StatisticsSensor::n_bins_theta)
+      .def_readonly("dtheta", &StatisticsSensor::dtheta)
+      .def_readonly("min_phi", &StatisticsSensor::min_phi)
+      .def_readonly("max_phi", &StatisticsSensor::max_phi)
+      .def_readonly("n_bins_phi", &StatisticsSensor::n_bins_phi)
+      .def_readonly("dphi", &StatisticsSensor::dphi)
+      .def_readonly("max_depth", &StatisticsSensor::max_depth)
+      .def_readonly("n_bins_depth", &StatisticsSensor::n_bins_depth)
+      .def_readonly("ddepth", &StatisticsSensor::ddepth)
+      .def_readonly("max_time", &StatisticsSensor::max_time)
+      .def_readonly("n_bins_time", &StatisticsSensor::n_bins_time)
+      .def_readonly("dtime", &StatisticsSensor::dtime)
+      .def_readonly("max_weight", &StatisticsSensor::max_weight)
+      .def_readonly("n_bins_weight", &StatisticsSensor::n_bins_weight)
+      .def_readonly("dweight", &StatisticsSensor::dweight)
+      .def("set_events_histogram_bins", &StatisticsSensor::set_events_histogram_bins, py::arg("max_events"),
+           "Set the bins for the events histogram")
+      .def("set_theta_histogram_bins", &StatisticsSensor::set_theta_histogram_bins, py::arg("min_theta"), py::arg("max_theta"), py::arg("n_bins"),
+           "Set the bins for the theta histogram")
+      .def("set_phi_histogram_bins", &StatisticsSensor::set_phi_histogram_bins, py::arg("min_phi"), py::arg("max_phi"), py::arg("n_bins"),
+           "Set the bins for the phi histogram")
+      .def("set_depth_histogram_bins", &StatisticsSensor::set_depth_histogram_bins, py::arg("max_depth"), py::arg("n_bins"),
+           "Set the bins for the depth histogram")
+      .def("set_time_histogram_bins", &StatisticsSensor::set_time_histogram_bins, py::arg("max_time"), py::arg("n_bins"),
+           "Set the bins for the time histogram")
+      .def("set_weight_histogram_bins", &StatisticsSensor::set_weight_histogram_bins, py::arg("max_weight"), py::arg("n_bins"),
+           "Set the bins for the weight histogram");
 
   // Calculations results
   py::class_<StokesMatrixProcessed>(m, "StokesMatrixProcessed")

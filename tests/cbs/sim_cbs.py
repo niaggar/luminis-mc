@@ -5,7 +5,7 @@ from datetime import datetime
 
 from luminis_mc import (
     Experiment, ResultsLoader,
-    Laser, MieMedium, FarFieldCBSSensor, SensorsGroup, SimConfig, MiePhaseFunction,
+    Laser, MieMedium, FarFieldCBSSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
     run_simulation_parallel, postprocess_farfield_cbs,
     set_log_level, LogLevel, LaserSource
 )
@@ -55,15 +55,21 @@ with Experiment(exp_name, base_dir) as exp:
     theta_max_far_field = np.deg2rad(40)
     phi_max_far_field = 2 * np.pi
     n_theta_far_field = 200
-    n_phi_far_field = 1
+    n_phi_far_field = 60
 
     sens = SensorsGroup()
     det = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, n_theta_far_field, n_phi_far_field))
+    stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
+
     det.set_theta_limit(0, theta_max_far_field)
-    det.use_partial_photon = True
     det.theta_pp_max = np.deg2rad(30)
     det.theta_stride = 1
     det.phi_stride = 2
+
+    stats.set_events_histogram_bins(500)
+    stats.set_theta_histogram_bins(0, np.pi/2, 180)
+    stats.set_phi_histogram_bins(0, 2*np.pi, 360)
+    stats.set_depth_histogram_bins(10*mean_free_path_sim, 100)
 
     config = SimConfig(n_photons=n_photons, medium=medium, detector=sens, laser=laser, track_reverse_paths=True)
     config.n_threads = 8
@@ -110,6 +116,7 @@ with Experiment(exp_name, base_dir) as exp:
 
     # 5) guarda RAW del sensor
     exp.save_sensor(det, "farfield_cbs")
+    exp.save_sensor(stats, "statistics")
 
     # 6) guarda READY-TO-PLOT (recomendado)
     cbs = postprocess_farfield_cbs(det, n_photons)

@@ -546,7 +546,7 @@ class Experiment:
         elif t == "FarFieldCBSSensor":
             for k in [
                 "N_theta", "N_phi", "theta_max", "phi_max", "dtheta", "dphi",
-                "use_partial_photon", "theta_pp_max", "theta_stride", "phi_stride",
+                "theta_pp_max", "theta_stride", "phi_stride",
             ]:
                 if hasattr(sensor, k):
                     _write_attr(g_meta, k, getattr(sensor, k))
@@ -562,12 +562,30 @@ class Experiment:
 
         # ── StatisticsSensor ───────────────────────────────────────────────────
         elif t == "StatisticsSensor":
-            _write_dataset(g_data, "events_histogram", _as_array(sensor.events_histogram))
-            _write_dataset(g_data, "theta_histogram",  _as_array(sensor.theta_histogram))
-            _write_dataset(g_data, "phi_histogram",    _as_array(sensor.phi_histogram))
-            _write_dataset(g_data, "depth_histogram",  _as_array(sensor.depth_histogram))
-            _write_dataset(g_data, "time_histogram",   _as_array(sensor.time_histogram))
-            _write_dataset(g_data, "weight_histogram", _as_array(sensor.weight_histogram))
+            for k in [
+                "events_histogram_bins_set", "max_events",
+                "theta_histogram_bins_set", "min_theta", "max_theta", "n_bins_theta", "dtheta",
+                "phi_histogram_bins_set", "min_phi", "max_phi", "n_bins_phi", "dphi",
+                "depth_histogram_bins_set", "max_depth", "n_bins_depth", "ddepth",
+                "time_histogram_bins_set", "max_time", "n_bins_time", "dtime",
+                "weight_histogram_bins_set", "max_weight", "n_bins_weight", "dweight",
+            ]:
+                _write_attr(g_meta, k, getattr(sensor, k))
+            for name_ in [
+                "events_histogram", "theta_histogram", "phi_histogram",
+                "depth_histogram", "time_histogram", "weight_histogram"
+            ]:
+                seq = getattr(sensor, name_)
+
+                try:
+                    if len(seq) == 0:
+                        _write_attr(g_meta, f"skipped:{name_}", "empty (bins not set?)")
+                        continue
+                except Exception:
+                    pass
+
+                arr = np.asarray(list(seq), dtype=np.int64)
+                _write_dataset(g_data, name_, arr)
 
         else:
             raise TypeError(
