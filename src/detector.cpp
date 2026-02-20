@@ -837,10 +837,22 @@ namespace luminis::core
     const double S2_contribution = 2.0 * std::real(Ex * std::conj(Ey));
     const double S3_contribution = 2.0 * std::imag(Ex * std::conj(Ey));
 
-    S0_t[0](x_idx, y_idx) += S0_contribution * deposit;
-    S1_t[0](x_idx, y_idx) += S1_contribution * deposit;
-    S2_t[0](x_idx, y_idx) += S2_contribution * deposit;
-    S3_t[0](x_idx, y_idx) += S3_contribution * deposit;
+    int t_idx;
+    if (dt == 0)
+    {
+      t_idx = 0;
+    }
+    else    {
+      double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity) + fabs((z - zd) / wd);
+      if (arrival_time < 0 || arrival_time >= len_t)
+        return;
+      t_idx = static_cast<int>(arrival_time / dt);
+    }
+
+    S0_t[t_idx](x_idx, y_idx) += S0_contribution * deposit;
+    S1_t[t_idx](x_idx, y_idx) += S1_contribution * deposit;
+    S2_t[t_idx](x_idx, y_idx) += S2_contribution * deposit;
+    S3_t[t_idx](x_idx, y_idx) += S3_contribution * deposit;
 
     hits += 1;
   }
