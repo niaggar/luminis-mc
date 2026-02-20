@@ -72,11 +72,13 @@ from ._core import (
 )
 
 from .manager import Experiment, ResultsLoader
+from .sweepmanager import SweepManager
 
 __all__ = [
     # Manager
     "Experiment",
     "ResultsLoader",
+    "SweepManager",
     # RNG
     "Rng",
     # Math
