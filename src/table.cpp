@@ -65,4 +65,31 @@ double SamplingTable::Sample(double u) const {
   return values[index - 1] + t * (values[index] - values[index - 1]);
 }
 
+void DataTable::initialize(const std::vector<double>& x_vals, const std::vector<std::complex<double>>& y_vals) {
+  if (x_vals.size() != y_vals.size()) {
+    LLOG_ERROR("DataTable::initialize: x_vals and y_vals must have the same size");
+    throw std::invalid_argument("x_vals and y_vals must have the same size");
+  }
+  x_values = x_vals;
+  y_values = y_vals;
+}
+
+std::complex<double> DataTable::Sample(double x) const {
+  if (x_values.empty() || y_values.empty()) {
+    LLOG_ERROR("DataTable::Sample called on an uninitialized table");
+    throw std::runtime_error("DataTable is not initialized");
+  }
+
+  auto it = std::lower_bound(x_values.begin(), x_values.end(), x);
+  int index = std::distance(x_values.begin(), it);
+
+  if (index == 0)
+    return y_values[0];
+  if (index >= x_values.size())
+    return y_values.back();
+
+  double t = (x - x_values[index - 1]) / (x_values[index] - x_values[index - 1]);
+  return y_values[index - 1] + t * (y_values[index] - y_values[index - 1]);
+}
+
 } // namespace luminis::sample

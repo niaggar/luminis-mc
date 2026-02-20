@@ -15,7 +15,25 @@ struct Vec3 {
 
   Vec3() = default;
   Vec3(double x, double y, double z) : x(x), y(y), z(z) {}
+
+  Vec3 operator+(const Vec3& other) const {
+    return Vec3{x + other.x, y + other.y, z + other.z};
+  }
+  Vec3 operator-(const Vec3& other) const {
+    return Vec3{x - other.x, y - other.y, z - other.z};
+  }
+  Vec3 operator*(double scalar) const {
+    return Vec3{x * scalar, y * scalar, z * scalar};
+  }
+  Vec3 operator/(double scalar) const {
+    return Vec3{x / scalar, y / scalar, z / scalar};
+  }
 };
+
+const Vec3 ZERO_VEC3{0.0, 0.0, 0.0};
+const Vec3 X_UNIT_VEC3{1.0, 0.0, 0.0};
+const Vec3 Y_UNIT_VEC3{0.0, 1.0, 0.0};
+const Vec3 Z_UNIT_VEC3{0.0, 0.0, 1.0};
 
 struct Vec2 {
   double x{0.0};
@@ -34,9 +52,11 @@ struct CVec2 {
 };
 
 struct Matrix {
-  const uint rows;
-  const uint cols;
+  uint rows;
+  uint cols;
   std::vector<double> data;
+
+  Matrix() = default;
 
   Matrix(uint rows, uint cols) : rows(rows), cols(cols) {
     data.resize(rows * cols, 0.0);
@@ -60,9 +80,11 @@ struct Matrix {
 };
 
 struct CMatrix {
-  const uint rows;
-  const uint cols;
+  uint rows;
+  uint cols;
   std::vector<std::complex<double>> data;
+
+  CMatrix() = default;
 
   CMatrix(uint rows, uint cols) : rows(rows), cols(cols) {
     data.resize(rows * cols, std::complex<double>(0.0, 0.0));
@@ -83,9 +105,22 @@ struct CMatrix {
     }
     return data[i * cols + j];
   }
+
+  static CMatrix identity(uint size) {
+    CMatrix I(size, size);
+    for (uint i = 0; i < size; ++i) {
+      I(i, i) = std::complex<double>(1.0, 0.0);
+    }
+    return I;
+  }
 };
 
 double dot(const Vec3 &a, const Vec3 &b);
+Vec3 cross(const Vec3 &a, const Vec3 &b);
 double norm(const Vec3 &v);
+void matcmul(const CMatrix &A, const CMatrix &B, CMatrix &C);
+void matcmulscalar(const double &scalar, CMatrix &A);
+void matmul(const Matrix &A, const Matrix &B, Matrix &C);
+double calculate_rotation_angle(const Vec3& n_from, const Vec3& n_to);
 
 } // namespace luminis::math

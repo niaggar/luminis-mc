@@ -1,10 +1,12 @@
-#include "luminis/log/logger.hpp"
+#include <luminis/log/logger.hpp>
 #include <cmath>
 #include <luminis/core/laser.hpp>
 #include <luminis/math/rng.hpp>
 #include <luminis/math/vec.hpp>
 
 namespace luminis::core {
+
+const double GEOMETRY_EPSILON = 1e-9;
 
 math::Vec3 uniform_distribution(Rng &rng, const math::Vec3 &center, const double sigma) {
   const double theta = rng.uniform() * 2.0 * M_PI;
@@ -24,13 +26,18 @@ math::Vec3 gaussian_distribution(Rng &rng, const math::Vec3 &center, const doubl
   };
 }
 
-Laser::Laser(Vec3 position, Vec3 direction, Vec3 local_m, Vec3 local_n,
-             CVec2 polarization, double wavelength, double sigma,
-             LaserSource source_type)
-    : position(position), direction(direction),
-      local_m(local_m), local_n(local_n),
-      polarization(polarization), wavelength(wavelength), sigma(sigma),
-      source_type(source_type) {}
+Laser::Laser(std::complex<double> m_state, std::complex<double> n_state, double wavelength, double sigma, LaserSource source_type)
+{
+  this->position = {0, 0, GEOMETRY_EPSILON};
+  this->polarization = CVec2(m_state, n_state);
+  this->wavelength = wavelength;
+  this->sigma = sigma;
+  this->source_type = source_type;
+
+  direction = {0, 0, 1};
+  local_m = {1, 0, 0};
+  local_n = {0, 1, 0};
+}
 
 // TODO: Implement time sampling based on pulse duration and repetition rate
 double Laser::sample_emission_time(Rng &rng) const {
