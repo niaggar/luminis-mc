@@ -5,6 +5,15 @@ from ._core import (
     Vec3,
     Vec2,
     CVec2,
+    Matrix,
+    CMatrix,
+    # Math functions
+    dot,
+    cross,
+    norm,
+    matcmul,
+    matcmulscalar,
+    calculate_rotation_angle,
     # Phase functions
     PhaseFunction,
     UniformPhaseFunction,
@@ -13,18 +22,37 @@ from ._core import (
     RayleighDebyePhaseFunction,
     RayleighDebyeEMCPhaseFunction,
     DrainePhaseFunction,
+    MiePhaseFunction,
+    form_factor,
     # Photon
     Photon,
+    PhotonRecord,
     # Laser
     LaserSource,
+    TemporalProfile,
     Laser,
-    # Detector
-    Detector,
-    AngularSpeckle,
-    SpatialIntensity,
+    uniform_distribution,
+    gaussian_distribution,
+    # Sensors
+    Sensor,
+    PhotonRecordSensor,
+    PlanarFieldSensor,
+    PlanarFluenceSensor,
+    PlanarCBSSensor,
+    FarFieldFluenceSensor,
+    FarFieldCBSSensor,
+    StatisticsSensor,
+    SensorsGroup,
+    # Results
+    StokesMatrixProcessed,
+    StokesRadialProcessed,
+    FarFieldCBSProcessed,
+    FarFieldCBSRadialProcessed,
+    postprocess_farfield_cbs,
     # Medium
     Medium,
     SimpleMedium,
+    MieMedium,
     # Absorption
     Absorption,
     AbsorptionTimeDependent,
@@ -43,13 +71,29 @@ from ._core import (
     HardSpheres,
 )
 
+from .manager import Experiment, ResultsLoader
+from .sweepmanager import SweepManager
+
 __all__ = [
+    # Manager
+    "Experiment",
+    "ResultsLoader",
+    "SweepManager",
     # RNG
     "Rng",
     # Math
     "Vec3",
     "Vec2",
     "CVec2",
+    "Matrix",
+    "CMatrix",
+    # Math functions
+    "dot",
+    "cross",
+    "norm",
+    "matcmul",
+    "matcmulscalar",
+    "calculate_rotation_angle",
     # Phase functions
     "PhaseFunction",
     "UniformPhaseFunction",
@@ -58,18 +102,37 @@ __all__ = [
     "RayleighDebyePhaseFunction",
     "RayleighDebyeEMCPhaseFunction",
     "DrainePhaseFunction",
+    "MiePhaseFunction",
+    "form_factor",
     # Photon
     "Photon",
+    "PhotonRecord",
     # Laser
     "LaserSource",
+    "TemporalProfile",
     "Laser",
-    # Detector
-    "Detector",
-    "AngularSpeckle",
-    "SpatialIntensity",
+    "uniform_distribution",
+    "gaussian_distribution",
+    # Sensors
+    "Sensor",
+    "PhotonRecordSensor",
+    "PlanarFieldSensor",
+    "PlanarFluenceSensor",
+    "PlanarCBSSensor",
+    "FarFieldFluenceSensor",
+    "FarFieldCBSSensor",
+    "StatisticsSensor",
+    "SensorsGroup",
+    # Results
+    "StokesMatrixProcessed",
+    "StokesRadialProcessed",
+    "FarFieldCBSProcessed",
+    "FarFieldCBSRadialProcessed",
+    "postprocess_farfield_cbs",
     # Medium
     "Medium",
     "SimpleMedium",
+    "MieMedium",
     # Absorption
     "Absorption",
     "AbsorptionTimeDependent",
