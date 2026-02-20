@@ -30,9 +30,7 @@
 
 namespace luminis::core
 {
-  static inline bool intersect_plane(const Vec3 &r, const Vec3 &v,
-                                     const Vec3 &p0, const Vec3 &n,
-                                     double &t_out)
+  static inline bool intersect_plane(const Vec3 &r, const Vec3 &v, const Vec3 &p0, const Vec3 &n, double &t_out)
   {
     const double denom = dot(v, n);
     if (std::abs(denom) < 1e-14)
@@ -63,9 +61,7 @@ namespace luminis::core
   }
 
   // Aplica T = S*R y normaliza usando F (tu misma fórmula)
-  static inline CVec2 apply_scatter_normalized(const CMatrix &S,
-                                               double cos_phi, double sin_phi,
-                                               const CVec2 &Ein)
+  static inline CVec2 apply_scatter_normalized(const CMatrix &S, double cos_phi, double sin_phi, const CVec2 &Ein)
   {
     // R(phi)
     CMatrix R(2, 2);
@@ -117,11 +113,6 @@ namespace luminis::core
     u_int new_id = static_cast<u_int>(detectors.size());
     detector->id = new_id;
     double z = detector->origin.z;
-
-    if (detector->estimator_enabled)
-    {
-      active_estimators.push_back(detector.get());
-    }
 
     z_layers[z].push_back(detector.get());
     detectors.push_back(std::move(detector));
@@ -203,9 +194,12 @@ namespace luminis::core
 
   void SensorsGroup::run_estimators(const Photon &photon, const Medium &medium)
   {
-    for (Sensor *sensor : active_estimators)
+    for (const auto &detector : detectors)
     {
-      sensor->process_estimation(photon, medium);
+      if (detector->estimator_enabled)
+      {
+        detector->process_estimation(photon, medium);
+      }
     }
   }
 
@@ -240,13 +234,24 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
 
   // Sensor implementation
-  Sensor::Sensor(double z)
+  Sensor::Sensor(double z, bool absorb, bool estimator)
   {
     origin = {0, 0, z};
     normal = Z_UNIT_VEC3;
     backward_normal = Z_UNIT_VEC3 * -1;
     m_polarization = X_UNIT_VEC3;
     n_polarization = Y_UNIT_VEC3;
+    absorb_photons = absorb;
+
+    if (z != 0.0 && estimator)
+    {
+      LLOG_WARN("Sensor: Estimator mode enabled but z={} is not 0. Estimation is only valid for sensors at z=0. Consider setting z=0 or disabling estimator mode.", z);
+      estimator_enabled = false;
+    }
+    else
+    {
+      estimator_enabled = estimator;
+    }
   }
 
   void Sensor::set_theta_limit(double min, double max)
@@ -317,13 +322,13 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   // PhotonRecordSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  PhotonRecordSensor::PhotonRecordSensor(double z) : Sensor(z)
+  PhotonRecordSensor::PhotonRecordSensor(double z, bool absorb) : Sensor(z, absorb, false)
   {
   }
 
   std::unique_ptr<Sensor> PhotonRecordSensor::clone() const
   {
-    auto det = std::make_unique<PhotonRecordSensor>(origin.z);
+    auto det = std::make_unique<PhotonRecordSensor>(origin.z, absorb_photons);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -374,7 +379,7 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   // PlanarFieldSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  PlanarFieldSensor::PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy) : Sensor(z)
+  PlanarFieldSensor::PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy, bool absorb, bool estimator) : Sensor(z, absorb, estimator)
   {
     this->len_x = len_x;
     this->len_y = len_y;
@@ -394,7 +399,7 @@ namespace luminis::core
 
   std::unique_ptr<Sensor> PlanarFieldSensor::clone() const
   {
-    auto det = std::make_unique<PlanarFieldSensor>(origin.z, len_x, len_y, dx, dy);
+    auto det = std::make_unique<PlanarFieldSensor>(origin.z, len_x, len_y, dx, dy, absorb_photons, estimator_enabled);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -580,7 +585,7 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   // PlanarFluenceSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  PlanarFluenceSensor::PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt) : Sensor(z)
+  PlanarFluenceSensor::PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt, bool absorb, bool estimator) : Sensor(z, absorb, estimator)
   {
     this->len_x = len_x;
     this->len_y = len_y;
@@ -613,7 +618,7 @@ namespace luminis::core
 
   std::unique_ptr<Sensor> PlanarFluenceSensor::clone() const
   {
-    auto det = std::make_unique<PlanarFluenceSensor>(origin.z, len_x, len_y, len_t, dx, dy, dt);
+    auto det = std::make_unique<PlanarFluenceSensor>(origin.z, len_x, len_y, len_t, dx, dy, dt, absorb_photons, estimator_enabled);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -843,7 +848,7 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   // PlanarCBSSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  PlanarCBSSensor::PlanarCBSSensor(double len_x, double len_y, double dx, double dy) : Sensor(0.0)
+  PlanarCBSSensor::PlanarCBSSensor(double len_x, double len_y, double dx, double dy, bool estimator) : Sensor(0.0, true, estimator)
   {
     this->len_x = len_x;
     this->len_y = len_y;
@@ -943,10 +948,15 @@ namespace luminis::core
     hits += 1;
   }
 
+  void PlanarCBSSensor::process_estimation(const Photon &photon, const Medium &medium)
+  {
+    // Not implemented for CBS sensor since it relies on interference between forward and reverse paths, which cannot be captured by estimation.
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // FarFieldFluenceSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  FarFieldFluenceSensor::FarFieldFluenceSensor(double z, double theta_max, double phi_max, int n_theta, int n_phi) : Sensor(z)
+  FarFieldFluenceSensor::FarFieldFluenceSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator) : Sensor(0.0, true, estimator)
   {
     this->theta_max = theta_max;
     this->phi_max = phi_max;
@@ -967,7 +977,7 @@ namespace luminis::core
 
   std::unique_ptr<Sensor> FarFieldFluenceSensor::clone() const
   {
-    auto det = std::make_unique<FarFieldFluenceSensor>(origin.z, theta_max, phi_max, N_theta, N_phi);
+    auto det = std::make_unique<FarFieldFluenceSensor>(theta_max, phi_max, N_theta, N_phi, estimator_enabled);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -1144,7 +1154,7 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   // FarFieldCBSSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  FarFieldCBSSensor::FarFieldCBSSensor(double theta_max, double phi_max, int n_theta, int n_phi) : Sensor(0.0)
+  FarFieldCBSSensor::FarFieldCBSSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator) : Sensor(0.0, true, estimator)
   {
     this->theta_max = theta_max;
     this->phi_max = phi_max;
@@ -1184,7 +1194,7 @@ namespace luminis::core
 
   std::unique_ptr<Sensor> FarFieldCBSSensor::clone() const
   {
-    auto det = std::make_unique<FarFieldCBSSensor>(theta_max, phi_max, N_theta, N_phi);
+    auto det = std::make_unique<FarFieldCBSSensor>(theta_max, phi_max, N_theta, N_phi, estimator_enabled);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -1198,7 +1208,6 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
-    det->use_partial_photon = use_partial_photon;
     det->theta_pp_max = theta_pp_max;
     det->theta_stride = theta_stride;
     det->phi_stride = phi_stride;
@@ -1297,9 +1306,6 @@ namespace luminis::core
 
   void FarFieldCBSSensor::process_estimation(const Photon &photon, const Medium &medium)
   {
-    if (!use_partial_photon)
-      return;
-
     // Para CBS por estimación: necesitas al menos 1 scatter previo,
     // porque el scatter estimado sería el segundo total.
     if (photon.events < 1)
@@ -1761,13 +1767,19 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   // StatisticsSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  StatisticsSensor::StatisticsSensor(double z) : Sensor(z)
+  StatisticsSensor::StatisticsSensor(double z, bool absorb) : Sensor(z, absorb, false)
   {
+    events_histogram = std::vector<int>();
+    theta_histogram = std::vector<int>();
+    phi_histogram = std::vector<int>();
+    depth_histogram = std::vector<int>();
+    time_histogram = std::vector<int>();
+    weight_histogram = std::vector<int>();
   }
 
   std::unique_ptr<Sensor> StatisticsSensor::clone() const
   {
-    auto det = std::make_unique<StatisticsSensor>(origin.z);
+    auto det = std::make_unique<StatisticsSensor>(origin.z, absorb_photons);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;

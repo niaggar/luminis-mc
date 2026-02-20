@@ -214,6 +214,12 @@ namespace luminis::core
       photon.pos.y += photon.P_local(2, 1) * step;
       photon.pos.z += photon.P_local(2, 2) * step;
 
+      // Update penetration depth (max z reached inside the medium).
+      if (photon.pos.z > photon.penetration_depth)
+      {
+        photon.penetration_depth = photon.pos.z;
+      }
+
       // --- Step 2: Detector intersection ---
       // Check if the step crossed any sensor plane. If a sensor absorbs the
       // photon (absorb_photons == true), terminate immediately.

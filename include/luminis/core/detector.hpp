@@ -91,14 +91,13 @@ namespace luminis::core
     /// @brief If true, photons are terminated (alive = false) after being detected.
     /// @details Set to false to allow the same photon to be recorded by multiple sensors
     ///          or to continue propagating after detection.
-    // TODO: Implement a form to control how the contribution will be handled
-    bool absorb_photons{true};
+    bool absorb_photons{false};
 
     /// @brief If true, this sensor participates in estimator-based detection.
     /// @details When enabled, SensorsGroup::run_estimators() calls process_estimation()
     ///          on this sensor after every scattering event, allowing collection of
     ///          virtual contributions without requiring physical plane intersection.
-    bool estimator_enabled{true};
+    bool estimator_enabled{false};
 
     /// @name Polar angle (theta) filter
     /// @brief Accepts photons whose exit angle satisfies theta_min <= theta <= theta_max.
@@ -134,10 +133,13 @@ namespace luminis::core
 
     /// @brief Construct a sensor centered at the given z-coordinate.
     /// @param z The z-position of the detection plane.
+    /// @param absorb If true, photons are terminated after being detected.
+    /// @param estimator If true, this sensor participates in estimator-based detection.
     /// @details Initializes the sensor with origin=(0,0,z), normal=+z, and default
     ///          polarization basis vectors m=+x, n=+y.
-    Sensor(double z);
+    Sensor(double z, bool absorb = true, bool estimator = false);
     virtual ~Sensor() = default;
+
     Sensor(const Sensor &) = delete;
     Sensor &operator=(const Sensor &) = delete;
     Sensor(Sensor &&) = default;
@@ -235,7 +237,10 @@ namespace luminis::core
 
     /// @brief Construct a photon record sensor at the given z-coordinate.
     /// @param z The z-position of the detection plane.
-    PhotonRecordSensor(double z);
+    /// @param absorb If true, photons are terminated after being detected.
+    /// @details Initializes the sensor with origin=(0,0,z), normal=+z, and default
+    ///          polarization basis vectors m=+x, n=+y.
+    PhotonRecordSensor(double z, bool absorb = true);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
 
@@ -283,8 +288,10 @@ namespace luminis::core
     /// @param len_y Total sensor height in y.
     /// @param dx    Pixel size in x (N_x = ceil(len_x / dx)).
     /// @param dy    Pixel size in y (N_y = ceil(len_y / dy)).
+    /// @param absorb If true, photons are terminated after being detected.
+    /// @param estimator If true, this sensor participates in estimator-based detection.
     /// @details Automatically sets a position filter to the sensor area bounds.
-    PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy);
+    PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy, bool absorb = true, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
     void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
@@ -335,7 +342,7 @@ namespace luminis::core
     /// @param dy    Pixel size in y.
     /// @param dt    Time bin width (0 for time-integrated, meaning N_t = 1).
     /// @details Automatically sets a position filter to the sensor area bounds.
-    PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt);
+    PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt, bool absorb = true, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
     void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
@@ -366,10 +373,13 @@ namespace luminis::core
     /// @param len_y Total sensor height in y.
     /// @param dx    Pixel size in x.
     /// @param dy    Pixel size in y.
-    PlanarCBSSensor(double len_x, double len_y, double dx, double dy);
+    /// @param estimator If true, this sensor participates in estimator-based detection.
+    /// @details Automatically sets a position filter to the sensor area bounds.
+    PlanarCBSSensor(double len_x, double len_y, double dx, double dy, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
     void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
+    void process_estimation(const Photon &photon, const Medium &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -398,13 +408,13 @@ namespace luminis::core
     Matrix S0, S1, S2, S3;     ///< Accumulated Stokes parameter grids [N_theta × N_phi].
 
     /// @brief Construct a far-field fluence sensor.
-    /// @param z       Z-coordinate of the detection plane (for hit registration).
     /// @param theta_max Maximum polar angle [rad].
     /// @param phi_max   Maximum azimuthal angle [rad] (typically 2*pi).
     /// @param n_theta   Number of polar angle bins.
     /// @param n_phi     Number of azimuthal angle bins.
+    /// @param estimator If true, this sensor participates in estimator-based detection.
     /// @details Automatically sets theta and phi filters to [0, theta_max] and [0, phi_max].
-    FarFieldFluenceSensor(double z, double theta_max, double phi_max, int n_theta, int n_phi);
+    FarFieldFluenceSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
     void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
@@ -461,9 +471,8 @@ namespace luminis::core
     double dtheta, dphi;       ///< Angular bin widths [rad].
 
     // --- NEW: partial photon / next-event estimator control ---
-    bool use_partial_photon{true}; // si true, NO usar process_hit
-    double theta_pp_max{-1.0};      // si <0 => usa theta_max
-    int theta_stride{1};            // subsampling para performance
+    double theta_pp_max{-1.0};     // si <0 => usa theta_max
+    int theta_stride{1};           // subsampling para performance
     int phi_stride{1};
 
     // --- NEW: cache para normalización angular (depende de k) ---
@@ -491,7 +500,9 @@ namespace luminis::core
     /// @param phi_max   Maximum azimuthal angle [rad] (typically 2*pi).
     /// @param n_theta   Number of polar angle bins.
     /// @param n_phi     Number of azimuthal angle bins.
-    FarFieldCBSSensor(double theta_max, double phi_max, int n_theta, int n_phi);
+    /// @param estimator If true, this sensor participates in estimator-based detection.
+    /// @details Automatically sets theta and phi filters to [0, theta_max] and [0, phi_max].
+    FarFieldCBSSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
 
@@ -640,8 +651,9 @@ namespace luminis::core
 
     /// @brief Construct a statistics sensor at the given z-coordinate.
     /// @param z The z-position of the detection plane.
+    /// @param absorb If true, photons hitting this sensor are absorbed.
     /// @note No histograms are active by default; call set_*_histogram_bins() to enable them.
-    StatisticsSensor(double z);
+    StatisticsSensor(double z, bool absorb = true);
 
     /// @brief Configure the scattering events histogram.
     /// @param max_events Number of bins (one bin per event count, from 0 to max_events-1).
@@ -710,7 +722,6 @@ namespace luminis::core
   {
     std::vector<std::unique_ptr<Sensor>> detectors;                     ///< Owned sensor instances.
     std::map<double, std::vector<Sensor *>, DoubleComparator> z_layers; ///< Sensors indexed by z-coordinate for fast lookup.
-    std::vector<Sensor *> active_estimators;                            ///< Sensors with estimator_enabled=true (raw pointers into detectors).
 
     SensorsGroup() = default;
     SensorsGroup(const SensorsGroup &) = delete;
