@@ -382,9 +382,9 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S2_incoh", &FarFieldCBSSensor::S2_incoh)
       .def_readonly("S3_incoh", &FarFieldCBSSensor::S3_incoh)
       .def_readwrite("use_partial_photon", &FarFieldCBSSensor::use_partial_photon)
-.def_readwrite("theta_pp_max", &FarFieldCBSSensor::theta_pp_max)
-.def_readwrite("theta_stride", &FarFieldCBSSensor::theta_stride)
-.def_readwrite("phi_stride", &FarFieldCBSSensor::phi_stride);
+      .def_readwrite("theta_pp_max", &FarFieldCBSSensor::theta_pp_max)
+      .def_readwrite("theta_stride", &FarFieldCBSSensor::theta_stride)
+      .def_readwrite("phi_stride", &FarFieldCBSSensor::phi_stride);
 
   py::class_<StatisticsSensor, Sensor>(m, "StatisticsSensor")
       .def(py::init<double>(),
