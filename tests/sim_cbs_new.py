@@ -1,9 +1,6 @@
 from luminis_mc import (
     Laser,
     MieMedium,
-    PlanarFieldSensor,
-    PlanarFluenceSensor,
-    FarFieldFluenceSensor,
     FarFieldCBSSensor,
     SensorsGroup,
     SimConfig,
@@ -16,13 +13,11 @@ from luminis_mc import Experiment, ResultsLoader
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.optimize import curve_fit
 import __main__
 
 set_log_level(LogLevel.info)
 
-exp = Experiment("sim_cbs_new", "/Users/niaggar/Documents/Thesis/Progress/23Feb26")
+exp = Experiment("sim_cbs_new-lin", "/Users/niaggar/Documents/Thesis/Progress/23Feb26")
 exp.log_script(__main__.__file__)
 start_time = time.time()
 
@@ -30,19 +25,21 @@ start_time = time.time()
 # Medium parameters in micrometers
 mean_free_path_sim = 1.0
 mean_free_path_real = 2.8
-radius_real = 0.1
+radius_real = 0.05
 n_particle_real = 1.58984
 n_medium_real = 1.33
 inv_mfp_sim = 1 / mean_free_path_sim
-mu_absortion_sim = 0.05 * inv_mfp_sim
+mu_absortion_sim = 0.0
 mu_scattering_sim = inv_mfp_sim - mu_absortion_sim
 
 # Laser parameters
 wavelength_real = 0.5145
-laser_m_polarization_state = 1/np.sqrt(2)
-laser_n_polarization_state = -1j/np.sqrt(2)
-laser_radius = 5 * mean_free_path_sim
-laser_type = LaserSource.Gaussian
+# laser_m_polarization_state = 1/np.sqrt(2)
+# laser_n_polarization_state = -1j/np.sqrt(2)
+laser_m_polarization_state = 1
+laser_n_polarization_state = 0
+laser_radius = 1 * mean_free_path_sim
+laser_type = LaserSource.Point
 
 # Phase function parameters
 phasef_theta_min = 0.0
@@ -50,7 +47,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 1000
 
 # Simulation parameters
-n_photons = 100_000_000
+n_photons = 100_000
 
 
 laser_source = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength_real, laser_radius, laser_type)
@@ -86,29 +83,20 @@ print(f"Relative refractive index: {n_particle_real / n_medium_real}")
 print(f"Mie Anisotropy: {mie_anysotropy}")
 
 
-# Detector parameters
-z_sensor = 0.0
-len_x_sensor = 40 * mean_free_path_sim
-len_y_sensor = 40 * mean_free_path_sim
-pixel_size = 0.1 * mean_free_path_sim
-len_t_sensor = 0.0
-pixel_t_size = 0.0
-
 # Far-field parameters
-theta_max_far_field = np.deg2rad(75)
+theta_max_far_field = np.deg2rad(40)
 phi_max_far_field = 2 * np.pi
-n_theta_far_field = 75
-n_phi_far_field = 30
+n_theta_far_field = 200
+n_phi_far_field = 1
 
 
 sens_group = SensorsGroup()
-# planar_field_sensor = sens_group.add_detector(PlanarFieldSensor(z_sensor, len_x_sensor, len_y_sensor, pixel_size, pixel_size))
-# planar_fluence_sensor = sens_group.add_detector(PlanarFluenceSensor(z_sensor, len_x_sensor, len_y_sensor, len_t_sensor, pixel_size, pixel_size, pixel_t_size))
-# far_field_fluence_sensor = sens_group.add_detector(FarFieldFluenceSensor(z_sensor, theta_max_far_field, phi_max_far_field, n_theta_far_field, n_phi_far_field))
 far_field_cbs_sensor = sens_group.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, n_theta_far_field, n_phi_far_field))
 far_field_cbs_sensor.set_theta_limit(0, theta_max_far_field)
-
-
+far_field_cbs_sensor.use_partial_photon = True
+far_field_cbs_sensor.theta_pp_max = np.deg2rad(30)
+far_field_cbs_sensor.theta_stride = 1
+far_field_cbs_sensor.phi_stride = 2
 
 exp.log_params(
     # Medium parameters
@@ -131,13 +119,6 @@ exp.log_params(
     phasef_ndiv=phasef_ndiv,
     # Simulation parameters
     n_photons=n_photons,
-    # Detector parameters
-    z_sensor=z_sensor,
-    len_x_sensor=len_x_sensor,
-    len_y_sensor=len_y_sensor,
-    pixel_size=pixel_size,
-    len_t_sensor=len_t_sensor,
-    pixel_t_size=pixel_t_size,
     # Far-field parameters
     theta_max_far_field=theta_max_far_field,
     phi_max_far_field=phi_max_far_field,
@@ -159,241 +140,100 @@ run_simulation_parallel(config)
 
 end_time = time.time()
 print(f"---- Simulation time: {end_time - start_time:.2f} seconds")
-# print(f"Photons detected by planar field sensor: {planar_field_sensor.hits}")
-# print(f"Photons detected by planar fluence sensor: {planar_fluence_sensor.hits}")
-# print(f"Photons detected by far-field fluence sensor: {far_field_fluence_sensor.hits}")
 print(f"Photons detected by far-field CBS sensor: {far_field_cbs_sensor.hits}")
 
 
-
-
-
-
-
-# S_0 = np.array(planar_fluence_sensor.S0_t[0], copy=False)
-# S_1 = np.array(planar_fluence_sensor.S1_t[0], copy=False)
-# S_2 = np.array(planar_fluence_sensor.S2_t[0], copy=False)
-# S_3 = np.array(planar_fluence_sensor.S3_t[0], copy=False)
-# E_x = np.array(planar_field_sensor.Ex, copy=False)
-# E_y = np.array(planar_field_sensor.Ey, copy=False)
-
-# I_ave_x = (S_0 + S_1) / 2
-# I_insta_x = np.abs(E_x)**2
-
-# I_ave_y = (S_0 - S_1) / 2
-# I_insta_y = np.abs(E_y)**2
-
-# def gaussian_2d_func(coords, amplitude, xo, yo, sigma, offset):
-#     x, y = coords
-#     g = offset + amplitude * np.exp( -((x-xo)**2 + (y-yo)**2) / (2*sigma**2) )
-#     return g.ravel()
-
-# def plot_figure_5_corrected(I_inst, I_avg_raw, NN, HW):
-#     # Crear grid espacial
-#     x = np.linspace(-HW, HW, NN)
-#     y = np.linspace(-HW, HW, NN)
-#     X, Y = np.meshgrid(x, y)
-
-#     # ... (El bloque de ajuste Gaussiano se queda igual) ...
-#     # Copia el bloque "try/except" y cálculo de "eta" de tu código anterior aquí
-#     # o usa el script completo de abajo.
-
-#     # --- REPETIMOS EL AJUSTE PARA QUE EL CÓDIGO ESTÉ COMPLETO ---
-#     x_flat = X.ravel()
-#     y_flat = Y.ravel()
-#     z_flat = I_avg_raw.ravel()
-#     initial_guess = [np.max(I_avg_raw), 0, 0, 10, 0]
-
-#     try:
-#         popt, pcov = curve_fit(gaussian_2d_func, (x_flat, y_flat), z_flat, p0=initial_guess)
-#         I_avg_smooth = gaussian_2d_func((X, Y), *popt).reshape(NN, NN)
-#     except:
-#         I_avg_smooth = I_avg_raw
-
-#     mask = I_avg_smooth > (np.max(I_avg_smooth) * 0.01)
-#     eta = I_inst[mask] / I_avg_smooth[mask]
-#     # -----------------------------------------------------------
-
-#     # --- GRAFICACIÓN ---
-#     fig = plt.figure(figsize=(16, 10))
-
-#     # (a) Instantaneous Ix
-#     ax1 = fig.add_subplot(2, 3, 1)
-#     ax1.imshow(I_inst, extent=[-HW, HW, -HW, HW], cmap='gray', origin='lower')
-#     # CORRECCIÓN 1: Añadir r antes de las comillas si hay LaTeX (opcional aquí, pero buena práctica)
-#     ax1.set_title(r"(a) Instantaneous Intensity $I_x$")
-#     ax1.set_xlabel(r"x ($l_s$)")
-
-#     # (b) Average Ix
-#     ax2 = fig.add_subplot(2, 3, 2)
-#     ax2.imshow(I_avg_raw, extent=[-HW, HW, -HW, HW], cmap='gray', origin='lower')
-#     ax2.set_title(r"(b) Average Intensity $\langle I_x \rangle$ (Raw)")
-#     ax2.set_xlabel(r"x ($l_s$)")
-
-#     # (c) Probability Density
-#     ax3 = fig.add_subplot(2, 3, 3)
-#     hist, bins = np.histogram(eta, bins=60, density=True)
-#     centers = (bins[:-1] + bins[1:]) / 2
-
-#     ax3.semilogy(centers, hist, 'mo', mfc='none', label='Simulación')
-
-#     x_theory = np.linspace(0, 10, 100)
-#     # CORRECCIÓN 2: Añadir r'' aquí por el \eta
-#     ax3.semilogy(x_theory, np.exp(-x_theory), 'k-', linewidth=2, label=r'Teoría $e^{-\eta}$')
-
-#     ax3.set_title("(c) Probability Density")
-#     # CORRECCIÓN 3: Añadir r'' aquí (ESTA ES LA QUE CAUSABA EL CRASH PRINCIPAL)
-#     ax3.set_xlabel(r"$\eta = I_x / \langle I_x \rangle$")
-
-#     ax3.set_ylim(1e-4, 1)
-#     ax3.set_xlim(0, 10)
-#     ax3.legend()
-#     ax3.grid(True, which="both", ls="--", alpha=0.2)
-
-#     # (d) 3D Surface
-#     ax4 = fig.add_subplot(2, 3, 4, projection='3d')
-#     surf = ax4.plot_surface(X, Y, I_avg_smooth, cmap='jet', linewidth=0, antialiased=False)
-#     ax4.set_title("(d) Avg Intensity (Fitted Profile)")
-
-#     # (e) Cross Section X
-#     ax5 = fig.add_subplot(2, 3, 5)
-#     mid_idx = NN // 2
-#     ax5.plot(x, I_avg_raw[mid_idx, :], 'm-', alpha=0.4, label='Data (Raw)')
-#     ax5.plot(x, I_avg_smooth[mid_idx, :], 'k-', linewidth=2, label='Fit')
-#     ax5.set_title("(e) Cross Section X")
-#     ax5.legend()
-
-#     # (f) Cross Section Y
-#     ax6 = fig.add_subplot(2, 3, 6)
-#     ax6.plot(y, I_avg_raw[:, mid_idx], 'm-', alpha=0.4, label='Data (Raw)')
-#     ax6.plot(y, I_avg_smooth[:, mid_idx], 'k-', linewidth=2, label='Fit')
-#     ax6.set_title("(f) Cross Section Y")
-
-#     plt.tight_layout()
-#     plt.savefig("replicate_fig5_corrected.png", dpi=150)
-#     plt.show()
-
-
-# NN = int(len_x_sensor / pixel_size)
-# HW = len_x_sensor / 2
-# plot_figure_5_corrected(I_insta_x, I_ave_x, NN, HW)
-# plot_figure_5_corrected(I_insta_y, I_ave_y, NN, HW)
-
-
-
-
-
-
-
-
-def plot_polar_intensity(ax, theta_mesh, phi_mesh, intensity_data, title, cmap='jet'):
-    """
-    Grafica intensidad en coordenadas polares (Theta = Radio, Phi = Ángulo)
-    """
-    mesh = ax.pcolormesh(phi_mesh, theta_mesh, intensity_data, cmap=cmap, shading='auto')
-    
-    # Estética similar a Sawicki et al.
-    ax.set_title(title, pad=20)
-    ax.grid(False) # Quitar grid para que parezca más una "imagen" óptica
-    ax.set_yticklabels([]) # Quitar etiquetas radiales internas si molestan
-    ax.set_xticklabels([]) # Quitar ángulos si se quiere limpiar
-    
-    # Ajustar límite radial
-    ax.set_ylim(0, np.max(theta_mesh))
-    
-    return mesh
-
-def plot_polar_stokes(ax, theta_mesh, phi_mesh, data, title, cmap='jet', vmin=None, vmax=None):
-    """
-    Grafica parámetros de Stokes en coordenadas polares.
-    Admite vmin/vmax para centrar mapas de color divergentes.
-    """
-    # pcolormesh con shading='auto'
-    mesh = ax.pcolormesh(phi_mesh, theta_mesh, data, cmap=cmap, shading='auto', vmin=vmin, vmax=vmax)
-    
-    # Estética
-    ax.set_title(title, pad=15, fontsize=12, fontweight='bold')
-    ax.grid(False) 
-    ax.set_yticklabels([]) 
-    ax.set_xticklabels([])
-    
-    # Ajustar límite radial
-    ax.set_ylim(0, np.max(theta_mesh))
-    
-    return mesh
-
-
+exp.save_sensor(far_field_cbs_sensor, "far_field_cbs_sensor")
 
 
 
 cbs_data = postprocess_farfield_cbs(far_field_cbs_sensor, n_photons)
 
+S0_coh = np.array(cbs_data.coherent.S0,    copy=False)   # (n_theta, n_phi)
+S1_coh = np.array(cbs_data.coherent.S1,    copy=False)
+S2_coh = np.array(cbs_data.coherent.S2,    copy=False)
+S3_coh = np.array(cbs_data.coherent.S3,    copy=False)
 
-
-S0_far_field = np.array(cbs_data.coherent.S0, copy=False)
-S1_far_field = np.array(cbs_data.coherent.S1, copy=False)
-S2_far_field = np.array(cbs_data.coherent.S2, copy=False)
-S3_far_field = np.array(cbs_data.coherent.S3, copy=False)
-
-Ix_far = 0.5 * (S0_far_field + S1_far_field)
-Iy_far = 0.5 * (S0_far_field - S1_far_field)
-I_RCP_far = 0.5 * (S0_far_field + S3_far_field)
-I_LCP_far = 0.5 * (S0_far_field - S3_far_field)
+S0_inc = np.array(cbs_data.incoherent.S0,  copy=False)
+S1_inc = np.array(cbs_data.incoherent.S1,  copy=False)
+S2_inc = np.array(cbs_data.incoherent.S2,  copy=False)
+S3_inc = np.array(cbs_data.incoherent.S3,  copy=False)
 
 theta_coords = np.linspace(0, theta_max_far_field, n_theta_far_field)
-phi_coords = np.linspace(0, phi_max_far_field, n_phi_far_field)
-THETA, PHI = np.meshgrid(theta_coords, phi_coords, indexing='ij')
-theta_deg_max = np.degrees(theta_max_far_field)
+theta_deg    = np.degrees(theta_coords)
+
+# Enhancement 2D y luego promedio en phi
+S0_inc_safe = np.where(S0_inc > 0, S0_inc, np.nan)
+eta_2d       = S0_coh / S0_inc_safe                        # (n_theta, n_phi)
+eta_theta    = np.nanmean(eta_2d, axis=1)                  # (n_theta,)
+
+# Intensidades promediadas en phi (para line plots)
+S0_coh_avg = np.mean(S0_coh, axis=1)
+S0_inc_avg = np.mean(S0_inc, axis=1)
+S1_coh_avg = np.mean(S1_coh, axis=1)
+S3_coh_avg = np.mean(S3_coh, axis=1)
+S3_inc_avg = np.mean(S3_inc, axis=1)
+
+def plot_test1(theta_deg, eta_theta, S0_coh_avg, S0_inc_avg):
+    eta_at_0 = eta_theta[0]
+    print(f"[TEST 1] η(θ=0) = {eta_at_0:.4f}  (esperado: 2.0000)")
+    print(f"[TEST 1] S0_coh[0]  = {S0_coh_avg[0]:.6e}")
+    print(f"[TEST 1] S0_inc[0]  = {S0_inc_avg[0]:.6e}")
+    print(f"[TEST 1] Ratio raw  = {S0_coh_avg[0] / S0_inc_avg[0]:.4f}")
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+
+    # Panel 1: Intensidades coh vs incoh
+    axes[0].plot(theta_deg, S0_coh_avg, 'b-', lw=2, label='Coherente')
+    axes[0].plot(theta_deg, S0_inc_avg, 'r--', lw=2, label='Incoherente')
+    axes[0].set_xlabel('θ (grados)')
+    axes[0].set_ylabel('S0 (normalizado)')
+    axes[0].set_title('Intensidades vs θ')
+    axes[0].legend()
+    axes[0].grid(True)
+
+    # Panel 2: Enhancement factor — el más importante
+    axes[1].plot(theta_deg, eta_theta, 'k-', lw=2)
+    axes[1].axhline(2.0,  color='r',  ls='--', lw=1, label='η = 2 (teórico)')
+    axes[1].axhline(1.0,  color='gray', ls=':', lw=1, label='η = 1 (fondo)')
+    axes[1].set_xlabel('θ (grados)')
+    axes[1].set_ylabel('η = S0_coh / S0_inc')
+    axes[1].set_title(f'Enhancement Factor  |  η(0) = {eta_at_0:.3f}')
+    axes[1].legend()
+    axes[1].grid(True)
+    axes[1].set_ylim([0.8, 2.5])
+
+    # Panel 3: Coh / (2 * Incoh) — debería ser ~1 fuera del cono y ~1 en el pico
+    # Esto normaliza el fondo a 1 para ver la forma del cono más claramente
+    ratio_norm = S0_coh_avg / (2.0 * S0_inc_avg)
+    axes[2].plot(theta_deg, ratio_norm, 'g-', lw=2)
+    axes[2].axhline(1.0, color='r', ls='--', lw=1, label='Máximo teórico')
+    axes[2].axhline(0.5, color='gray', ls=':', lw=1, label='Fondo incoherente')
+    axes[2].set_xlabel('θ (grados)')
+    axes[2].set_ylabel('S0_coh / (2 · S0_inc)')
+    axes[2].set_title('Forma del cono CBS (normalizado)')
+    axes[2].legend()
+    axes[2].grid(True)
+
+    plt.suptitle('TEST 1 — Partículas pequeñas, sin absorción, luz lineal', fontweight='bold')
+    plt.tight_layout()
+    plt.savefig('test1_enhancement.png', dpi=150)
+    plt.show()
+
+plot_test1(theta_deg, eta_theta, S0_coh_avg, S0_inc_avg)
 
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 10), subplot_kw={'projection': 'polar'})
-axes = axes.flatten()
-# Graficar Ix
-c1 = plot_polar_intensity(axes[0], THETA, PHI, Ix_far, r"$I_x$ Backscattering - Coherent")
-plt.colorbar(c1, ax=axes[0], fraction=0.046, pad=0.04)
-# Graficar Iy
-c2 = plot_polar_intensity(axes[1], THETA, PHI, Iy_far, r"$I_y$ Backscattering - Coherent")
-plt.colorbar(c2, ax=axes[1], fraction=0.046, pad=0.04)
-# Graficar I_RCP
-c3 = plot_polar_intensity(axes[2], THETA, PHI, I_RCP_far, r"$I_{RCP}$ Backscattering - Coherent")
-plt.colorbar(c3, ax=axes[2], fraction=0.046, pad=0.04)
-# Graficar I_LCP
-c4 = plot_polar_intensity(axes[3], THETA, PHI, I_LCP_far, r"$I_{LCP}$ Backscattering - Coherent")
-plt.colorbar(c4, ax=axes[3], fraction=0.046, pad=0.04)
-plt.tight_layout()
-plt.show()
+print("=" * 50)
+print(f"Hits totales:       {far_field_cbs_sensor.hits}")
+print(f"Fotones simulados:  {n_photons}")
+print(f"Fracción detectada: {far_field_cbs_sensor.hits / n_photons:.4%}")
+print()
+print(f"S0_coh[θ=0]:  {S0_coh_avg[0]:.4e}")
+print(f"S0_inc[θ=0]:  {S0_inc_avg[0]:.4e}")
+print(f"η(θ=0):       {S0_coh_avg[0]/S0_inc_avg[0]:.4f}  ← debe ser ~2.0 en Test 1")
+print()
+print(f"S0_coh[θ=max]: {S0_coh_avg[-1]:.4e}")
+print(f"S0_inc[θ=max]: {S0_inc_avg[-1]:.4e}")
+print(f"η(θ=max):      {S0_coh_avg[-1]/S0_inc_avg[-1]:.4f}  ← debe ser ~1.0 (fondo)")
+print("=" * 50)
 
-
-
-S0_far_field = np.array(cbs_data.incoherent.S0, copy=False)
-S1_far_field = np.array(cbs_data.incoherent.S1, copy=False)
-S2_far_field = np.array(cbs_data.incoherent.S2, copy=False)
-S3_far_field = np.array(cbs_data.incoherent.S3, copy=False)
-
-Ix_far = 0.5 * (S0_far_field + S1_far_field)
-Iy_far = 0.5 * (S0_far_field - S1_far_field)
-I_RCP_far = 0.5 * (S0_far_field + S3_far_field)
-I_LCP_far = 0.5 * (S0_far_field - S3_far_field)
-
-theta_coords = np.linspace(0, theta_max_far_field, n_theta_far_field)
-phi_coords = np.linspace(0, phi_max_far_field, n_phi_far_field)
-THETA, PHI = np.meshgrid(theta_coords, phi_coords, indexing='ij')
-theta_deg_max = np.degrees(theta_max_far_field)
-
-
-fig, axes = plt.subplots(2, 2, figsize=(12, 10), subplot_kw={'projection': 'polar'})
-axes = axes.flatten()
-# Graficar Ix
-c1 = plot_polar_intensity(axes[0], THETA, PHI, Ix_far, r"$I_x$ Backscattering - Incoherent")
-plt.colorbar(c1, ax=axes[0], fraction=0.046, pad=0.04)
-# Graficar Iy
-c2 = plot_polar_intensity(axes[1], THETA, PHI, Iy_far, r"$I_y$ Backscattering - Incoherent")
-plt.colorbar(c2, ax=axes[1], fraction=0.046, pad=0.04)
-# Graficar I_RCP
-c3 = plot_polar_intensity(axes[2], THETA, PHI, I_RCP_far, r"$I_{RCP}$ Backscattering - Incoherent")
-plt.colorbar(c3, ax=axes[2], fraction=0.046, pad=0.04)
-# Graficar I_LCP
-c4 = plot_polar_intensity(axes[3], THETA, PHI, I_LCP_far, r"$I_{LCP}$ Backscattering - Incoherent")
-plt.colorbar(c4, ax=axes[3], fraction=0.046, pad=0.04)
-plt.tight_layout()
-plt.show()
