@@ -1,0 +1,595 @@
+================================================================================
+                       LUMINIS-MC — Descripción del Código
+================================================================================
+
+1. VISIÓN GENERAL
+================================================================================
+
+luminis-mc es una librería de simulación Monte Carlo de transporte de fotones
+en medios turbios, escrita en C++ con bindings de Python a través de pybind11.
+Está diseñada para simular fenómenos de dispersión múltiple de luz, incluyendo
+polarización, coherencia y Coherent Backscattering (CBS).
+
+El usuario interactúa desde Python: configura el medio, el láser, los detectores
+y ejecuta la simulación. Todo el cómputo pesado (propagación del fotón, scattering,
+detección) se ejecuta en C++ compilado, con soporte para paralelismo multi-hilo.
+El resultado se recoge en Python como arrays NumPy para su análisis y visualización.
+
+Tecnologías clave:
+  - C++23 como núcleo computacional
+  - Fortran 77 para el solver de Mie (MIEV0)
+  - pybind11 para los bindings Python ↔ C++
+  - scikit-build-core + CMake como sistema de compilación
+  - std::thread para paralelismo
+
+
+2. ESTRUCTURA DE ARCHIVOS
+================================================================================
+
+luminis-mc/
+├── CMakeLists.txt               ← Build system (CMake + scikit-build)
+├── pyproject.toml               ← Metadata del paquete Python
+│
+├── include/luminis/             ← HEADERS C++ (interfaz pública)
+│   ├── core/
+│   │   ├── photon.hpp           ← Struct Photon y PhotonRecord
+│   │   ├── laser.hpp            ← Fuente láser (Point, Uniform, Gaussian)
+│   │   ├── medium.hpp           ← Medio dispersivo (SimpleMedium, MieMedium)
+│   │   ├── detector.hpp         ← Sensores/Detectores (todos los tipos)
+│   │   ├── simulation.hpp       ← SimConfig y funciones de simulación
+│   │   ├── absortion.hpp        ← Mapa de absorción 2D en el medio
+│   │   ├── results.hpp          ← Post-procesamiento de resultados CBS
+│   │   └── core.hpp             ← Funciones auxiliares (en desuso/comentadas)
+│   ├── math/
+│   │   ├── vec.hpp              ← Vec3, Vec2, CVec2, Matrix, CMatrix
+│   │   ├── rng.hpp              ← Generador de números aleatorios (mt19937_64)
+│   │   └── utils.hpp            ← Funciones de rotación, scattering, clamping
+│   ├── sample/
+│   │   ├── phase.hpp            ← Funciones de fase (HG, Mie, Rayleigh, Draine...)
+│   │   ├── meanfreepath.hpp     ← Metropolis-Hastings para muestreo de MFP
+│   │   └── table.hpp            ← Tablas de muestreo (CDF inversa) y DataTable
+│   ├── log/
+│   │   └── logger.hpp           ← Logger singleton con niveles (debug/info/warn/error)
+│   └── mie/
+│       └── dmiev.h              ← Interfaz C++ al solver Mie en Fortran
+│
+├── src/                         ← IMPLEMENTACIONES C++
+│   ├── simulation.cpp           ← Loop principal de propagación del fotón
+│   ├── detector.cpp             ← Implementación de todos los sensores (~1730 líneas)
+│   ├── photon.cpp               ← Inicialización de fotones
+│   ├── laser.cpp                ← Emisión de fotones desde el láser
+│   ├── medium.cpp               ← Muestreo de scattering, matrices de Mie
+│   ├── phase.cpp                ← Funciones de fase y muestreo condicional
+│   ├── results.cpp              ← Post-procesamiento far-field CBS
+│   ├── absortion.cpp            ← Registro de absorción
+│   ├── table.cpp, vec.cpp, ...  ← Utilidades
+│   └── mie/                     ← Solver de Mie (Fortran + wrapper C++)
+│       ├── MIEV0noP.f           ← Código Fortran de Wiscombe (MIEV0)
+│       ├── ErrPack.f            ← Manejo de errores Fortran
+│       └── dmiev.cpp            ← Wrapper C++ que llama al Fortran
+│
+├── python/
+│   ├── python_module.cpp        ← Bindings pybind11 (TODAS las clases expuestas)
+│   └── luminis_mc/
+│       ├── __init__.py          ← Re-exporta todo desde _core + manager
+│       └── manager.py           ← Experiment y ResultsLoader (guardar resultados)
+│
+├── tests/                       ← Scripts de simulación en Python
+│   ├── sim_cbs_new.py           ← Simulación CBS con FarFieldCBSSensor + MieMedium
+│   ├── sim_cbs.py               ← Simulación CBS (versión anterior, API vieja)
+│   ├── sim_speckel.py           ← Simulaciones de speckle
+│   └── ...                      ← Otros scripts de prueba
+│
+└── apps/                        ← Aplicaciones standalone C++
+    └── main.cpp                 ← Ejemplo de ejecución directa en C++
+
+
+3. PIPELINE DE COMPILACIÓN Y USO
+================================================================================
+
+Compilación:
+  pip install .    (o pip install -e .)
+
+  Internamente:
+    1. scikit-build-core invoca CMake
+    2. CMake compila:
+       a) mie_fortran  → librería estática Fortran (MIEV0 solver)
+       b) _core_c      → librería estática C++ (toda la lógica de simulación)
+       c) _core        → módulo Python (.so) que enlaza _core_c + pybind11
+    3. Se instala como paquete Python: luminis_mc
+
+Uso desde Python:
+    import luminis_mc as lmc
+    
+    phase = lmc.MiePhaseFunction(...)
+    medium = lmc.MieMedium(...)
+    laser = lmc.Laser(...)
+    sensors = lmc.SensorsGroup()
+    det = sensors.add_detector(lmc.FarFieldCBSSensor(...))
+    
+    config = lmc.SimConfig(n_photons=1e6, medium=medium, ...)
+    config.n_threads = 8
+    lmc.run_simulation_parallel(config)
+    
+    # Acceder a resultados
+    S0_coh = np.array(det.S0_coh, copy=False)
+
+
+4. ESTRUCTURA DE LA SIMULACIÓN (run_photon)
+================================================================================
+
+El motor de la simulación implementa el método Monte Carlo de transporte radiativo
+con polarización vectorial (matrices de Jones / parámetros de Stokes).
+
+4.1 Configuración (SimConfig)
+─────────────────────────────
+SimConfig agrupa todos los componentes necesarios:
+  - n_photons:           número total de fotones a simular
+  - n_threads:           número de hilos para ejecución paralela
+  - seed:                semilla del RNG
+  - medium:              puntero al medio dispersivo
+  - laser:               puntero a la fuente láser
+  - detector:            puntero al grupo de sensores
+  - absorption:          (opcional) mapa de absorción temporal
+  - track_reverse_paths: si true, calcula el path reverso para CBS
+
+4.2 Ejecución paralela (run_simulation_parallel)
+─────────────────────────────────────────────────
+1. Se distribuyen los n_photons entre n_threads hilos.
+2. Cada hilo recibe:
+   - Un clon del SensorsGroup (thread-local, sin locks)
+   - Un RNG con semilla derivada (mix_seed(base_seed, thread_id))
+3. Cada hilo ejecuta run_photon() para cada uno de sus fotones.
+4. Al finalizar todos los hilos, se hace merge de los detectores locales
+   al detector principal (merge_from).
+
+4.3 Loop de propagación del fotón (run_photon)
+───────────────────────────────────────────────
+Para cada fotón:
+
+  (a) Inicialización:
+      - El láser emite un fotón: posición, dirección, polarización (CVec2),
+        longitud de onda, número de onda k.
+      - Se inicializan las matrices de base local P_local (3x3) que representan
+        el sistema de coordenadas local del fotón: filas = (m, n, s) donde
+        m y n son los ejes de polarización y s es la dirección de propagación.
+      - Para CBS: se guardan P0, r_0, polarización inicial, T = I.
+
+  (b) Step: Muestrea un camino libre (exponencial o hard-spheres vía
+      Metropolis-Hastings si aplica). Avanza el fotón:
+        pos += P_local[2] * step   (fila 2 = dirección s)
+
+  (c) Detección: SensorsGroup::record_hit() verifica si el fotón cruzó algún
+      plano detector (z_layers). Si cruza, calcula el punto de intersección,
+      la fase óptica, y llama a process_hit() del sensor correspondiente.
+      Si absorb_photons=true, el fotón muere.
+
+  (d) Verificación de frontera: Comprueba que el fotón siga dentro del medio.
+      Si sale, el fotón muere (sin reflexión de Fresnel por ahora).
+
+  (e) Estimadores: SensorsGroup::run_estimators() permite que sensores con
+      estimator_enabled calculen contribuciones parciales sin que el fotón
+      llegue físicamente al plano detector.
+
+  (f) Scattering:
+      - Muestrea ángulo polar θ (desde PhaseFunction via CDF inversa)
+      - Calcula la matriz de scattering S(θ) del medio
+      - Muestrea ángulo azimutal φ condicionado a la polarización actual
+        (muestreo condicional que respeta la distribución de Mie completa)
+      - Actualiza la base local: P_local = A(θ,φ) · P_local
+      - Actualiza polarización usando la matriz de Jones:
+          T = S · R(φ)
+          E_new = T · E_old / sqrt(F)
+        donde F es el factor de normalización que asegura consistencia
+        con el peso estadístico.
+
+  (g) Tracking CBS (si track_reverse_paths):
+      - Guarda r_0 (posición del primer scattering), r_n (último)
+      - Guarda bases P0, P1, Pn2, Pn1, Pn
+      - Acumula la matriz de Jones intermedia T_mid:
+        Para n >= 3, T_mid = J_{n-1} · J_{n-2} · ... · J_2
+        El buffer J_prev se acumula paso a paso (pipeline de 2 etapas).
+
+  (h) Absorción parcial y Russian roulette:
+      - El peso se reduce: w *= μ_s / μ_t (albedo)
+      - Si w < 1e-4: ruleta rusa (10% chance de sobrevivir con w/0.1)
+      - Si events > 1000: el fotón muere.
+
+
+5. EL FOTÓN (Photon)
+================================================================================
+
+Campos principales:
+  - pos, prev_pos:        posición actual y anterior
+  - P_local:              Matrix 3x3, base local (m=fila0, n=fila1, s=fila2)
+  - polarization:         CVec2 (Em, En) — campo eléctrico en base local
+  - weight:               peso estadístico del fotón
+  - k:                    número de onda 2π/λ
+  - opticalpath:          camino óptico acumulado
+  - events:               número de scatterings sufridos
+
+Campos para CBS:
+  - P0, P1, Pn2, Pn1, Pn: bases locales en puntos clave de la trayectoria
+  - r_0, r_n:             posiciones del primer y último scattering
+  - matrix_T:             matriz de Jones intermedia acumulada (J_2...J_{n-1})
+  - matrix_T_buffer:      buffer temporal para el pipeline de acumulación
+  - initial_polarization: polarización del fotón al ser emitido
+  - polarization_reverse: campo eléctrico del path reverso (calculado por CBS)
+
+PhotonRecord (struct separado):
+  Snapshot inmutable de un fotón al momento de detección. Almacena eventos,
+  profundidad, camino óptico, peso, posiciones de primer/último scattering,
+  dirección, base, y polarización forward/reverse.
+
+
+6. EL MEDIO (Medium)
+================================================================================
+
+Clase base abstracta con métodos virtuales:
+  - sample_free_path(rng)      → longitud del paso libre
+  - sample_scattering_angle(rng) → θ (via PhaseFunction)
+  - sample_azimuthal_angle(rng)  → φ uniforme en [0, 2π)
+  - sample_conditional_azimuthal_angle(rng, S, E, k, θ) → φ condicionado
+  - scattering_matrix(θ, φ, k) → CMatrix 2x2 de Jones [[S2, 0], [0, S1]]
+
+Propiedades:
+  - mu_absorption, mu_scattering, mu_attenuation = mu_a + mu_s
+  - refractive_index, light_speed
+
+Implementaciones concretas:
+
+  SimpleMedium:
+    - Camino libre exponencial (1/μ_t)
+    - Matriz de scattering calculada con form_factor (Rayleigh-Debye)
+    - Parámetros: radio de partícula, índices de refracción
+
+  MieMedium:
+    - Camino libre exponencial (1/μ_t)
+    - Matriz de scattering exacta usando solver de Mie (MIEV0 Fortran)
+    - Al inicializarse, pre-computa tablas de S1(θ) y S2(θ) interpolables
+      usando DataTable (evita llamar a Mie en cada scattering)
+    - Parámetros adicionales: wavelength, m = n_p/n_m complejo
+
+Funciones de fase disponibles (PhaseFunction):
+  - UniformPhaseFunction:             isotrópica
+  - HenyeyGreensteinPhaseFunction:    parametrizada por g
+  - RayleighPhaseFunction:            scattering Rayleigh
+  - RayleighDebyePhaseFunction:       Rayleigh-Debye-Gans
+  - RayleighDebyeEMCPhaseFunction:    Rayleigh-Debye con corrección EMC
+  - DrainePhaseFunction:              Draine (parametrizada por g y α)
+  - MiePhaseFunction:                 exacta Mie (via tablas precalculadas)
+
+Todas usan SamplingTable internamente: se construye la CDF numérica de la PDF
+de scattering y se muestrea por inversión (sample_theta(u)).
+
+
+7. EL LÁSER (Laser)
+================================================================================
+
+Define la fuente de fotones:
+  - Posición de emisión (origen en z=0 por defecto)
+  - Dirección de propagación (z positivo por defecto)
+  - Estado de polarización inicial: CVec2 (componentes m y n)
+  - Longitud de onda → determina k = 2π·n_medio / λ
+  - Distribución espacial: Point, Uniform(sigma), Gaussian(sigma)
+  - Perfil temporal: Delta, Gaussian, TopHat, Exponential, PulseTrain, CW
+
+emit_photon(rng) → crea un Photon con posición, dirección, base local y
+polarización configurados.
+
+
+8. LOS DETECTORES (Sensor y subclases)
+================================================================================
+
+8.1 Arquitectura general
+────────────────────────
+Todos los detectores heredan de la clase base abstracta Sensor:
+
+  Sensor (base)
+  ├── PhotonRecordSensor      — Graba cada fotón individualmente
+  ├── PlanarFieldSensor        — Campo eléctrico complejo en plano (x,y)
+  ├── PlanarFluenceSensor      — Parámetros de Stokes en plano (x,y,t)
+  ├── PlanarCBSSensor          — CBS en plano espacial (en desarrollo)
+  ├── FarFieldFluenceSensor    — Parámetros de Stokes en campo lejano (θ,φ)
+  ├── FarFieldCBSSensor        — CBS en campo lejano (θ,φ) ← PRINCIPAL CBS
+  └── StatisticsSensor         — Histogramas estadísticos
+
+Cada Sensor tiene:
+  - origin (posición z del plano detector)
+  - normal (siempre ẑ)
+  - Filtros opcionales:
+    · Theta: rango de ángulo polar permitido
+    · Phi: rango de ángulo azimutal permitido
+    · Posición: ventana rectangular (x_min, x_max, y_min, y_max)
+  - absorb_photons: si true, el fotón muere al ser detectado
+  - estimator_enabled: si true, se llama process_estimation() en cada scattering
+
+Métodos virtuales que cada sensor implementa:
+  - process_hit():        se llama cuando el fotón cruza el plano detector
+  - process_estimation(): se llama después de cada scattering (estimadores)
+  - clone():              crea una copia vacía (para paralelismo)
+  - merge_from():         combina resultados de otro sensor del mismo tipo
+
+SensorsGroup:
+  - Contenedor de múltiples sensores.
+  - z_layers: mapa ordenado {z → [sensores en ese z]}. Permite buscar
+    eficientemente qué sensores cruza un fotón verificando solo las capas
+    entre z_min y z_max del paso actual.
+  - active_estimators: lista de sensores con estimadores habilitados.
+  - record_hit(): para cada capa z cruzada, calcula la intersección exacta,
+    verifica filtros (check_conditions), y llama process_hit().
+  - run_estimators(): llama process_estimation() en todos los estimadores.
+
+8.2 PhotonRecordSensor
+──────────────────────
+El sensor más simple. Almacena un vector de PhotonRecord.
+Cada proceso de hit crea un snapshot completo del fotón: posición, dirección,
+peso, polarización forward y reverse, camino óptico, etc.
+
+Útil para: post-procesamiento personalizado en Python, cálculos de speckle,
+análisis detallado por fotón individual.
+
+8.3 PlanarFieldSensor
+─────────────────────
+Acumula el campo eléctrico complejo en una grilla 2D (N_x × N_y).
+Tiene dos campos: Ex y Ey (CMatrix).
+
+process_hit():
+  - Proyecta la polarización local (Em, En) a componentes de laboratorio (x, y)
+    usando la base P_local del fotón:
+      Ex += (Em·P[0,0] + En·P[1,0]) · phase · √weight
+      Ey += (Em·P[0,1] + En·P[1,1]) · phase · √weight
+  - La fase es exp(i·k·optical_path) y √weight mantiene la coherencia
+    estadística (la interferencia se produce al sumar amplitudes).
+
+process_estimation():
+  - Calcula la contribución del estimador: scatter virtual hacia el detector,
+    incluyendo rotación de base, scattering matrix, atenuación exponencial,
+    y proyección de polarización.
+
+Útil para: patrones de speckle, interferencia coherente en campo cercano.
+
+8.4 PlanarFluenceSensor
+───────────────────────
+Acumula los cuatro parámetros de Stokes (S0, S1, S2, S3) en una grilla
+espacial 2D, opcionalmente resuelta en tiempo (S0_t[t_idx](x, y)).
+
+process_hit():
+  - Calcula las componentes del campo en coordenadas del detector.
+  - Calcula los Stokes: S0 = |Ex|² + |Ey|², S1 = |Ex|² - |Ey|²,
+    S2 = 2·Re(Ex·Ey*), S3 = 2·Im(Ex·Ey*).
+  - Deposita en el bin (x_idx, y_idx, t_idx) correspondiente.
+
+process_estimation():
+  - Similar al PlanarFieldSensor pero deposita parámetros de Stokes en vez
+    de campo complejo.
+
+Útil para: distribuciones espaciales de intensidad, resolución temporal,
+imágenes de fluencia con polarimetría.
+
+8.5 FarFieldFluenceSensor
+─────────────────────────
+Acumula los Stokes en una grilla angular (N_theta × N_phi) en campo lejano.
+
+process_hit():
+  - Calcula θ = acos(-s_z) y φ = atan2(s_y, s_x) de la dirección del fotón.
+  - Proyecta polarización a lab y deposita Stokes en el bin angular.
+
+process_estimation():
+  - (Código presente pero comentado/en desarrollo) Iteraría sobre todos los
+    bins angulares calculando la contribución del scatter virtual hacia cada
+    dirección.
+
+Útil para: distribuciones angulares de intensidad difusa, sin CBS.
+
+8.6 StatisticsSensor
+────────────────────
+Histogramas configurables de propiedades del fotón al ser detectado:
+  - events_histogram:  número de scatterings
+  - theta_histogram:   ángulo polar de salida
+  - phi_histogram:     ángulo azimutal
+  - depth_histogram:   profundidad de penetración
+  - time_histogram:    tiempo de llegada
+  - weight_histogram:  peso estadístico
+
+Se configura qué histogramas activar y sus rangos/bins con métodos
+set_*_histogram_bins().
+
+Útil para: estadísticas de transporte, validación, distribuciones de
+número de scattering.
+
+
+9. DETECTORES CBS (Coherent Backscattering)
+================================================================================
+
+CBS es el fenómeno principal modelado por esta librería. La idea física es
+que en backscattering, para cada trayectoria directa (forward) a través
+del medio, existe una trayectoria inversa (reverse) que visita los mismos
+scatterers en orden inverso. Estas dos trayectorias son recíprocas e
+interfieren constructivamente en la dirección exacta de backscattering,
+produciendo un pico de intensidad (enhancement factor ≈ 2).
+
+9.1 PlanarCBSSensor (en desarrollo)
+────────────────────────────────────
+Diseñado para CBS en campo cercano (plano espacial). El código de process_hit()
+está mayoritariamente comentado. La estructura almacena Stokes S0-S3 en una
+grilla (N_x × N_y). No está funcional en la versión actual.
+
+9.2 FarFieldCBSSensor ← DETECTOR CBS PRINCIPAL
+───────────────────────────────────────────────
+Este es el detector central para simulaciones de CBS. Opera en el espacio
+angular (campo lejano) con una grilla (N_theta × N_phi).
+
+Almacena DOS conjuntos de Stokes:
+  - S0_coh, S1_coh, S2_coh, S3_coh:     intensidad COHERENTE |E_f + E_r|²
+  - S0_incoh, S1_incoh, S2_incoh, S3_incoh: intensidad INCOHERENTE |E_f|² + |E_r|²
+
+El enhancement factor se obtiene como: η(θ) = I_coh(θ) / I_incoh(θ)
+En θ=0 (exact backscattering), η → 2 para medios conservadores sin absorción.
+
+Inicialización:
+  FarFieldCBSSensor(theta_max, phi_max, n_theta, n_phi)
+  - Se posiciona en z=0 (el plano de retro-reflexión)
+  - Los bins cubren θ ∈ [0, theta_max] y φ ∈ [0, phi_max]
+  - dtheta = theta_max / n_theta, dphi = phi_max / n_phi
+
+process_hit(photon, info, medium):
+  Requiere events >= 2 (CBS no existe para scattering simple).
+
+  Paso 1: Cálculo del path reverso
+    Llama a coherent_calculation(photon, medium) que calcula
+    photon.polarization_reverse (ver sección 9.3).
+
+  Paso 2: Ángulos far-field
+    θ = acos(-s_out_z), φ = atan2(s_out_y, s_out_x)
+    Se determina el bin (theta_idx, phi_idx).
+
+  Paso 3: Fase geométrica CBS
+    La diferencia de fase entre path forward y reverse depende de la
+    separación entre primer y último scatterer:
+      q_b = k · (s_out + s_in)
+      Δr = r_n - r_0
+      path_phase = exp(i · q_b · Δr)
+    En exact backscattering (s_out = -s_in), q_b = 0 y path_phase = 1,
+    garantizando interferencia constructiva perfecta.
+
+  Paso 4: Campos forward y reverse
+    Forward:
+      E_f = (Em_f, En_f) · P_local → (Efx, Efy) en lab
+      con amplitud = phase · √weight  (info.phase = exp(i·k·optical_path))
+    Reverse:
+      E_r = (Em_r, En_r) · P_local → (Erx, Ery) en lab
+      con amplitud adicional × path_phase
+
+  Paso 5: Acumulación
+    Coherente:  E_total = E_f + E_r
+      S0_coh += |Etx|² + |Ety|²
+      S1_coh += |Etx|² - |Ety|²
+      S2_coh += 2·Re(Etx·Ety*)
+      S3_coh += 2·Im(Etx·Ety*)
+    Incoherente: suma de intensidades individuales
+      S0_incoh += (|Efx|² + |Efy|²) + (|Erx|² + |Ery|²)
+      (análogamente para S1, S2, S3)
+
+process_estimation():
+  (Código presente pero comentado) Implementaría CBS con estimadores,
+  iterando sobre todos los bins (θ,φ) y calculando la contribución
+  coherente e incoherente para cada dirección virtual. Esto permitiría
+  recoger señal CBS sin necesidad de que el fotón escape exactamente
+  en el ángulo correcto, mejorando la convergencia estadística.
+
+9.3 Cálculo del path reverso: coherent_calculation()
+─────────────────────────────────────────────────────
+Esta función (en detector.cpp) calcula la polarización del path reverso
+(photon.polarization_reverse) para un fotón que ha completado su
+trayectoria forward.
+
+La idea:
+  Para una trayectoria con n scatterings en posiciones r_1...r_n,
+  el path reverso recorre los mismos puntos en orden inverso: r_n...r_1.
+  Se necesita construir la cadena de Jones del path reverso.
+
+Notación del código:
+  - s0: dirección incidente (del láser)
+  - s1: dirección después del primer scattering
+  - s_{n-1}: dirección antes del último scattering
+  - s_n: dirección de salida (detectada)
+  - P0, P1, Pn1, Pn: bases locales en esos puntos
+
+Estructura del cálculo (3 bloques):
+
+  Bloque A — Primer scattering reverso (en r_n):
+    El path reverso "entra" con la dirección incidente s_0 y "sale" hacia
+    -s_{n-1} (reverso del penúltimo tramo).
+    - Se calcula θ_a = acos(s_0 · (-s_{n-1}))
+    - Se obtiene S_a = scattering_matrix(θ_a)
+    - Se construyen rotaciones para alinear las bases:
+        R_n: base (m0,n0) → plano de scattering
+    - scatter_event(S_a, R_n, E_initial) aplica la Jones matrix
+    - R_n': plano de scattering → base (m_{n-1}, -n_{n-1})
+
+  Bloque B — Scatterings intermedios (Q · T^T · Q):
+    Para los scatterings 2...n-1, se usa el teorema de reciprocidad:
+      La cadena de Jones del path reverso es Q · T^T · Q
+    donde:
+      T = J_2 · J_3 · ... · J_{n-1} (acumulada durante la propagación forward
+          como photon.matrix_T)
+      T^T = transpose (NO conjugado) de T
+      Q = diag(1, -1) — refleja la componente n de polarización
+    Esto evita re-calcular cada scattering individual del path medio.
+
+  Bloque C — Último scattering reverso (en r_1):
+    El path reverso "entra" desde -s_1 y "sale" hacia s_n (la dirección
+    detectada del forward).
+    - θ_b = acos((-s_1) · s_n)
+    - S_b = scattering_matrix(θ_b)
+    - Rotaciones análogas al bloque A
+    - El resultado final se rota a la base (m_n, n_n) del punto de detección
+
+El resultado es photon.polarization_reverse: CVec2 en la base local final
+del fotón, listo para ser combinado con photon.polarization en el detector.
+
+Funciones auxiliares usadas (definidas en utils.hpp/cpp):
+  - scatter_event(S, R, E):  E_out = S · R · E / √F  (normalizado)
+  - rot2(m_to, n_to, m_from, n_from): CMatrix 2×2 de cambio de base
+  - apply2(A, v): multiplica matriz 2×2 por vector 2×1
+  - safe_unit(v, fallback): normaliza v, o usa fallback si es degenerado
+  - clamp_pm1(x): clampea x a [-1, +1] para acos seguro
+  - row_vec3(P, r): extrae la fila r de una Matrix 3x3 como Vec3
+
+9.4 Post-procesamiento: postprocess_farfield_cbs()
+───────────────────────────────────────────────────
+Función que normaliza los datos crudos del FarFieldCBSSensor:
+
+  Para cada bin (i, j):
+    dΩ = solid_angle_bin(i, dθ, dφ) = sin(θ_center) · dθ · dφ
+    norm = (1/n_photons) · (1/dΩ)
+    S_coh_normalized(i,j) = S_coh_raw(i,j) · norm
+    S_incoh_normalized(i,j) = S_incoh_raw(i,j) · norm
+
+Retorna un FarFieldCBSProcessed que contiene:
+  - dOmega: matriz con el ángulo sólido de cada bin
+  - coherent: StokesMatrixProcessed (S0, S1, S2, S3 normalizados)
+  - incoherent: StokesMatrixProcessed
+
+Desde Python, se usa para calcular el enhancement factor:
+  result = postprocess_farfield_cbs(det, n_photons)
+  enhancement = result.coherent.S0 / result.incoherent.S0
+
+
+10. FLUJO DE DATOS: DE C++ A PYTHON
+================================================================================
+
+El binding pybind11 (python_module.cpp) expone:
+  - Todas las clases como py::class_ con herencia correcta
+  - Matrices como buffer protocol (acceso zero-copy desde NumPy)
+  - Enums (LaserSource, TemporalProfile, LogLevel)
+  - Funciones de simulación con GIL release para paralelismo real
+
+Patrón de uso del SensorsGroup:
+  sensors = SensorsGroup()
+  det = sensors.add_detector(FarFieldCBSSensor(θmax, φmax, Nθ, Nφ))
+  
+  add_detector() clona el sensor y devuelve un puntero a la copia interna.
+  Esto permite manipular det directamente (ej: det.set_theta_limit(...))
+  y luego leer los resultados tras la simulación (det.S0_coh, etc.).
+
+El manager.py ofrece Experiment: un helper para guardar el estado completo
+de una simulación (parámetros JSON, sensores como .npy, figuras, script).
+
+
+11. RESUMEN DE FLUJO CBS COMPLETO
+================================================================================
+
+1. Configurar: MiePhaseFunction → MieMedium → Laser → FarFieldCBSSensor
+2. SimConfig(track_reverse_paths=True)
+3. run_simulation_parallel():
+   a. Cada fotón se propaga, acumulando T_mid y guardando bases P0..Pn
+   b. Al cruzar z=0 hacia atrás (backscattering):
+      - coherent_calculation() calcula E_reverse usando reciprocidad
+      - FarFieldCBSSensor acumula |E_fwd + E_rev|² (coherente)
+        y |E_fwd|² + |E_rev|² (incoherente) en bins angulares
+4. postprocess_farfield_cbs() normaliza por ángulo sólido y n_photons
+5. En Python: η(θ) = S0_coh(θ) / S0_incoh(θ) → pico CBS en θ≈0
+
+================================================================================
