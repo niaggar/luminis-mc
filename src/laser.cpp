@@ -39,9 +39,39 @@ Laser::Laser(std::complex<double> m_state, std::complex<double> n_state, double 
   local_n = {0, 1, 0};
 }
 
-// TODO: Implement time sampling based on pulse duration and repetition rate
 double Laser::sample_emission_time(Rng &rng) const {
-  return 0.0;
+  constexpr double PS_TO_NS      = 1e-3;
+  constexpr double FWHM_TO_SIGMA = 1.0 / (2.0 * std::sqrt(2.0 * std::log(2.0)));
+
+  const double t0_ns = time_offset * PS_TO_NS;
+
+  switch (temporal_profile) {
+  case TemporalProfile::Delta:
+    return t0_ns;
+
+  case TemporalProfile::Gaussian: {
+    const double sigma_ns = pulse_duration * FWHM_TO_SIGMA * PS_TO_NS;
+    return rng.normal(t0_ns, sigma_ns);
+  }
+
+  case TemporalProfile::TopHat:
+    return t0_ns + (rng.uniform() - 0.5) * pulse_duration * PS_TO_NS;
+
+  case TemporalProfile::Exponential:
+    return t0_ns - std::log(rng.uniform()) * pulse_duration * PS_TO_NS;
+
+  case TemporalProfile::PulseTrain:
+    if (repetition_rate <= 0.0)
+      return t0_ns;
+    return t0_ns + rng.uniform() * (1e9 / repetition_rate);
+
+  case TemporalProfile::CW:
+    if (pulse_duration <= 0.0)
+      return t0_ns;
+    return t0_ns + rng.uniform() * pulse_duration * PS_TO_NS;
+  }
+
+  return t0_ns;
 }
 
 Photon Laser::emit_photon(Rng &rng) const {
@@ -64,6 +94,7 @@ Photon Laser::emit_photon(Rng &rng) const {
   }
   Photon photon = Photon(pos, direction, local_m, local_n, wavelength);
   photon.set_polarization(polarization);
+  photon.launch_time = sample_emission_time(rng);
   return photon;
 }
 
