@@ -1,6 +1,7 @@
 from luminis_mc import (
     Laser,
-    SimpleMedium,
+    RGDMedium,
+    Sample,
     MultiDetector,
     HistogramDetector,
     SpatialDetector,
@@ -75,7 +76,9 @@ laser_type = LaserSource.Gaussian
 rng_test = Rng()
 laser_source = Laser(origin, polarization, wavelength_real, laser_radius, laser_type)
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
-medium = SimpleMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
+medium = RGDMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
+sample = Sample(n_medium=n_medium_real)
+sample.add_layer(medium, 0.0, float('inf'))
 absorption = AbsorptionTimeDependent(
     radius=10 * mean_free_path_sim,
     depth=100 * mean_free_path_sim,
@@ -124,7 +127,7 @@ print(f"Anisotropy: {anysotropy}")
 
 config = SimConfig(
     n_photons=n_photons,
-    medium=medium,
+    sample=sample,
     detector=detectors_container,
     laser=laser_source,
     # absorption=absorption,

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <luminis/core/photon.hpp>
+#include <luminis/core/sample.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/core/detector.hpp>
 #include <vector>

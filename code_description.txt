@@ -34,7 +34,8 @@ luminis-mc/
 │   ├── core/
 │   │   ├── photon.hpp           ← Struct Photon y PhotonRecord
 │   │   ├── laser.hpp            ← Fuente láser (Point, Uniform, Gaussian)
-│   │   ├── medium.hpp           ← Medio dispersivo (SimpleMedium, MieMedium)
+│   │   ├── medium.hpp           ← Medio dispersivo (ScatteringMedium, RGDMedium, MieMedium)
+│   │   ├── sample.hpp           ← Muestra por capas (Sample, SampleLayer)
 │   │   ├── detector.hpp         ← Sensores/Detectores (todos los tipos)
 │   │   ├── simulation.hpp       ← SimConfig y funciones de simulación
 │   │   ├── absortion.hpp        ← Mapa de absorción 2D en el medio
@@ -59,6 +60,7 @@ luminis-mc/
 │   ├── photon.cpp               ← Inicialización de fotones
 │   ├── laser.cpp                ← Emisión de fotones desde el láser
 │   ├── medium.cpp               ← Muestreo de scattering, matrices de Mie
+│   ├── sample.cpp               ← Implementación de Sample y SampleLayer
 │   ├── phase.cpp                ← Funciones de fase y muestreo condicional
 │   ├── results.cpp              ← Post-procesamiento far-field CBS
 │   ├── absortion.cpp            ← Registro de absorción
@@ -103,11 +105,13 @@ Uso desde Python:
     
     phase = lmc.MiePhaseFunction(...)
     medium = lmc.MieMedium(...)
+    sample = lmc.Sample(n_medium=1.33)
+    sample.add_layer(medium, 0.0, float('inf'))
     laser = lmc.Laser(...)
     sensors = lmc.SensorsGroup()
     det = sensors.add_detector(lmc.FarFieldCBSSensor(...))
     
-    config = lmc.SimConfig(n_photons=1e6, medium=medium, ...)
+    config = lmc.SimConfig(n_photons=1e6, sample=sample, ...)
     config.n_threads = 8
     lmc.run_simulation_parallel(config)
     
@@ -127,7 +131,7 @@ SimConfig agrupa todos los componentes necesarios:
   - n_photons:           número total de fotones a simular
   - n_threads:           número de hilos para ejecución paralela
   - seed:                semilla del RNG
-  - medium:              puntero al medio dispersivo
+  - sample:              puntero al Sample (muestra por capas compartiendo n_medio)
   - laser:               puntero a la fuente láser
   - detector:            puntero al grupo de sensores
   - absorption:          (opcional) mapa de absorción temporal
@@ -155,17 +159,27 @@ Para cada fotón:
         m y n son los ejes de polarización y s es la dirección de propagación.
       - Para CBS: se guardan P0, r_0, polarización inicial, T = I.
 
-  (b) Step: Muestrea un camino libre (exponencial o hard-spheres vía
-      Metropolis-Hastings si aplica). Avanza el fotón:
-        pos += P_local[2] * step   (fila 2 = dirección s)
+  (b) Step + cruce de interfaces:
+      1. Muestrea un camino libre desde el medio de la capa actual.
+      2. Si el paso cruza una interfaz entre capas (via find_next_interface):
+         - Trunca el paso en la interfaz.
+         - Calcula la distancia óptica restante: d_opt = (step_restante) × μ_t_vieja.
+         - Mueve el fotón justo tras la interfaz (nudge ε).
+         - Detecta sensores en el sub-paso (record_hit).
+         - Transita a la nueva capa, convierte d_opt a paso físico:
+             step_nuevo = d_opt / μ_t_nueva.
+         - No actualiza velocidad: todas las capas comparten el mismo n_medio.
+         - Repite si el paso restante cruza otra interfaz.
+      3. Avanza lo restante del paso en la capa final:
+           pos += P_local[2] * step
 
   (c) Detección: SensorsGroup::record_hit() verifica si el fotón cruzó algún
       plano detector (z_layers). Si cruza, calcula el punto de intersección,
       la fase óptica, y llama a process_hit() del sensor correspondiente.
       Si absorb_photons=true, el fotón muere.
 
-  (d) Verificación de frontera: Comprueba que el fotón siga dentro del medio.
-      Si sale, el fotón muere (sin reflexión de Fresnel por ahora).
+  (d) Verificación de frontera: Comprueba que el fotón siga dentro del Sample.
+      Si sale (z < 0 o z ≥ z_top), el fotón muere (sin reflexión de Fresnel).
 
   (e) Estimadores: SensorsGroup::run_estimators() permite que sensores con
       estimator_enabled calculen contribuciones parciales sin que el fotón
@@ -222,37 +236,68 @@ PhotonRecord (struct separado):
   dirección, base, y polarización forward/reverse.
 
 
-6. EL MEDIO (Medium)
+6. EL MEDIO DISPERSIVO (ScatteringMedium)
 ================================================================================
 
-Clase base abstracta con métodos virtuales:
-  - sample_free_path(rng)      → longitud del paso libre
-  - sample_scattering_angle(rng) → θ (via PhaseFunction)
+ScatteringMedium es la clase base abstracta que describe las propiedades de
+scattering y absorción de las partículas en suspensión. NO almacena el índice
+de refracción del medio huésped (solvente); ese dato pertenece al Sample
+(sección 6b). Esto refleja la física: en una muestra real las distintas capas
+pueden tener diferentes partículas en suspensión, pero el solvente (y por tanto
+su índice de refracción) es el mismo en todas.
+
+Archivo: include/luminis/core/medium.hpp   |   src/medium.cpp
+
+6.1 ScatteringMedium (base abstracta)
+─────────────────────────────────────
+Métodos virtuales puros:
+  - sample_free_path(rng)      → longitud del paso libre [mm]
+  - scattering_matrix(θ, φ, k) → CMatrix 2×2 de Jones [[S2, 0], [0, S1]]
+
+Métodos con implementación por defecto (delegan a PhaseFunction):
+  - sample_scattering_angle(rng) → θ (via CDF inversa de la fase)
   - sample_azimuthal_angle(rng)  → φ uniforme en [0, 2π)
   - sample_conditional_azimuthal_angle(rng, S, E, k, θ) → φ condicionado
-  - scattering_matrix(θ, φ, k) → CMatrix 2x2 de Jones [[S2, 0], [0, S1]]
+    a la polarización actual (muestreo que respeta la distribución de Mie)
 
 Propiedades:
-  - mu_absorption, mu_scattering, mu_attenuation = mu_a + mu_s
-  - refractive_index, light_speed
+  - mu_absorption   (μ_a [1/mm])  — coeficiente de absorción
+  - mu_scattering   (μ_s [1/mm])  — coeficiente de scattering
+  - mu_attenuation  (μ_t = μ_a + μ_s [1/mm]) — coeficiente de atenuación total
+  - phase_function  (puntero no-owning a PhaseFunction)
 
-Implementaciones concretas:
+6.2 RGDMedium (Rayleigh-Gans-Debye)
+────────────────────────────────────
+Hereda de ScatteringMedium. Válido para partículas pequeñas y ópticamente
+suaves: parámetro de tamaño x = 2πr/λ ≪ 1, |m − 1| ≪ 1 y |m − 1| x ≪ 1.
 
-  SimpleMedium:
-    - Camino libre exponencial (1/μ_t)
-    - Matriz de scattering calculada con form_factor (Rayleigh-Debye)
-    - Parámetros: radio de partícula, índices de refracción
+  - Camino libre: exponencial, l = −l_mean · ln(U), con l_mean = 1/μ_s.
+  - Matriz de scattering: fórmula analítica RGD:
+      s2 = −i k³ (m−1) V F(θ,k,r) cos(θ) / (2π)
+      s1 = −i k³ (m−1) V F(θ,k,r)         / (2π)
+    donde V = (4π/3) r³ es el volumen de la partícula, F el form factor, y
+    m = n_particle/n_medium el índice relativo.
+  - Parámetros propios: radius, n_particle, n_medium (contraste para el form
+    factor, NO el índice global del solvente).
 
-  MieMedium:
-    - Camino libre exponencial (1/μ_t)
-    - Matriz de scattering exacta usando solver de Mie (MIEV0 Fortran)
-    - Al inicializarse, pre-computa tablas de S1(θ) y S2(θ) interpolables
-      usando DataTable (evita llamar a Mie en cada scattering)
-    - Parámetros adicionales: wavelength, m = n_p/n_m complejo
+6.3 MieMedium (Mie completo)
+────────────────────────────
+Hereda de ScatteringMedium. Sin restricción de tamaño de partícula.
 
-Funciones de fase disponibles (PhaseFunction):
+  - Camino libre: exponencial (igual que RGDMedium).
+  - Matriz de scattering: tablas precomputadas por el solver Fortran MIEV0.
+    Al construirse, se evalúan S1(θ) y S2(θ) en una grilla uniforme de 1000
+    ángulos en [0, π] y se almacenan en DataTable para look-up O(1) por
+    interpolación. Esto evita llamar a MIEV0 en cada evento de scattering.
+  - Parámetros propios: radius, n_particle, n_medium, wavelength,
+    m = n_particle/n_medium (complejo en general).
+
+6.4 Funciones de fase (PhaseFunction)
+─────────────────────────────────────
+Todas heredan de PhaseFunction y se muestrean por inversión de CDF numérica:
+
   - UniformPhaseFunction:             isotrópica
-  - HenyeyGreensteinPhaseFunction:    parametrizada por g
+  - HenyeyGreensteinPhaseFunction:    parametrizada por g (asimetría)
   - RayleighPhaseFunction:            scattering Rayleigh
   - RayleighDebyePhaseFunction:       Rayleigh-Debye-Gans
   - RayleighDebyeEMCPhaseFunction:    Rayleigh-Debye con corrección EMC
@@ -261,6 +306,153 @@ Funciones de fase disponibles (PhaseFunction):
 
 Todas usan SamplingTable internamente: se construye la CDF numérica de la PDF
 de scattering y se muestrea por inversión (sample_theta(u)).
+
+
+6b. LA MUESTRA POR CAPAS (Sample)
+================================================================================
+
+Archivo: include/luminis/core/sample.hpp   |   src/sample.cpp
+
+El Sample modela una muestra física formada por capas contiguas de medios
+dispersivos apiladas a lo largo del eje z, como un pastel de capas. Todas las
+capas comparten el mismo medio huésped (solvente) con índice de refracción
+n_medium; lo que cambia entre capas son las propiedades de las partículas en
+suspensión (coeficientes ópticos μ_a, μ_s, función de fase, etc.).
+
+6b.1 Modelo físico y justificación
+──────────────────────────────────
+En un experimento de scattering múltiple, la cubeta contiene un solvente
+(p. ej. agua, n ≈ 1.33) en el que se suspenden partículas. Se puede preparar
+la muestra con capas que difieren en concentración, tamaño de partícula o
+material, pero el solvente es siempre el mismo líquido.
+
+Consecuencias físicas:
+  1. El índice de refracción es uniforme en toda la muestra:
+       n(z) = n_medium  ∀ z.
+  2. La velocidad del fotón es constante:
+       v = c / n_medium = 1 / n_medium  (en unidades naturales c=1).
+  3. No hay reflexión ni refracción de Fresnel en las interfaces entre capas,
+     porque el contraste de índice es Δn = 0. El fotón cruza las interfaces
+     libremente; solo cambian las propiedades de scattering/absorción.
+  4. Al cruzar una interfaz, la dirección del fotón no cambia, pero el camino
+     libre restante debe re-escalarse porque cambia el coeficiente de
+     atenuación μ_t (ver sección 6b.3).
+
+6b.2 Estructura de datos
+────────────────────────
+
+  SampleLayer (una capa individual):
+    - medium:  const ScatteringMedium*  (puntero no-owning al medio dispersivo)
+    - z_min:   frontera inferior de la capa [mm] (inclusiva)
+    - z_max:   frontera superior de la capa [mm] (exclusiva, puede ser +∞)
+    - contains(z)  → true si z_min ≤ z < z_max
+    - thickness()  → z_max − z_min (puede ser +∞)
+
+  Sample (colección ordenada de capas):
+    - layers:           vector<SampleLayer>, ordenadas por z_min
+    - interfaces:       vector<double>, coordenadas z de las fronteras internas
+                        (excluye z=0 y z_max de la última capa)
+    - refractive_index: índice de refracción del solvente (n_medium)
+    - light_speed:      velocidad del fotón = 1 / n_medium
+
+    Constructor:
+      Sample(n_medium = 1.0)  → inicializa refractive_index y light_speed
+
+    Métodos principales:
+      - add_layer(medium, z_min, z_max)
+          Agrega una capa al tope de la muestra. Reglas:
+          · La primera capa debe empezar en z = 0.
+          · Cada capa subsiguiente debe empezar exactamente donde termina la
+            anterior (contigüidad estricta, sin huecos ni solapamientos).
+          · z_max > z_min. La última capa puede tener z_max = +∞ (semi-infinita).
+          · medium != nullptr.
+      - get_layer(index)        → referencia a la capa por índice
+      - get_layer_at(z)         → puntero a la capa que contiene z (búsqueda
+                                  binaria O(log N) sobre el vector interfaces)
+      - get_layer_index_at(z)   → índice de la capa que contiene z
+      - find_next_interface(z_current, z_target)
+          Busca la primera interfaz interna entre z_current y z_target.
+          Retorna std::optional<double> con la coordenada z de la interfaz,
+          o std::nullopt si no hay interfaz entre ambos puntos.
+          Funciona tanto para movimiento ascendente (z_target > z_current)
+          como descendente (z_target < z_current).
+      - is_inside(position)     → true si la posición 3D está dentro del Sample
+                                  (z ≥ 0 y z < z_top, sin NaN/Inf en x,y,z)
+      - z_top()                 → z_max de la última capa (puede ser +∞)
+      - light_speed_in_medium() → velocidad del fotón (= 1/n_medium)
+
+6b.3 Algoritmo de cruce de interfaces (en run_photon)
+─────────────────────────────────────────────────────
+Cuando un fotón se mueve un paso libre (step) dentro de una capa, puede
+cruzar una o varias interfaces antes de consumir toda la distancia óptica
+muestreada. El algoritmo es iterativo:
+
+  ENTRADA: step (distancia física muestreada), dirección (dir_x, dir_y, dir_z)
+
+  1. Calcular z candidato: new_z = pos.z + dir_z * step
+  2. Buscar la próxima interfaz: iface = find_next_interface(pos.z, new_z)
+  3. Mientras exista una interfaz entre pos.z y new_z:
+     a. Parametrizar la intersección: t = (z_iface − pos.z) / (dir_z · step)
+        Si |dir_z · step| < ε o t ∉ [0,1], salir del loop (guard numérico).
+     b. Distancia al borde: step_to_iface = step · t
+     c. Distancia óptica restante: d_opt = (step − step_to_iface) × μ_t_vieja
+        donde μ_t_vieja es el mu_attenuation de la capa actual.
+     d. Mover el fotón a la interfaz:
+          pos += dir · step_to_iface
+          pos.z = z_iface ± ε   (nudge para aterrizar en la capa correcta)
+     e. Verificar sensores en el sub-paso (record_hit).
+     f. Determinar la nueva capa: new_layer_idx = get_layer_index_at(pos.z)
+        Si new_layer_idx ≥ size(), el fotón salió del Sample → muere.
+     g. Actualizar current_layer del fotón.
+     h. Convertir distancia óptica a física en la nueva capa:
+          step = d_opt / μ_t_nueva
+        Esto preserva el número de caminos libres ópticos: la porción ya
+        viajada consumió τ₁ = step_to_iface × μ_t_vieja, y el total muestreado
+        era τ = step_original × μ_t_vieja. La porción restante τ₂ = τ − τ₁ se
+        traduce a distancia física en el medio nuevo como τ₂ / μ_t_nueva.
+     i. Recalcular new_z y buscar la siguiente interfaz (repite desde 3).
+
+  4. Completar el paso restante en la capa final: pos += dir · step.
+
+  Justificación del re-escaleo de distancia óptica:
+    En Monte Carlo, el camino libre se muestrea como τ = −ln(U) (variable
+    exponencial). Este τ es adimensional y representa la distancia óptica.
+    La distancia física correspondiente es l = τ / μ_t. Al cambiar de capa,
+    μ_t cambia, pero τ restante no: simplemente se convierte a la nueva
+    longitud física l' = τ_restante / μ_t_nueva. Esto es equivalente a
+    muestrear un nuevo camino libre condicionado a no haber interactuado
+    en la primera capa — la "propiedad sin memoria" de la distribución
+    exponencial.
+
+  Nota sobre velocidad: como n_medium es constante, la velocidad del fotón
+  no cambia al cruzar interfaces. No se aplican condiciones de Fresnel.
+
+6b.4 Ejemplo de uso desde Python
+────────────────────────────────
+    import luminis_mc as lmc
+
+    # Funciones de fase para cada capa
+    phase1 = lmc.MiePhaseFunction(radius=0.5e-3, n_p=1.59, n_m=1.33, wl=0.633e-3)
+    phase2 = lmc.HenyeyGreensteinPhaseFunction(g=0.9)
+
+    # Medios dispersivos (solo propiedades de partículas)
+    medium1 = lmc.MieMedium(mu_a=0.01, mu_s=10.0, phase=phase1, ...)
+    medium2 = lmc.RGDMedium(mu_a=0.0,  mu_s=5.0,  phase=phase2, ...)
+
+    # Muestra: agua como solvente, dos capas
+    sample = lmc.Sample(n_medium=1.33)
+    sample.add_layer(medium1, 0.0, 5.0)           # capa 1: z ∈ [0, 5) mm
+    sample.add_layer(medium2, 5.0, float('inf'))   # capa 2: z ∈ [5, ∞) mm
+
+    # Configuración
+    config = lmc.SimConfig(
+        n_photons=1_000_000,
+        sample=sample,
+        laser=laser,
+        detector=sensors
+    )
+    lmc.run_simulation_parallel(config)
+
 
 
 7. EL LÁSER (Laser)
@@ -581,8 +773,8 @@ de una simulación (parámetros JSON, sensores como .npy, figuras, script).
 11. RESUMEN DE FLUJO CBS COMPLETO
 ================================================================================
 
-1. Configurar: MiePhaseFunction → MieMedium → Laser → FarFieldCBSSensor
-2. SimConfig(track_reverse_paths=True)
+1. Configurar: MiePhaseFunction → MieMedium → Sample(n_medium) → Laser → FarFieldCBSSensor
+2. SimConfig(sample=sample, track_reverse_paths=True)
 3. run_simulation_parallel():
    a. Cada fotón se propaga, acumulando T_mid y guardando bases P0..Pn
    b. Al cruzar z=0 hacia atrás (backscattering):

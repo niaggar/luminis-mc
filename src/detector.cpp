@@ -22,6 +22,7 @@
 #include <luminis/core/detector.hpp>
 #include <luminis/core/photon.hpp>
 #include <luminis/core/medium.hpp>
+#include <luminis/core/sample.hpp>
 #include <luminis/math/vec.hpp>
 #include <luminis/math/utils.hpp>
 #include <luminis/log/logger.hpp>
@@ -45,7 +46,7 @@ namespace luminis::core
 
   // Normalización de fase function implícita en S_matrix:
   // I_norm = ∫_0^π (|S11|^2 + |S22|^2) sinθ dθ
-  static double compute_I_norm(const Medium &medium, double k, int n = 2048)
+  static double compute_I_norm(const ScatteringMedium &medium, double k, int n = 2048)
   {
     double acc = 0.0;
     const double dth = M_PI / n;
@@ -118,7 +119,7 @@ namespace luminis::core
     detectors.push_back(std::move(detector));
   }
 
-  bool SensorsGroup::record_hit(Photon &photon, const Medium &medium)
+  bool SensorsGroup::record_hit(Photon &photon, const Sample &medium)
   {
     bool photon_killed = false;
 
@@ -192,7 +193,7 @@ namespace luminis::core
     return photon_killed;
   }
 
-  void SensorsGroup::run_estimators(const Photon &photon, const Medium &medium)
+  void SensorsGroup::run_estimators(const Photon &photon, const Sample &medium)
   {
     for (const auto &detector : detectors)
     {
@@ -314,7 +315,7 @@ namespace luminis::core
     return true;
   }
 
-  void Sensor::process_estimation(const Photon &photon, const Medium &medium)
+  void Sensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     // Default implementation does nothing, can be overridden by specific sensors
   }
@@ -352,7 +353,7 @@ namespace luminis::core
     recorded_photons.insert(recorded_photons.end(), o.recorded_photons.begin(), o.recorded_photons.end());
   }
 
-  void PhotonRecordSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void PhotonRecordSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     hits += 1;
 
@@ -365,7 +366,7 @@ namespace luminis::core
     photon_rec.weight = photon.weight;
     photon_rec.k = photon.k;
     photon_rec.position_detector = info.intersection_point;
-    photon_rec.position_first_scattering = photon.r_0;
+    photon_rec.position_first_scattering = photon.r_1;
     photon_rec.position_last_scattering = photon.r_n;
     photon_rec.direction = Vec3{photon.P_local(2, 0), photon.P_local(2, 1), photon.P_local(2, 2)};
     photon_rec.m = Vec3{photon.P_local(0, 0), photon.P_local(0, 1), photon.P_local(0, 2)};
@@ -430,7 +431,7 @@ namespace luminis::core
     }
   }
 
-  void PlanarFieldSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void PlanarFieldSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     // Map intersection point to grid coordinates (centered at origin).
     const double x = info.intersection_point.x;
@@ -454,7 +455,7 @@ namespace luminis::core
     hits += 1;
   }
 
-  void PlanarFieldSensor::process_estimation(const Photon &photon, const Medium &medium)
+  void PlanarFieldSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     const double x = photon.pos.x;
     const double y = photon.pos.y;
@@ -482,12 +483,14 @@ namespace luminis::core
     std::complex<double> Ed2;
     Vec3 p;
 
+    const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
+
     if (std::abs(1 - mu) < 1e-11)
     {
       // Photon is on the same direction as the detector normal
       Q = Pold;
 
-      CMatrix Smatrix = medium.scattering_matrix(1.0, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0, photon.k);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -506,7 +509,7 @@ namespace luminis::core
       Q(2, 1) *= -1;
       Q(2, 2) *= -1;
 
-      CMatrix Smatrix = medium.scattering_matrix(M_PI, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0, photon.k);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -539,7 +542,7 @@ namespace luminis::core
       matmul(A, Pold, Q);
 
       double theta = std::acos(mu);
-      CMatrix Smatrix = medium.scattering_matrix(theta, 0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0, photon.k);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -654,7 +657,7 @@ namespace luminis::core
     }
   }
 
-  void PlanarFluenceSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void PlanarFluenceSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     // --- Time-resolved binning ---
     // If dt==0, all photons go into a single time bin (steady-state mode).
@@ -709,7 +712,7 @@ namespace luminis::core
     hits += 1;
   }
 
-  void PlanarFluenceSensor::process_estimation(const Photon &photon, const Medium &medium)
+  void PlanarFluenceSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     const double x = photon.pos.x;
     const double y = photon.pos.y;
@@ -737,12 +740,14 @@ namespace luminis::core
     std::complex<double> Ed2;
     Vec3 p;
 
+    const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
+
     if (std::abs(1 - mu) < 1e-11)
     {
       // Photon is on the same direction as the detector normal
       Q = Pold;
 
-      CMatrix Smatrix = medium.scattering_matrix(1.0, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0, photon.k);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -761,7 +766,7 @@ namespace luminis::core
       Q(2, 1) *= -1;
       Q(2, 2) *= -1;
 
-      CMatrix Smatrix = medium.scattering_matrix(M_PI, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0, photon.k);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -794,7 +799,7 @@ namespace luminis::core
       matmul(A, Pold, Q);
 
       double theta = std::acos(mu);
-      CMatrix Smatrix = medium.scattering_matrix(theta, 0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0, photon.k);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -916,7 +921,7 @@ namespace luminis::core
     }
   }
 
-  void PlanarCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void PlanarCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     const double x = info.intersection_point.x;
     const double y = info.intersection_point.y;
@@ -928,7 +933,7 @@ namespace luminis::core
     const double w_sqrt = std::sqrt(photon.weight);
 
     // Vec3 qb = (photon.dir + photon.s_0) * photon.k;
-    // Vec3 delta_r = photon.r_n - photon.r_0;
+    // Vec3 delta_r = photon.r_n - photon.r_1;
     // std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
 
     // Vec3 n_0 = photon.n_0;
@@ -960,7 +965,7 @@ namespace luminis::core
     hits += 1;
   }
 
-  void PlanarCBSSensor::process_estimation(const Photon &photon, const Medium &medium)
+  void PlanarCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     // Not implemented for CBS sensor since it relies on interference between forward and reverse paths, which cannot be captured by estimation.
   }
@@ -1017,7 +1022,7 @@ namespace luminis::core
     }
   }
 
-  void FarFieldFluenceSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void FarFieldFluenceSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     Matrix P = photon.P_local;
     const Vec3 dir = {P(2, 0), P(2, 1), P(2, 2)};
@@ -1051,7 +1056,7 @@ namespace luminis::core
     hits += 1;
   }
 
-  void FarFieldFluenceSensor::process_estimation(const Photon &photon, const Medium &medium)
+  void FarFieldFluenceSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     const double EPSILON = 1e-10;
     Vec3 r_scat = photon.pos;
@@ -1226,7 +1231,7 @@ namespace luminis::core
     return det;
   }
 
-  void FarFieldCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void FarFieldCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     // CBS requires at least 2 scattering events to form a time-reversed path pair.
     if (photon.events < 2)
@@ -1254,13 +1259,13 @@ namespace luminis::core
 
     // --- CBS geometric phase factor ---
     // The phase difference between forward and reverse paths arises from
-    // the spatial separation of the first (r_0) and last (r_n) scattering events:
-    //   phase = exp(i * k * (s_out + s_in) . (r_n - r_0))
+    // the spatial separation of the first (r_1) and last (r_n) scattering events:
+    //   phase = exp(i * k * (s_out + s_in) . (r_n - r_1))
     // At exact backscattering (s_out = -s_in), this phase vanishes and
     // the two paths interfere constructively, producing the CBS cone.
     const Vec3 s_in{photon.P0(2, 0), photon.P0(2, 1), photon.P0(2, 2)};
     const Vec3 qb = (s_out + s_in) * photon.k;
-    const Vec3 delta_r = photon.r_n - photon.r_0;
+    const Vec3 delta_r = photon.r_n - photon.r_1;
     const std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
 
     // --- Common amplitude factor ---
@@ -1316,17 +1321,17 @@ namespace luminis::core
     hits += 1;
   }
 
-  void FarFieldCBSSensor::process_estimation(const Photon &photon, const Medium &medium)
+  void FarFieldCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
-    // Para CBS por estimación: necesitas al menos 1 scatter previo,
-    // porque el scatter estimado sería el segundo total.
     if (photon.events < 1)
       return;
+
+    const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
 
     // Cache I_norm para este k
     if (_I_norm < 0.0 || std::abs(_I_norm_k - photon.k) > 1e-12)
     {
-      _I_norm = compute_I_norm(medium, photon.k);
+      _I_norm = compute_I_norm(*current_medium, photon.k);
       _I_norm_k = photon.k;
       if (_I_norm < 1e-300)
         return;
@@ -1356,7 +1361,7 @@ namespace luminis::core
     const int i_max = std::min(N_theta, static_cast<int>(th_max / dtheta));
 
     // Pre-factor de “sobrevive al scatter” (mu_s/mu_t)
-    const double w_scatter = photon.weight * (medium.mu_scattering / medium.mu_attenuation);
+    const double w_scatter = photon.weight * (current_medium->mu_scattering / current_medium->mu_attenuation);
     if (w_scatter < 1e-300)
       return;
 
@@ -1391,7 +1396,7 @@ namespace luminis::core
           continue;
 
         // 2) Transmitancia sin scatter adicional: exp(-mu_t L)
-        const double Tr = std::exp(-medium.mu_attenuation * L);
+        const double Tr = std::exp(-current_medium->mu_attenuation * L);
         if (Tr < 1e-20)
           continue;
 
@@ -1411,7 +1416,7 @@ namespace luminis::core
         const double cos_phi = dot(n_cur, p_hat);
 
         // 4) Matriz S(th_scat)
-        const CMatrix S = medium.scattering_matrix(th_scat, 0.0, photon.k);
+        const CMatrix S = current_medium->scattering_matrix(th_scat, 0.0, photon.k);
         const double s22 = std::norm(S(0, 0));
         const double s11 = std::norm(S(1, 1));
 
@@ -1473,9 +1478,9 @@ namespace luminis::core
         // 9) Reverse local via reciprocity (en base P_exit)
         const CVec2 Er_loc = coherent_estimation_partial(photon, medium, Pcur, P_exit, Tmid);
 
-        // 10) Fase CBS geométrica: exp(i k (s_out + s_in)·(r_n - r_0))
+        // 10) Fase CBS geométrica: exp(i k (s_out + s_in)·(r_n - r_1))
         const Vec3 qb = (s_out + s_in) * photon.k;
-        const Vec3 delta_r = photon.pos - photon.r_0; // r_n estimado = pos actual
+        const Vec3 delta_r = photon.pos - photon.r_1; // r_n estimado = pos actual
         const std::complex<double> path_phase = std::exp(std::complex<double>(0.0, dot(qb, delta_r)));
 
         // 11) Proyección a lab (x,y) con P_exit
@@ -1537,7 +1542,7 @@ namespace luminis::core
 
   CVec2 coherent_estimation_partial(
       const Photon &photon,
-      const Medium &medium,
+      const Sample &medium,
       const Matrix &P_last_in,  // frame de s_{n-1} (antes del scatter estimado)
       const Matrix &P_last_out, // frame de s_n     (después del scatter estimado)
       const CMatrix &Tmid)      // J_{n-1}...J_2  (para n=events+1)
@@ -1582,8 +1587,10 @@ namespace luminis::core
     const Vec3 s_in_a = s0;
     const Vec3 s_out_a = snm1 * (-1.0);
 
+    const ScatteringMedium *medium_at_n = medium.get_layer(photon.last_scatter_layer).medium;
+
     const double th_a = std::acos(clamp_pm1(dot(s_in_a, s_out_a)));
-    const CMatrix S_a = medium.scattering_matrix(th_a, 0.0, photon.k);
+    const CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0, photon.k);
 
     const Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
     const Vec3 mprime_in = safe_unit(cross(nprime, s_in_a), m0);
@@ -1617,8 +1624,10 @@ namespace luminis::core
     const Vec3 s_in_c = s1 * (-1.0);
     const Vec3 s_out_c = sn;
 
+    const ScatteringMedium *medium_at_1 = medium.get_layer(0).medium; // capa del scatter inicial
+
     const double th_c = std::acos(clamp_pm1(dot(s_in_c, s_out_c)));
-    const CMatrix S_c = medium.scattering_matrix(th_c, 0.0, photon.k);
+    const CMatrix S_c = medium_at_1->scattering_matrix(th_c, 0.0, photon.k);
 
     const Vec3 npp = safe_unit(cross(s_in_c, s_out_c), n1 * (-1.0));
     const Vec3 mpp_in = safe_unit(cross(npp, s_in_c), m1);
@@ -1638,7 +1647,7 @@ namespace luminis::core
     return E; // en base (mn,nn) del frame P_last_out
   }
 
-  void coherent_calculation(Photon &photon, const Medium &medium)
+  void coherent_calculation(Photon &photon, const Sample &medium)
   {
     // --- Extract local frames and propagation directions ---
     // Same structure as coherent_estimation, but uses photon.Pn (actual exit
@@ -1670,7 +1679,8 @@ namespace luminis::core
 
     double cos_th_a = clamp_pm1(dot(s_in_a, s_out_a));
     double th_a = std::acos(cos_th_a);
-    CMatrix S_a = medium.scattering_matrix(th_a, 0.0, photon.k);
+    const ScatteringMedium *medium_at_n = medium.get_layer(photon.last_scatter_layer).medium;
+    CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0, photon.k);
 
     // Scattering plane normal: n' = s_in x s_out
     Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
@@ -1734,7 +1744,8 @@ namespace luminis::core
 
     double cos_th_b = clamp_pm1(dot(s_in_b, s_out_b));
     double th_b = std::acos(cos_th_b);
-    CMatrix S_b = medium.scattering_matrix(th_b, 0.0, photon.k);
+    const ScatteringMedium *medium_at_1 = medium.get_layer(photon.first_scatter_layer).medium;
+    CMatrix S_b = medium_at_1->scattering_matrix(th_b, 0.0, photon.k);
 
     // Scattering plane normal: n'' = (-s1) x sn
     Vec3 npp = safe_unit(cross(s_in_b, s_out_b), n1 * (-1.0));
@@ -1907,7 +1918,7 @@ namespace luminis::core
     }
   }
 
-  void StatisticsSensor::process_hit(Photon &photon, InteractionInfo &info, const Medium &medium)
+  void StatisticsSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     if (events_histogram_bins_set)
     {

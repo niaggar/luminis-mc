@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <luminis/core/photon.hpp>
 #include <luminis/core/medium.hpp>
+#include <luminis/core/sample.hpp>
 #include <luminis/math/vec.hpp>
 #include <vector>
 #include <functional>
@@ -151,7 +152,7 @@ namespace luminis::core
     /// @param medium   The scattering medium (needed for matrix lookups in some sensors).
     /// @note Called by SensorsGroup::record_hit() after the photon passes all filters.
     ///       Subclasses accumulate their specific quantities (fields, Stokes, records, etc.).
-    virtual void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) = 0;
+    virtual void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) = 0;
 
     /// @brief Compute a virtual (estimator) contribution from a photon after scattering.
     /// @param photon The photon in its current state (not modified).
@@ -163,7 +164,8 @@ namespace luminis::core
     ///          The estimator approach calculates what the photon's contribution *would be*
     ///          if it were scattered directly toward the detector, applying the appropriate
     ///          phase function weight and exponential attenuation for the remaining distance.
-    virtual void process_estimation(const Photon &photon, const Medium &medium);
+    // TODO: Configure estimation to take into account all the layers above the current scattering point, not just the current layer.
+    virtual void process_estimation(const Photon &photon, const Sample &medium);
 
     /// @brief Create an empty clone of this sensor with identical configuration but zeroed data.
     /// @return A new sensor of the same type with all filter settings copied.
@@ -248,7 +250,7 @@ namespace luminis::core
     /// @details Captures: events, penetration depth, optical path, weight, arrival time,
     ///          positions (first/last scattering, detector), direction, polarization basis,
     ///          and both forward and reverse polarization states.
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -294,8 +296,8 @@ namespace luminis::core
     PlanarFieldSensor(double z, double len_x, double len_y, double dx, double dy, bool absorb = true, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
-    void process_estimation(const Photon &photon, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
+    void process_estimation(const Photon &photon, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -345,8 +347,8 @@ namespace luminis::core
     PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt, bool absorb = true, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
-    void process_estimation(const Photon &photon, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
+    void process_estimation(const Photon &photon, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -378,8 +380,8 @@ namespace luminis::core
     PlanarCBSSensor(double len_x, double len_y, double dx, double dy, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
-    void process_estimation(const Photon &photon, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
+    void process_estimation(const Photon &photon, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -417,8 +419,8 @@ namespace luminis::core
     FarFieldFluenceSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
-    void process_estimation(const Photon &photon, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
+    void process_estimation(const Photon &photon, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -444,9 +446,9 @@ namespace luminis::core
   /// 2. Calls coherent_calculation() to compute the reverse-path polarization state
   ///    (photon.polarization_reverse) from stored scattering history.
   /// 3. Computes the CBS geometric phase factor:
-  ///      path_phase = exp(i * k * (s_out + s_in) · (r_n - r_0))
+  ///      path_phase = exp(i * k * (s_out + s_in) · (r_n - r_1))
   ///    where s_in is the incident direction, s_out the exit direction, and
-  ///    r_0, r_n are the first and last scattering positions.
+  ///    r_1, r_n are the first and last scattering positions.
   ///    At exact backscattering (s_out = -s_in), this phase vanishes → constructive interference.
   /// 4. Projects both forward (E_f) and reverse (E_r) fields to laboratory (x, y) components.
   /// 5. Accumulates:
@@ -455,7 +457,7 @@ namespace luminis::core
   ///
   /// **Required simulation setup:**
   ///   - SimConfig::track_reverse_paths must be true so that the photon stores the
-  ///     scattering history (P0, P1, Pn1, Pn, r_0, r_n, matrix_T) needed for the
+  ///     scattering history (P0, P1, Pn1, Pn, r_1, r_n, matrix_T) needed for the
   ///     reverse-path calculation.
   ///
   /// **Post-processing:**
@@ -509,13 +511,13 @@ namespace luminis::core
     /// @brief Process a backscattered photon, computing forward and reverse contributions.
     /// @details See the class-level documentation for the full algorithm description.
     ///          Ignored for photons with fewer than 2 scattering events.
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
 
     /// @brief Estimator-based CBS contribution (currently unimplemented).
     /// @details The commented-out code would iterate over all (theta, phi) bins,
     ///          computing virtual scatter contributions and their reverse-path
     ///          counterparts for improved statistical convergence.
-    void process_estimation(const Photon &photon, const Medium &medium) override;
+    void process_estimation(const Photon &photon, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -538,7 +540,7 @@ namespace luminis::core
   /// @see coherent_calculation() for the direct-hit version.
   CVec2 coherent_estimation_partial(
       const Photon &photon,
-      const Medium &medium,
+      const Sample&medium,
       const Matrix &P_last_in,  // frame de s_{n-1} (antes del scatter estimado)
       const Matrix &P_last_out, // frame de s_n     (después del scatter estimado)
       const CMatrix &Tmid);
@@ -578,8 +580,8 @@ namespace luminis::core
   ///
   /// @pre photon.events >= 2
   /// @pre SimConfig::track_reverse_paths was true during simulation (so that P0, P1,
-  ///      Pn1, Pn, r_0, r_n, initial_polarization, and matrix_T are populated).
-  void coherent_calculation(Photon &photon, const Medium &medium);
+  ///      Pn1, Pn, r_1, r_n, initial_polarization, and matrix_T are populated).
+  void coherent_calculation(Photon &photon, const Sample &medium);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // StatisticsSensor — Configurable histograms of photon properties
@@ -690,7 +692,7 @@ namespace luminis::core
     void merge_from(const Sensor &other) override;
 
     /// @brief Deposit the photon into each active histogram based on its properties.
-    void process_hit(Photon &photon, InteractionInfo &info, const Medium &medium) override;
+    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -739,12 +741,12 @@ namespace luminis::core
     /// @param photon The propagating photon (may be terminated if a sensor absorbs it).
     /// @param medium The scattering medium (passed through to process_hit).
     /// @return true if the photon was absorbed by at least one sensor, false otherwise.
-    bool record_hit(Photon &photon, const Medium &medium);
+    bool record_hit(Photon &photon, const Sample &medium);
 
     /// @brief Dispatch estimator contributions to all enabled sensors.
     /// @param photon The photon in its current state after scattering (not modified).
     /// @param medium The scattering medium (passed through to process_estimation).
-    void run_estimators(const Photon &photon, const Medium &medium);
+    void run_estimators(const Photon &photon, const Sample &medium);
 
     /// @brief Combine accumulated results from another SensorsGroup (after parallel run).
     /// @param other The source group (sensors are matched by id).

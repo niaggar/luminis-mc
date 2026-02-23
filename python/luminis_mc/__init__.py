@@ -50,9 +50,11 @@ from ._core import (
     FarFieldCBSRadialProcessed,
     postprocess_farfield_cbs,
     # Medium
-    Medium,
-    SimpleMedium,
+    ScatteringMedium,
+    RGDMedium,
     MieMedium,
+    SampleLayer,
+    Sample,
     # Absorption
     Absorption,
     AbsorptionTimeDependent,
@@ -130,9 +132,11 @@ __all__ = [
     "FarFieldCBSRadialProcessed",
     "postprocess_farfield_cbs",
     # Medium
-    "Medium",
-    "SimpleMedium",
+    "ScatteringMedium",
+    "RGDMedium",
     "MieMedium",
+    "SampleLayer",
+    "Sample",
     # Absorption
     "Absorption",
     "AbsorptionTimeDependent",
