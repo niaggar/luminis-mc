@@ -38,6 +38,7 @@ Usage example::
 """
 
 import json
+import shutil
 import time
 from pathlib import Path
 from datetime import datetime
@@ -59,7 +60,7 @@ class SweepManager:
     failed so the caller can decide whether to abort the sweep.
     """
 
-    def __init__(self, sweep_name: str, base_dir: str):
+    def __init__(self, sweep_name: str, base_dir: str, timestamped: bool = True):
         """
         Create the sweep root directory and initialise the manifest file.
 
@@ -69,9 +70,22 @@ class SweepManager:
             Human-readable label appended to the timestamped directory name.
         base_dir:
             Parent directory under which the sweep folder is created.
+        timestamped:
+            When ``True`` (default) the sweep folder is prefixed with a
+            ``YYYY-MM-DD_HH-MM-SS`` timestamp.  Set to ``False`` to reuse
+            a fixed folder name and overwrite previous sweep results.
         """
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.root     = Path(base_dir) / f"{ts}_{sweep_name}"
+        self._timestamped = timestamped
+
+        if timestamped:
+            ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            self.root = Path(base_dir) / f"{ts}_{sweep_name}"
+        else:
+            self.root = Path(base_dir) / sweep_name
+
+        if self.root.exists():
+            shutil.rmtree(self.root)
+
         self.runs_dir = self.root / "runs"
         self.runs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -145,8 +159,8 @@ class SweepManager:
             Wraps any exception raised inside *run_fn*, after marking the
             run as ``"failed"`` in the manifest.
         """
-        # run_folder = self.runs_dir / f"{run_id:04d}_{run_name}"
-        # run_folder.mkdir(parents=True, exist_ok=True)
+        run_folder = self.runs_dir / f"{run_id:04d}_{run_name}"
+        run_folder.mkdir(parents=True, exist_ok=True)
 
         t0     = time.time()
         status = "ok"
@@ -155,14 +169,14 @@ class SweepManager:
         record = {
             "run_id":     run_id,
             "run_name":   run_name,
-            "path":       f"{run_id:04d}_{run_name}",
+            "path":       run_folder,
             "started_at": datetime.now().isoformat(timespec="seconds"),
         }
         self._append_manifest({**record, "status": "started"})
 
         try:
             # Each run gets its own Experiment rooted inside runs_dir.
-            exp = Experiment(name=f"{run_id:04d}_{run_name}", base_dir=str(self.runs_dir))
+            exp = Experiment(name=f"{run_id:04d}_{run_name}", base_dir=str(self.runs_dir), timestamped=False)
             run_fn(exp)
             exp.close()
         except Exception as e:

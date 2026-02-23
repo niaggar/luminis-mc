@@ -229,7 +229,7 @@ class Experiment:
             ...
     """
 
-    def __init__(self, name: str, base_dir: str = "sim_results", h5_name: str = "results.h5"):
+    def __init__(self, name: str, base_dir: str = "sim_results", h5_name: str = "results.h5", timestamped: bool = True):
         """
         Create the experiment directory and open the HDF5 file for writing.
 
@@ -241,9 +241,21 @@ class Experiment:
             Root directory under which the experiment folder is created.
         h5_name:
             Name of the HDF5 results file (default ``"results.h5"``).
+        timestamped:
+            When ``True`` (default) the folder is prefixed with a
+            ``YYYY-MM-DD_HH-MM-SS`` timestamp, producing a unique directory
+            per run.  Set to ``False`` for quick test runs: the folder will
+            simply be ``<base_dir>/<name>/`` and any previous results at
+            that path are overwritten.
         """
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.path = Path(base_dir) / f"{timestamp}_{name}"
+        if timestamped:
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            self.path = Path(base_dir) / f"{timestamp}_{name}"
+        else:
+            self.path = Path(base_dir) / name
+        
+        if self.path.exists():
+            shutil.rmtree(self.path)
         self.path.mkdir(parents=True, exist_ok=True)
 
         self.h5_path = self.path / h5_name
