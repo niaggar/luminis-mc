@@ -5,7 +5,7 @@ from datetime import datetime
 
 from luminis_mc import (
     Experiment, ResultsLoader,
-    Laser, MieMedium, FarFieldCBSSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
+    Laser, MieMedium, Sample, FarFieldCBSSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
     run_simulation_parallel, postprocess_farfield_cbs,
     set_log_level, LogLevel, LaserSource
 )
@@ -50,6 +50,8 @@ with Experiment(exp_name, base_dir) as exp:
     laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength_real, laser_radius, laser_type)
     phase = MiePhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, phasef_ndiv, phasef_theta_min, phasef_theta_max)
     medium = MieMedium(mu_absortion_sim, mu_scattering_sim, phase, mean_free_path_sim, radius_real, n_particle_real, n_medium_real, wavelength_real)
+    sample = Sample(n_medium=n_medium_real)
+    sample.add_layer(medium, 0.0, float('inf'))
 
     # Sensor parameters
     theta_max_far_field = np.deg2rad(40)
@@ -71,7 +73,7 @@ with Experiment(exp_name, base_dir) as exp:
     stats.set_phi_histogram_bins(0, 2*np.pi, 360)
     stats.set_depth_histogram_bins(10*mean_free_path_sim, 100)
 
-    config = SimConfig(n_photons=n_photons, medium=medium, detector=sens, laser=laser, track_reverse_paths=True)
+    config = SimConfig(n_photons=n_photons, sample=sample, detector=sens, laser=laser, track_reverse_paths=True)
     config.n_threads = 8
 
     # 3) params

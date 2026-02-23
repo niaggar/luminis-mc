@@ -46,6 +46,7 @@ add_library(_core_c
     src/detector.cpp
     src/laser.cpp
     src/medium.cpp
+    src/sample.cpp
     src/phase.cpp
     src/photon.cpp
     src/simulation.cpp

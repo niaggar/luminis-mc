@@ -41,7 +41,7 @@ Laser::Laser(std::complex<double> m_state, std::complex<double> n_state, double 
 
 double Laser::sample_emission_time(Rng &rng) const {
   constexpr double PS_TO_NS      = 1e-3;
-  constexpr double FWHM_TO_SIGMA = 1.0 / (2.0 * std::sqrt(2.0 * std::log(2.0)));
+  const double FWHM_TO_SIGMA = 1.0 / (2.0 * std::sqrt(2.0 * std::log(2.0)));
 
   const double t0_ns = time_offset * PS_TO_NS;
 

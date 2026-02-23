@@ -43,6 +43,7 @@
 #include <cstdint>
 #include <luminis/core/simulation.hpp>
 #include <luminis/core/medium.hpp>
+#include <luminis/core/sample.hpp>
 #include <luminis/core/detector.hpp>
 #include <luminis/core/photon.hpp>
 #include <luminis/core/laser.hpp>
@@ -75,7 +76,7 @@ namespace luminis::core
 
     bool track_reverse_paths{false}; ///< Enable CBS reverse-path tracking (populates P0/P1/Pn/matrix_T on each Photon).
 
-    Medium *medium{nullptr};                      ///< Scattering medium (optical properties, phase function). Must not be null.
+    Sample *sample{nullptr};                       ///< Layered sample with shared host medium. Must not be null.
     Laser *laser{nullptr};                        ///< Photon source (position, direction, polarization). Must not be null.
     SensorsGroup *detector{nullptr};              ///< Sensor group collecting detection data. Must not be null.
     AbsorptionTimeDependent *absorption{nullptr}; ///< Optional time-dependent absorption recorder; may be null.
@@ -84,26 +85,26 @@ namespace luminis::core
      * @brief Constructs a SimConfig with an auto-generated RNG seed.
      *
      * @param n  Total number of photons to simulate.
-     * @param m  Pointer to the scattering medium.
+     * @param s  Pointer to the layered sample.
      * @param l  Pointer to the photon source.
      * @param d  Pointer to the sensor group.
      * @param a  Pointer to the absorption recorder (may be null).
      * @param track_reverse_paths  Enable CBS reverse-path bookkeeping.
      */
-    SimConfig(std::size_t n, Medium *m = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
+    SimConfig(std::size_t n, Sample *s = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
 
     /**
      * @brief Constructs a SimConfig with an explicit RNG seed for reproducibility.
      *
      * @param s  64-bit RNG seed.
      * @param n  Total number of photons to simulate.
-     * @param m  Pointer to the scattering medium.
+     * @param sa Pointer to the layered sample.
      * @param l  Pointer to the photon source.
      * @param d  Pointer to the sensor group.
      * @param a  Pointer to the absorption recorder (may be null).
      * @param track_reverse_paths  Enable CBS reverse-path bookkeeping.
      */
-    SimConfig(std::uint64_t s, std::size_t n, Medium *m = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
+    SimConfig(std::uint64_t s, std::size_t n, Sample *sa = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -155,12 +156,12 @@ namespace luminis::core
    * 9. Applies weight splitting (absorption) and Russian roulette.
    *
    * @param photon              Photon packet to transport (modified in place).
-   * @param medium              Scattering medium providing optical properties.
+   * @param sample              Layered sample providing optical properties.
    * @param detector            Sensor group for hit recording and estimators.
    * @param rng                 Per-thread random number generator.
    * @param absorption          Optional time-dependent absorption recorder.
    * @param track_reverse_paths Enable CBS reverse-path bookkeeping.
    */
-  void run_photon(Photon &photon, Medium &medium, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths);
+  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths);
   
 } // namespace luminis::core

@@ -4,12 +4,13 @@
  *
  * Defines three tiers of scattering media:
  *
- * - **Medium** (abstract base): holds the optical coefficients (μ_a, μ_s, μ_t),
- *   a pointer to a PhaseFunction, and provides sampling interfaces for free path,
- *   scattering angle θ, azimuthal angle φ, the conditional φ sampling that
- *   accounts for polarization state, and the 2×2 amplitude scattering matrix J(θ,φ,k).
+ * - **ScatteringMedium** (abstract base): holds the optical coefficients
+ *   (μ_a, μ_s, μ_t), a pointer to a PhaseFunction, and provides sampling
+ *   interfaces for free path, scattering angle θ, azimuthal angle φ, the
+ *   conditional φ sampling that accounts for polarization state, and the
+ *   2×2 amplitude scattering matrix J(θ,φ,k).
  *
- * - **SimpleMedium**: Rayleigh-Gans-Debye (RGD) approximation.  Uses an
+ * - **RGDMedium**: Rayleigh-Gans-Debye (RGD) approximation.  Uses an
  *   analytical form-factor and a constant exponential free-path distribution.
  *   Suitable for dilute suspensions of small particles (size parameter x ≪ 1).
  *
@@ -26,9 +27,14 @@
  *       where s2 acts on the parallel (p) component and s1 on the perpendicular
  *       (s) component of the electric field.
  *
+ * @note The global refractive index of the host medium (solvent) is stored in
+ *       the `Sample` class, not in individual scattering media. All layers
+ *       share the same host medium; only the particle properties differ.
+ *
  * @see luminis/sample/phase.hpp   — PhaseFunction interface
  * @see luminis/sample/table.hpp   — DataTable for tabulated S1/S2
  * @see luminis/mie/dmiev.h        — MIEV0 Mie solver
+ * @see luminis/core/sample.hpp    — Sample (layered container with shared n_medium)
  */
 
 #pragma once
@@ -44,7 +50,7 @@ using namespace luminis::sample;
 namespace luminis::core {
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  Abstract base medium
+//  Abstract base scattering medium
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -54,28 +60,29 @@ namespace luminis::core {
  * a concrete PhaseFunction.  Derived classes must implement:
  *   - `sample_free_path()`  — the free-path length distribution
  *   - `scattering_matrix()` — the 2×2 amplitude scattering matrix J(θ,φ,k)
+ *
+ * @note The host medium refractive index and photon velocity are managed by
+ *       the `Sample` class. `ScatteringMedium` only describes particle-level
+ *       scattering and absorption properties.
  */
-struct Medium {
+struct ScatteringMedium {
   const PhaseFunction *phase_function{nullptr}; ///< Pointer to the phase-function sampler (not owned)
 
   const double mu_absorption{0.0};  ///< Absorption coefficient μ_a [1/mm]
   const double mu_scattering{0.0};  ///< Scattering coefficient μ_s [1/mm]
   const double mu_attenuation{0.0}; ///< Total attenuation coefficient μ_t = μ_a + μ_s [1/mm]
 
-  const double light_speed{1};          ///< Phase speed of light in the medium [mm/ns]
-  const double refractive_index{1.0};   ///< Real part of the refractive index
-
-  virtual ~Medium() = default;
+  virtual ~ScatteringMedium() = default;
 
   /**
-   * @brief Construct a medium from its bulk optical coefficients.
+   * @brief Construct a scattering medium from its bulk optical coefficients.
    *
    * @param absorption     Absorption coefficient μ_a [1/mm].
    * @param scattering     Scattering coefficient μ_s [1/mm].
    * @param phase_func     Pointer to the phase-function sampler.
    *                       Must remain valid for the lifetime of this object.
    */
-  Medium(double absorption, double scattering, PhaseFunction *phase_func);
+  ScatteringMedium(double absorption, double scattering, PhaseFunction *phase_func);
 
   // ── Sampling interface ─────────────────────────────────────────────────────
 
@@ -139,24 +146,6 @@ struct Medium {
    * @return       2×2 complex amplitude scattering matrix.
    */
   virtual CMatrix scattering_matrix(const double theta, const double phi, const double k) const = 0;
-
-  // ── Utility ────────────────────────────────────────────────────────────────
-
-  /**
-   * @brief Return the phase speed of light in the medium.
-   * @return Speed [mm/ns].
-   */
-  double light_speed_in_medium() const;
-
-  /**
-   * @brief Test whether a point lies inside the medium volume.
-   *
-   * A position is outside if z < 0, or if any coordinate is NaN or infinite.
-   *
-   * @param position  3D position to test [mm].
-   * @return          `true` if the position is inside the medium.
-   */
-  bool is_inside(const Vec3 &position) const;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -172,14 +161,14 @@ struct Medium {
  * The amplitude scattering matrix is computed analytically from the particle
  * volume, form factor F(θ, k, r), and the contrast index (m - 1).
  */
-struct SimpleMedium : public Medium {
+struct RGDMedium : public ScatteringMedium {
   double mean_free_path; ///< Mean free path l = 1/μ_s [mm]
   double n_particle;     ///< Real refractive index of the scatterer
-  double n_medium;       ///< Real refractive index of the surrounding medium
+  double n_medium;       ///< Real refractive index of the surrounding medium (used for contrast ratio)
   double radius;         ///< Particle radius [mm]
 
   /**
-   * @brief Construct a SimpleMedium.
+   * @brief Construct a RGDMedium.
    *
    * @param absorption  Absorption coefficient μ_a [1/mm].
    * @param scattering  Scattering coefficient μ_s [1/mm].
@@ -189,7 +178,7 @@ struct SimpleMedium : public Medium {
    * @param n_particle  Refractive index of the particle.
    * @param n_medium    Refractive index of the surrounding medium.
    */
-  SimpleMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium);
+  RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium);
 
   /**
    * @brief Sample an exponentially-distributed free path.
@@ -229,7 +218,7 @@ struct SimpleMedium : public Medium {
  *
  * Valid for spherical particles of arbitrary size parameter x = 2π r/λ.
  */
-struct MieMedium : public Medium {
+struct MieMedium : public ScatteringMedium {
   double mean_free_path;          ///< Mean free path l = 1/μ_s [mm]
   double n_particle;              ///< Real refractive index of the particle
   double n_medium;                ///< Real refractive index of the surrounding medium

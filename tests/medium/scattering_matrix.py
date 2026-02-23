@@ -1,5 +1,5 @@
 from luminis_mc import (
-    SimpleMedium,
+    RGDMedium,
     MieMedium,
     RayleighDebyeEMCPhaseFunction,
     MiePhaseFunction,
@@ -49,7 +49,7 @@ nDiv = 1000
 rng_test = Rng()
 phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
 mie_phase_function = MiePhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
-medium = SimpleMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
+medium = RGDMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
 mie_medium = MieMedium(mu_absortion_sim, mu_scattering_sim, mie_phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real, wavelength_real)
 
 anysotropy = phase_function.get_anisotropy_factor(rng_test)

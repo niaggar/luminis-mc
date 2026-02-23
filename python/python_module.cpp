@@ -1,6 +1,7 @@
 #include <luminis/core/detector.hpp>
 #include <luminis/core/laser.hpp>
 #include <luminis/core/medium.hpp>
+#include <luminis/core/sample.hpp>
 #include <luminis/core/photon.hpp>
 #include <luminis/core/simulation.hpp>
 #include <luminis/core/absortion.hpp>
@@ -179,6 +180,7 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("launch_time", &Photon::launch_time)
       .def_readwrite("velocity", &Photon::velocity)
       .def_readwrite("weight", &Photon::weight)
+      .def_readwrite("current_layer", &Photon::current_layer)
       .def_readwrite("polarized", &Photon::polarized)
       .def_readwrite("polarization", &Photon::polarization)
       .def_readonly("P0", &Photon::P0)
@@ -186,7 +188,7 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("Pn2", &Photon::Pn2)
       .def_readonly("Pn1", &Photon::Pn1)
       .def_readonly("Pn", &Photon::Pn)
-      .def_readonly("r_0", &Photon::r_0)
+      .def_readonly("r_1", &Photon::r_1)
       .def_readonly("r_n", &Photon::r_n)
       .def_readonly("matrix_T", &Photon::matrix_T)
       .def_readonly("matrix_T_buffer", &Photon::matrix_T_buffer)
@@ -459,39 +461,35 @@ PYBIND11_MODULE(_core, m)
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_solid_angle") = true, py::arg("normalize_per_photon") = true, py::arg("eps") = 1e-30,
         "Calculate the Stokes matrix from a list of photon records");
 
-  // Medium bindings
-  py::class_<Medium>(m, "Medium")
-      .def_readonly("mu_a", &Medium::mu_absorption)
-      .def_readonly("mu_s", &Medium::mu_scattering)
-      .def_readonly("mu_t", &Medium::mu_attenuation)
-      .def_readonly("light_speed", &Medium::light_speed)
-      .def_readonly("refractive_index", &Medium::refractive_index)
-      .def_readonly("phase_function", &Medium::phase_function)
-      .def("sample_free_path", &Medium::sample_free_path, py::arg("rng"),
+  // ScatteringMedium bindings
+  py::class_<ScatteringMedium>(m, "ScatteringMedium")
+      .def_readonly("mu_a", &ScatteringMedium::mu_absorption)
+      .def_readonly("mu_s", &ScatteringMedium::mu_scattering)
+      .def_readonly("mu_t", &ScatteringMedium::mu_attenuation)
+      .def_readonly("phase_function", &ScatteringMedium::phase_function)
+      .def("sample_free_path", &ScatteringMedium::sample_free_path, py::arg("rng"),
            "Sample the free path length in the medium")
-      .def("sample_scattering_angle", &Medium::sample_scattering_angle,
+      .def("sample_scattering_angle", &ScatteringMedium::sample_scattering_angle,
            py::arg("rng"), "Sample the scattering angle in the medium")
-      .def("sample_azimuthal_angle", &Medium::sample_azimuthal_angle,
+      .def("sample_azimuthal_angle", &ScatteringMedium::sample_azimuthal_angle,
            py::arg("rng"), "Sample the azimuthal angle in the medium")
-      .def("sample_conditional_azimuthal_angle", &Medium::sample_conditional_azimuthal_angle,
+      .def("sample_conditional_azimuthal_angle", &ScatteringMedium::sample_conditional_azimuthal_angle,
            py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("k"), py::arg("theta"),
            "Sample the azimuthal angle conditioned on scattering angle theta")
-      .def("scattering_matrix", &Medium::scattering_matrix, py::arg("theta"),
+      .def("scattering_matrix", &ScatteringMedium::scattering_matrix, py::arg("theta"),
            py::arg("phi"), py::arg("k"),
-           "Get the scattering matrix for given angles and wavenumber")
-      .def("light_speed_in_medium", &Medium::light_speed_in_medium,
-           "Get the speed of light in the medium");
+           "Get the scattering matrix for given angles and wavenumber");
 
-  py::class_<SimpleMedium, Medium>(m, "SimpleMedium")
+  py::class_<RGDMedium, ScatteringMedium>(m, "RGDMedium")
       .def(py::init<double, double, PhaseFunction *, double, double, double, double>(),
            py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"),
            py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"))
-      .def_readonly("mean_free_path", &SimpleMedium::mean_free_path)
-      .def_readonly("radius", &SimpleMedium::radius)
-      .def_readonly("n_particle", &SimpleMedium::n_particle)
-      .def_readonly("n_medium", &SimpleMedium::n_medium);
+      .def_readonly("mean_free_path", &RGDMedium::mean_free_path)
+      .def_readonly("radius", &RGDMedium::radius)
+      .def_readonly("n_particle", &RGDMedium::n_particle)
+      .def_readonly("n_medium", &RGDMedium::n_medium);
 
-  py::class_<MieMedium, Medium>(m, "MieMedium")
+  py::class_<MieMedium, ScatteringMedium>(m, "MieMedium")
       .def(py::init<double, double, PhaseFunction *, double, double, double, double, double>(),
            py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"), py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
       .def_readonly("mean_free_path", &MieMedium::mean_free_path)
@@ -500,6 +498,38 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("n_medium", &MieMedium::n_medium)
       .def_readonly("wavelength", &MieMedium::wavelength)
       .def_readonly("m", &MieMedium::m);
+
+  // Sample bindings
+  py::class_<SampleLayer>(m, "SampleLayer")
+      .def(py::init<const ScatteringMedium *, double, double>(), py::arg("medium"), py::arg("z_min"), py::arg("z_max"))
+      .def_readonly("medium", &SampleLayer::medium)
+      .def_readonly("z_min", &SampleLayer::z_min)
+      .def_readonly("z_max", &SampleLayer::z_max)
+      .def("contains", &SampleLayer::contains, py::arg("z"),
+           "Check if a z-coordinate lies within this layer")
+      .def("thickness", &SampleLayer::thickness,
+           "Return the thickness of the layer");
+
+  py::class_<Sample>(m, "Sample")
+      .def(py::init<double>(), py::arg("n_medium") = 1.0,
+           "Construct a Sample with the given host medium refractive index")
+      .def("add_layer", &Sample::add_layer, py::arg("medium"), py::arg("z_min"), py::arg("z_max"),
+           "Add a new layer to the top of the sample")
+      .def("size", &Sample::size,
+           "Return the number of layers")
+      .def("get_layer", &Sample::get_layer, py::arg("index"),
+           py::return_value_policy::reference_internal,
+           "Access a layer by index")
+      .def("is_inside", &Sample::is_inside, py::arg("position"),
+           "Test whether a position is inside the sample")
+      .def("z_top", &Sample::z_top,
+           "Return the z_max of the topmost layer")
+      .def("light_speed_in_medium", &Sample::light_speed_in_medium,
+           "Return the phase speed of light in the host medium")
+      .def_readonly("refractive_index", &Sample::refractive_index)
+      .def_readonly("light_speed", &Sample::light_speed)
+      .def_readonly("layers", &Sample::layers)
+      .def_readonly("interfaces", &Sample::interfaces);
 
   // Absorption bindings
   py::class_<Absorption>(m, "Absorption")
@@ -535,15 +565,15 @@ PYBIND11_MODULE(_core, m)
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t, Medium *, Laser *, SensorsGroup *, AbsorptionTimeDependent *, bool>(),
-           py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
+      .def(py::init<std::size_t, Sample *, Laser *, SensorsGroup *, AbsorptionTimeDependent *, bool>(),
+           py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
            "Initialize a simulation configuration with given parameters")
-      .def(py::init<std::uint64_t, std::size_t, Medium *, Laser *, SensorsGroup *, AbsorptionTimeDependent *, bool>(),
-           py::arg("rng_seed"), py::arg("n_photons"), py::arg("medium"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
+      .def(py::init<std::uint64_t, std::size_t, Sample *, Laser *, SensorsGroup *, AbsorptionTimeDependent *, bool>(),
+           py::arg("rng_seed"), py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
            "Initialize a simulation configuration with given parameters including RNG seed")
       .def_readonly("seed", &SimConfig::seed)
       .def_readonly("n_photons", &SimConfig::n_photons)
-      .def_readonly("medium", &SimConfig::medium, pybind11::return_value_policy::reference)
+      .def_readonly("sample", &SimConfig::sample, pybind11::return_value_policy::reference)
       .def_readonly("laser", &SimConfig::laser, pybind11::return_value_policy::reference)
       .def_readonly("detector", &SimConfig::detector, pybind11::return_value_policy::reference)
       .def_readonly("absorption", &SimConfig::absorption, pybind11::return_value_policy::reference)

@@ -14,6 +14,7 @@
 #include <luminis/core/absortion.hpp>
 #include <luminis/core/detector.hpp>
 #include <luminis/core/simulation.hpp>
+#include <luminis/core/sample.hpp>
 #include <luminis/log/logger.hpp>
 #include <luminis/math/utils.hpp>
 #include <cmath>
@@ -40,11 +41,11 @@ namespace luminis::core
   // SimConfig implementation
   // ═══════════════════════════════════════════════════════════════════════════
 
-  SimConfig::SimConfig(std::size_t n, Medium *m, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
-      : n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
+  SimConfig::SimConfig(std::size_t n, Sample *s, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+      : n_photons(n), sample(s), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
-  SimConfig::SimConfig(std::uint64_t s, std::size_t n, Medium *m, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
-      : seed(s), n_photons(n), medium(m), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
+  SimConfig::SimConfig(std::uint64_t seed, std::size_t n, Sample *s, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+      : seed(seed), n_photons(n), sample(s), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Single-threaded driver
@@ -54,11 +55,15 @@ namespace luminis::core
   {
     Rng rng(config.seed);
 
+    // Photon velocity is uniform across all layers (shared host medium).
+    const double initial_velocity = config.sample->light_speed_in_medium();
+
     for (std::size_t i = 0; i < config.n_photons; ++i)
     {
       Photon photon = config.laser->emit_photon(rng);
-      photon.velocity = config.medium->light_speed_in_medium();
-      run_photon(photon, *config.medium, *config.detector, rng, config.absorption, config.track_reverse_paths);
+      photon.velocity = initial_velocity;
+      photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
+      run_photon(photon, *config.sample, *config.detector, rng, config.absorption, config.track_reverse_paths);
     }
   }
 
@@ -81,7 +86,7 @@ namespace luminis::core
     // Remainder photons are assigned one-per-thread to the first `rem` threads
     // so the total is always exactly n_photons.
     const std::size_t base = config.n_photons / n_threads;
-    const std::size_t rem  = config.n_photons % n_threads;
+    const std::size_t rem = config.n_photons % n_threads;
 
     LLOG_INFO("Running simulation with {} threads for {} photons", n_threads, config.n_photons);
 
@@ -115,7 +120,7 @@ namespace luminis::core
       const std::size_t my_count = base + (t < rem ? 1u : 0u);
 
       workers.emplace_back([&, t, my_count]()
-      {
+                           {
         try
         {
           // Each thread gets a deterministic but independent seed derived from
@@ -132,19 +137,22 @@ namespace luminis::core
           if (config.absorption)
             abs_ptr = &thread_absorptions[t];
 
+          // Photon velocity is uniform across all layers (shared host medium).
+          const double initial_velocity = config.sample->light_speed_in_medium();
+
           for (std::size_t i = 0; i < my_count; ++i)
           {
             Photon photon = config.laser->emit_photon(rng);
-            photon.velocity = config.medium->light_speed_in_medium();
-            run_photon(photon, *config.medium, det, rng, abs_ptr, config.track_reverse_paths);
+            photon.velocity = initial_velocity;
+            photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
+            run_photon(photon, *config.sample, det, rng, abs_ptr, config.track_reverse_paths);
           }
         }
         catch (...)
         {
           any_error = true;
           thread_exception = std::current_exception();
-        }
-      });
+        } });
     }
 
     LLOG_INFO("All threads launched.");
@@ -178,41 +186,121 @@ namespace luminis::core
   // Per-photon transport kernel
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void run_photon(Photon &photon, Medium &medium, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths)
+  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths)
   {
     // --- Initialize CBS frame history ---
     // All CBS fields are reset to the launch state so the photon can be reused
     // across multiple trajectories without carrying stale data.
-    photon.r_0 = photon.pos;
+    photon.r_1 = photon.pos;
     photon.r_n = photon.pos;
 
-    photon.P0  = photon.P_local;
-    photon.P1  = photon.P_local;
+    photon.P0 = photon.P_local;
+    photon.P1 = photon.P_local;
     photon.Pn2 = photon.P_local;
     photon.Pn1 = photon.P_local;
-    photon.Pn  = photon.P_local;
+    photon.Pn = photon.P_local;
 
     photon.initial_polarization = photon.polarization;
 
     // matrix_T accumulates the normalized interior Jones matrices J_2..J_{n-1}.
     // Initialized to identity (no scattering history yet).
-    photon.matrix_T        = CMatrix::identity(2);
+    photon.matrix_T = CMatrix::identity(2);
     photon.matrix_T_buffer = CMatrix::identity(2);
-    photon.has_T_prev      = false;
+    photon.has_T_prev = false;
 
     photon.coherent_path_calculated = false;
 
     // ─── Main transport loop ─────────────────────────────────────────────────
     while (photon.alive)
     {
+      // --- Resolve current layer ---
+      const SampleLayer &current_layer = sample.get_layer(photon.current_layer);
+      const ScatteringMedium &medium = *current_layer.medium;
+
       // --- Step 1: Free-path sampling ---
-      // Advance the photon by one mean-free-path sampled from the medium.
-      const double step = medium.sample_free_path(rng);
+      // Sample a free-path length from the current layer's medium.
+      double step = medium.sample_free_path(rng);
+
+      // Compute candidate new position.
+      const double dir_x = photon.P_local(2, 0);
+      const double dir_y = photon.P_local(2, 1);
+      const double dir_z = photon.P_local(2, 2);
+      double new_z = photon.pos.z + dir_z * step;
+
+      // --- Step 1b: Interface crossing check ---
+      // If the step crosses a layer boundary, truncate at the interface,
+      // convert remaining optical distance into the new layer, and repeat
+      // until no more interfaces are crossed or the remaining step is consumed.
+      {
+        auto iface = sample.find_next_interface(photon.pos.z, new_z);
+        while (iface.has_value())
+        {
+          const double z_iface = iface.value();
+
+          // Parametric intersection: fraction of step to reach the interface.
+          const double dz_total = dir_z * step;
+          if (std::abs(dz_total) < 1e-15)
+            break; // Moving parallel to interface, no crossing.
+
+          const double t = (z_iface - photon.pos.z) / dz_total;
+          if (t < 0.0 || t > 1.0)
+            break; // Numerical guard.
+
+          // Distance traveled to reach the interface.
+          const double step_to_iface = step * t;
+
+          // Remaining optical distance (in the current layer's extinction units).
+          const double remaining_optical = (step - step_to_iface) * sample.get_layer(photon.current_layer).medium->mu_attenuation;
+
+          // Move photon exactly to the interface.
+          photon.opticalpath += step_to_iface;
+          photon.prev_pos = photon.pos;
+          photon.pos.x += dir_x * step_to_iface;
+          photon.pos.y += dir_y * step_to_iface;
+          // Place photon slightly past the interface to land in the new layer.
+          const double nudge = (dir_z > 0) ? 1e-12 : -1e-12;
+          photon.pos.z = z_iface + nudge;
+
+          // Detect sensor crossings for the sub-step to the interface.
+          const bool hit = detector.record_hit(photon, sample);
+          if (hit)
+          {
+            photon.alive = false;
+            break;
+          }
+
+          // Transition to the new layer.
+          std::size_t new_layer_idx = sample.get_layer_index_at(photon.pos.z);
+          if (new_layer_idx >= sample.size())
+          {
+            // Photon has left the stack (top or bottom boundary).
+            photon.alive = false;
+            break;
+          }
+          photon.current_layer = new_layer_idx;
+
+          // Convert remaining optical distance to physical distance in the new layer.
+          const ScatteringMedium &new_medium = *sample.get_layer(photon.current_layer).medium;
+          if (new_medium.mu_attenuation > 0)
+            step = remaining_optical / new_medium.mu_attenuation;
+          else
+            step = remaining_optical; // Fallback for non-attenuating layer.
+
+          // Check for further interface crossings in the new layer.
+          new_z = photon.pos.z + dir_z * step;
+          iface = sample.find_next_interface(photon.pos.z, new_z);
+        }
+      }
+
+      // If the photon was killed during interface transitions, stop.
+      if (!photon.alive)
+        break;
+
       photon.opticalpath += step;
       photon.prev_pos = photon.pos;
-      photon.pos.x += photon.P_local(2, 0) * step;
-      photon.pos.y += photon.P_local(2, 1) * step;
-      photon.pos.z += photon.P_local(2, 2) * step;
+      photon.pos.x += dir_x * step;
+      photon.pos.y += dir_y * step;
+      photon.pos.z += dir_z * step;
 
       // Update penetration depth (max z reached inside the medium).
       if (photon.pos.z > photon.penetration_depth)
@@ -221,9 +309,7 @@ namespace luminis::core
       }
 
       // --- Step 2: Detector intersection ---
-      // Check if the step crossed any sensor plane. If a sensor absorbs the
-      // photon (absorb_photons == true), terminate immediately.
-      const bool hit = detector.record_hit(photon, medium);
+      const bool hit = detector.record_hit(photon, sample);
       if (hit)
       {
         photon.alive = false;
@@ -231,24 +317,22 @@ namespace luminis::core
       }
 
       // --- Step 3: Boundary check ---
-      // Terminate if the photon has left the medium volume.
-      // TODO: Implement boundary interactions and multiple media.
-      const bool is_inside = medium.is_inside(photon.pos);
+      const bool is_inside = sample.is_inside(photon.pos);
       if (!is_inside)
       {
         photon.alive = false;
         break;
       }
+      photon.current_layer = sample.get_layer_index_at(photon.pos.z);
 
       // --- Step 4: Next-event estimation ---
-      // Call all estimators (forced-detection variance reduction) at the
-      // current scattering position before sampling the new direction.
-      detector.run_estimators(photon, medium);
+      const ScatteringMedium &scatter_medium = *sample.get_layer(photon.current_layer).medium;
+      detector.run_estimators(photon, sample);
 
       // --- Step 5: Sample scattering angles ---
-      const double theta = medium.sample_scattering_angle(rng);
-      CMatrix S_matrix = medium.scattering_matrix(theta, 0, photon.k);
-      const double phi = medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
+      const double theta = scatter_medium.sample_scattering_angle(rng);
+      CMatrix S_matrix = scatter_medium.scattering_matrix(theta, 0, photon.k);
+      const double phi = scatter_medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
 
       // --- Step 6: Update local frame (P_local) ---
       // Build the 3×3 rotation matrix A that transforms the current local
@@ -257,8 +341,8 @@ namespace luminis::core
       // Row layout: (m', n', s') = A * (m, n, s).
       const double cos_theta = std::cos(theta);
       const double sin_theta = std::sin(theta);
-      const double cos_phi   = std::cos(phi);
-      const double sin_phi   = std::sin(phi);
+      const double cos_phi = std::cos(phi);
+      const double sin_phi = std::sin(phi);
 
       Matrix A_update = Matrix(3, 3);
       A_update(0, 0) = cos_theta * cos_phi;
@@ -280,8 +364,10 @@ namespace luminis::core
         // where R is the in-plane rotation by φ and S is the amplitude
         // scattering matrix. Both are 2×2 in the local (m, n) basis.
         CMatrix R(2, 2);
-        R(0, 0) =  cos_phi;  R(0, 1) = sin_phi;
-        R(1, 0) = -sin_phi;  R(1, 1) = cos_phi;
+        R(0, 0) = cos_phi;
+        R(0, 1) = sin_phi;
+        R(1, 0) = -sin_phi;
+        R(1, 1) = cos_phi;
         CMatrix T_current = CMatrix(2, 2);
         matcmul(S_matrix, R, T_current);
 
@@ -318,10 +404,10 @@ namespace luminis::core
           // Raw (un-normalized) Jones matrix for this scattering event.
           // Used in matrix_T_raw which tracks the unnormalized path product.
           CMatrix T_current_raw(2, 2);
-          T_current_raw(0, 0) =  S_matrix(0, 0) * cos_phi;
-          T_current_raw(0, 1) =  S_matrix(0, 0) * sin_phi;
+          T_current_raw(0, 0) = S_matrix(0, 0) * cos_phi;
+          T_current_raw(0, 1) = S_matrix(0, 0) * sin_phi;
           T_current_raw(1, 0) = -S_matrix(1, 1) * sin_phi;
-          T_current_raw(1, 1) =  S_matrix(1, 1) * cos_phi;
+          T_current_raw(1, 1) = S_matrix(1, 1) * cos_phi;
 
           // Event index of the scatter just executed (1-based).
           const uint evt = photon.events + 1;
@@ -330,14 +416,16 @@ namespace luminis::core
           if (evt == 1)
           {
             // First scattering event: record the first-scatter position and frame.
-            photon.r_0 = photon.pos;
-            photon.P1  = photon.P_local;
+            photon.r_1 = photon.pos;
+            photon.first_scatter_layer = photon.current_layer;
+            photon.P1 = photon.P_local;
           }
 
-          photon.r_n  = photon.pos;   // Always update to the most recent scatter site.
-          photon.Pn2  = photon.Pn1;
-          photon.Pn1  = photon.Pn;
-          photon.Pn   = photon.P_local;
+          photon.r_n = photon.pos; // Always update to the most recent scatter site.
+          photon.last_scatter_layer = photon.current_layer;
+          photon.Pn2 = photon.Pn1;
+          photon.Pn1 = photon.Pn;
+          photon.Pn = photon.P_local;
 
           // --- Double-buffer T-matrix update ---
           // matrix_T accumulates J_2 · J_3 · … · J_{n-1} (the interior events).
@@ -351,9 +439,9 @@ namespace luminis::core
             if (!photon.has_T_prev)
             {
               // Second event: store it as the current "last" candidate.
-              photon.matrix_T_buffer     = T_current;
+              photon.matrix_T_buffer = T_current;
               photon.matrix_T_raw_buffer = T_current_raw;
-              photon.has_T_prev          = true;
+              photon.has_T_prev = true;
             }
             else
             {
@@ -361,7 +449,7 @@ namespace luminis::core
               // so prepend it to matrix_T (T_mid = J_prev * T_mid).
               CMatrix tmp(2, 2);
               matcmul(photon.matrix_T_buffer, photon.matrix_T, tmp);
-              photon.matrix_T        = std::move(tmp);
+              photon.matrix_T = std::move(tmp);
               photon.matrix_T_buffer = T_current;
 
               // Update the raw matrix with Frobenius normalization to prevent
@@ -378,7 +466,7 @@ namespace luminis::core
                 tmp_raw(1, 0) /= frob;
                 tmp_raw(1, 1) /= frob;
               }
-              photon.matrix_T_raw        = std::move(tmp_raw);
+              photon.matrix_T_raw = std::move(tmp_raw);
               photon.matrix_T_raw_buffer = T_current_raw;
             }
           }
@@ -388,8 +476,9 @@ namespace luminis::core
       // --- Step 9: Weight update (absorption splitting + Russian roulette) ---
       // Implicit absorption: fraction mu_a/mu_t is deposited, surviving weight
       // is rescaled by mu_s/mu_t so the photon continues with reduced weight.
-      const double d_weight = photon.weight * (medium.mu_absorption / medium.mu_attenuation);
-      photon.weight          = photon.weight * (medium.mu_scattering  / medium.mu_attenuation);
+      // Uses the medium of the layer where scattering occurred.
+      const double d_weight = photon.weight * (scatter_medium.mu_absorption / scatter_medium.mu_attenuation);
+      photon.weight = photon.weight * (scatter_medium.mu_scattering / scatter_medium.mu_attenuation);
       photon.events++;
 
       if (absorption)

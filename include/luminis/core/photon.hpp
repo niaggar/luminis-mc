@@ -23,7 +23,7 @@
  * ## CBS frame history
  * For coherent backscattering (CBS), the simulation must retain the local
  * frames at the first and last two scattering vertices (P0, P1, Pn1, Pn),
- * the positions of those vertices (r_0, r_n), and the accumulated Jones
+ * the positions of those vertices (r_1, r_n), and the accumulated Jones
  * transfer matrix T. These fields are updated during transport only when
  * `SimConfig::track_reverse_paths` is enabled.
  *
@@ -80,6 +80,10 @@ namespace luminis::core
     double launch_time{0.0};      ///< Emission time [ns]; used for time-gated detection.
     double velocity{1.0};         ///< Phase velocity in the medium [mm/ns] (c/n).
     double weight{1.0};           ///< Statistical weight for variance reduction (Russian roulette / absorption).
+
+    // ─── Layer tracking ──────────────────────────────────────────────────────
+
+    std::size_t current_layer{0};  ///< Index of the current Sample layer the photon is in.
 
     // ─── Polarization state ──────────────────────────────────────────────────
 
@@ -151,7 +155,9 @@ namespace luminis::core
      * @name CBS scattering-vertex positions
      * @{
      */
-    Vec3 r_0{0, 0, 0}; ///< Position of the first scattering event.
+    std::size_t first_scatter_layer{0}; ///< Index of the layer where the first scattering event occurred.
+    std::size_t last_scatter_layer{0};  ///< Index of the layer where the last scattering event occurred.
+    Vec3 r_1{0, 0, 0}; ///< Position of the first scattering event.
     Vec3 r_n{0, 0, 0}; ///< Position of the last scattering event.
     /** @} */
 
@@ -249,7 +255,7 @@ namespace luminis::core
 
     // ─── Spatial information ─────────────────────────────────────────────────
 
-    Vec3 position_first_scattering{0.0, 0.0, 0.0}; ///< Position of the first scattering event (r_0).
+    Vec3 position_first_scattering{0.0, 0.0, 0.0}; ///< Position of the first scattering event (r_1).
     Vec3 position_last_scattering{0.0, 0.0, 0.0};  ///< Position of the last scattering event (r_n).
     Vec3 position_detector{0.0, 0.0, 0.0};          ///< Intersection point on the detector plane.
 

@@ -4,16 +4,16 @@ import numpy as np
 from datetime import datetime
 
 from luminis_mc import (
-    Experiment, ResultsLoader,
-    Laser, MieMedium, Sample, PlanarFluenceSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
-    run_simulation_parallel, postprocess_farfield_cbs,
+    Experiment,
+    Laser, MieMedium, Sample, PlanarFluenceSensor, PlanarFieldSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
+    run_simulation_parallel,
     set_log_level, LogLevel, LaserSource
 )
 
 set_log_level(LogLevel.info)
 
-exp_name = "sim_ring"
-base_dir = "/Users/niaggar/Documents/Thesis/Progress/23Feb26"
+exp_name = "speckel"
+base_dir = "/Users/niaggar/Documents/Thesis/Progress/02Mar26"
 
 
 with Experiment(exp_name, base_dir) as exp:
@@ -23,19 +23,21 @@ with Experiment(exp_name, base_dir) as exp:
     # Medium parameters in micrometers
     mean_free_path_sim = 1.0
     mean_free_path_real = 2.8
-    radius_real = 0.5
-    n_particle_real = 1.59
+    radius_real = 0.8
+    mean_free_path_sim = 1.0
+    mean_free_path_real = 2.8
+    n_particle_real = 1.58984
     n_medium_real = 1.33
     inv_mfp_sim = 1 / mean_free_path_sim
-    mu_absortion_sim = 0.01 * inv_mfp_sim
+    mu_absortion_sim = 0.0
     mu_scattering_sim = inv_mfp_sim - mu_absortion_sim
 
     # Laser parameters
     wavelength_real = 0.52
     laser_m_polarization_state = 1/np.sqrt(2)
     laser_n_polarization_state = -1j/np.sqrt(2)
-    laser_radius = 0 * mean_free_path_sim
-    laser_type = LaserSource.Point
+    laser_radius = 5 * mean_free_path_sim
+    laser_type = LaserSource.Gaussian
 
     # Phase function parameters
     phasef_theta_min = 0.0
@@ -43,7 +45,7 @@ with Experiment(exp_name, base_dir) as exp:
     phasef_ndiv = 1000
 
     # Simulation parameters
-    n_photons = 1_000_000
+    n_photons = 10_000_000
 
     laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength_real, laser_radius, laser_type)
     phase = MiePhaseFunction(wavelength_real, radius_real, n_particle_real, n_medium_real, phasef_ndiv, phasef_theta_min, phasef_theta_max)
@@ -54,20 +56,20 @@ with Experiment(exp_name, base_dir) as exp:
     anysotropy = phase.get_anisotropy_factor()
     print("Anisotropy factor:", anysotropy)
 
-
     # Sensor parameters
     sensor_z = 0
-    sensor_len_x = 50 * mean_free_path_sim
-    sensor_len_y = 50 * mean_free_path_sim
-    sensor_len_t = 10 * mean_free_path_sim
+    sensor_len_x = 40 * mean_free_path_sim
+    sensor_len_y = 40 * mean_free_path_sim
+    sensor_len_t = 0 * mean_free_path_sim
     sensor_dx = 0.1 * mean_free_path_sim
     sensor_dy = 0.1 * mean_free_path_sim
-    sensor_dt = 0.5 * mean_free_path_sim
+    sensor_dt = 0 * mean_free_path_sim
     sensor_absorb = True
-    sensor_estimate = True
+    sensor_estimate = False
 
     sens = SensorsGroup()
-    det = sens.add_detector(PlanarFluenceSensor(sensor_z, sensor_len_x, sensor_len_y, sensor_len_t, sensor_dx, sensor_dy, sensor_dt, sensor_absorb, sensor_estimate))
+    planar_field_sensor = sens.add_detector(PlanarFieldSensor(sensor_z, sensor_len_x, sensor_len_y, sensor_dx, sensor_dy, sensor_absorb, sensor_estimate))
+    planar_fluence_sensor = sens.add_detector(PlanarFluenceSensor(sensor_z, sensor_len_x, sensor_len_y, sensor_len_t, sensor_dx, sensor_dy, sensor_dt, sensor_absorb, sensor_estimate))
     stats = sens.add_detector(StatisticsSensor(sensor_z, sensor_absorb))
 
     stats.set_events_histogram_bins(500)
@@ -122,8 +124,8 @@ with Experiment(exp_name, base_dir) as exp:
     )
 
     # 5) guarda RAW del sensor
-    exp.save_sensor(det, "planar_fluence")
+    exp.save_sensor(planar_field_sensor, "planarfield")
+    exp.save_sensor(planar_fluence_sensor, "planarfluence")
     exp.save_sensor(stats, "statistics")
-
 
 

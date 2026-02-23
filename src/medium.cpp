@@ -1,9 +1,9 @@
 /**
  * @file medium.cpp
- * @brief Implementations of Medium, SimpleMedium, and MieMedium.
+ * @brief Implementations of ScatteringMedium, RGDMedium, and MieMedium.
  *
  * Provides the base-class method bodies (free-path sampling delegation,
- * boundary test, angle sampling via phase function) and the two concrete
+ * angle sampling via phase function) and the two concrete
  * derived-class constructors plus their `sample_free_path`,
  * `scattering_matrix`, and (for MieMedium) `precompute_scattering_tables`.
  *
@@ -21,73 +21,49 @@ namespace luminis::core
 {
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  Medium — base class
+//  ScatteringMedium — base class
 // ══════════════════════════════════════════════════════════════════════════════
 
   /// Initialises μ_a, μ_s, μ_t = μ_a + μ_s, and the phase-function pointer.
-  Medium::Medium(double absorption, double scattering, PhaseFunction *phase_func)
+  ScatteringMedium::ScatteringMedium(double absorption, double scattering, PhaseFunction *phase_func)
       : mu_absorption(absorption), mu_scattering(scattering), mu_attenuation(absorption + scattering), phase_function(phase_func) {}
 
-  double Medium::sample_azimuthal_angle(Rng &rng) const
+  double ScatteringMedium::sample_azimuthal_angle(Rng &rng) const
   {
     if (phase_function)
     {
       return phase_function->sample_phi(rng.uniform());
     }
-    LLOG_ERROR("Medium::sample_azimuthal_angle: Phase function is not defined!");
+    LLOG_ERROR("ScatteringMedium::sample_azimuthal_angle: Phase function is not defined!");
     std::exit(EXIT_FAILURE);
   }
 
-  double Medium::sample_conditional_azimuthal_angle(Rng &rng, CMatrix &S, CVec2 &E, double k, double theta) const
+  double ScatteringMedium::sample_conditional_azimuthal_angle(Rng &rng, CMatrix &S, CVec2 &E, double k, double theta) const
   {
     if (phase_function)
     {
       return phase_function->sample_phi_conditional(theta, S, E, k, rng);
     }
-    LLOG_ERROR("Medium::sample_conditional_azimuthal_angle: Phase function is not defined!");
+    LLOG_ERROR("ScatteringMedium::sample_conditional_azimuthal_angle: Phase function is not defined!");
     std::exit(EXIT_FAILURE);
   }
 
-  double Medium::light_speed_in_medium() const
-  {
-    return light_speed;
-  }
-
-  /// Returns false if z < 0, or if any coordinate is NaN or infinite.
-  bool Medium::is_inside(const Vec3 &position) const
-  {
-    bool inside = true;
-    if (position.z < 0)
-    {
-      inside = false;
-    }
-    else if (std::isnan(position.x) || std::isnan(position.y) || std::isnan(position.z))
-    {
-      inside = false;
-    }
-    else if (std::isinf(position.x) || std::isinf(position.y) || std::isinf(position.z))
-    {
-      inside = false;
-    }
-    return inside;
-  }
-
-  double Medium::sample_scattering_angle(Rng &rng) const
+  double ScatteringMedium::sample_scattering_angle(Rng &rng) const
   {
     if (phase_function)
     {
       return phase_function->sample_theta(rng.uniform());
     }
-    LLOG_ERROR("Medium::sample_scattering_angle: Phase function is not defined!");
+    LLOG_ERROR("ScatteringMedium::sample_scattering_angle: Phase function is not defined!");
     std::exit(EXIT_FAILURE);
   }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  SimpleMedium — Rayleigh-Gans-Debye (RGD) approximation
+//  RGDMedium — Rayleigh-Gans-Debye (RGD) approximation
 // ══════════════════════════════════════════════════════════════════════════════
 
-  SimpleMedium::SimpleMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium)
-      : Medium(absorption, scattering, phase_func)
+  RGDMedium::RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium)
+      : ScatteringMedium(absorption, scattering, phase_func)
   {
     mean_free_path = mfp;
     radius = r;
@@ -96,7 +72,7 @@ namespace luminis::core
   }
 
   /// Exponential distribution: l = -l_mean · ln(U), U ~ Uniform(0, 1).
-  double SimpleMedium::sample_free_path(Rng &rng) const
+  double RGDMedium::sample_free_path(Rng &rng) const
   {
     return -1 * mean_free_path * std::log(rng.uniform());
   }
@@ -111,7 +87,7 @@ namespace luminis::core
    *
    * where V = (4π/3) r³ is the sphere volume and F is the form factor.
    */
-  CMatrix SimpleMedium::scattering_matrix(const double theta, const double phi, const double k) const
+  CMatrix RGDMedium::scattering_matrix(const double theta, const double phi, const double k) const
   {
     const double F = form_factor(theta, k, radius);
     const double kkk = std::pow(k, 3);
@@ -135,7 +111,7 @@ namespace luminis::core
 // ══════════════════════════════════════════════════════════════════════════════
 
   MieMedium::MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength)
-      : Medium(absorption, scattering, phase_func)
+      : ScatteringMedium(absorption, scattering, phase_func)
   {
     mean_free_path = mfp;
     radius = r;
