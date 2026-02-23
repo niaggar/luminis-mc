@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime
 
 from luminis_mc import (
-    Experiment, ResultsLoader, SweepManager,
+    SweepManager,
     Laser, MieMedium, Sample, FarFieldCBSSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
     run_simulation_parallel, postprocess_farfield_cbs,
     set_log_level, LogLevel, LaserSource
@@ -13,10 +13,10 @@ from luminis_mc import (
 set_log_level(LogLevel.info)
 
 exp_name = "sim_cbs"
-base_dir = "/Users/niaggar/Documents/Thesis/Progress/23Feb26"
+base_dir = "/Users/niaggar/Documents/Thesis/Progress/02Mar26"
 
 
-sweep = SweepManager(exp_name, base_dir)
+sweep = SweepManager(exp_name, base_dir, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
 sweep.log_readme("CBS simulation test - sweep over particle radius")
 
