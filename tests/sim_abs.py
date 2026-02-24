@@ -6,7 +6,7 @@ from luminis_mc import (
     HistogramDetector,
     SpatialDetector,
     SpatialTimeDetector,
-    AbsorptionTimeDependent,
+    Absorption,
     SimConfig,
     RayleighDebyeEMCPhaseFunction,
     CVec2,
@@ -179,7 +179,7 @@ for r in radius_study:
     sample.add_layer(medium, 0.0, float('inf'))
     anysotropy = phase_function.get_anisotropy_factor(rng_test)
 
-    absorption = AbsorptionTimeDependent(
+    absorption = Absorption(
         radius=abs_r_len,
         depth=abs_z_len,
         d_r=abs_d_r,

@@ -531,45 +531,45 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("layers", &Sample::layers)
       .def_readonly("interfaces", &Sample::interfaces);
 
-  // Absorption bindings
+  // Absorption bindings (unified: time-integrated when d_t == 0, time-resolved when d_t > 0)
   py::class_<Absorption>(m, "Absorption")
-      .def(py::init<double, double, double, double>(), py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"))
+      .def(py::init<double, double, double, double, double, double>(),
+           py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"),
+           py::arg("d_t") = 0.0, py::arg("t_max") = 0.0,
+           "Construct an absorption recorder.\n"
+           "  d_t == 0  → time-integrated (single bin)\n"
+           "  d_t > 0   → time-resolved with n_t = ceil(t_max / d_t) bins")
       .def_readonly("radius", &Absorption::radius)
       .def_readonly("depth", &Absorption::depth)
       .def_readonly("d_r", &Absorption::d_r)
       .def_readonly("d_z", &Absorption::d_z)
-      .def_readonly("absorption_values", &Absorption::absorption_values)
+      .def_readonly("d_t", &Absorption::d_t)
+      .def_readonly("t_max", &Absorption::t_max)
+      .def_readonly("n_t", &Absorption::n_t)
+      .def_readonly("time_slices", &Absorption::time_slices)
       .def("record_absorption", &Absorption::record_absorption,
            py::arg("photon"), py::arg("d_weight"),
-           "Record absorption from a photon at its current position")
-      .def("get_absorption_image", &Absorption::get_absorption_image, py::arg("n_photons"),
-           "Get the 2D absorption image");
-
-  py::class_<AbsorptionTimeDependent>(m, "AbsorptionTimeDependent")
-      .def(py::init<double, double, double, double, double, double>(), py::arg("radius"), py::arg("depth"), py::arg("d_r"), py::arg("d_z"), py::arg("d_t"), py::arg("t_max"))
-      .def_readonly("radius", &AbsorptionTimeDependent::radius)
-      .def_readonly("depth", &AbsorptionTimeDependent::depth)
-      .def_readonly("d_r", &AbsorptionTimeDependent::d_r)
-      .def_readonly("d_z", &AbsorptionTimeDependent::d_z)
-      .def_readonly("d_t", &AbsorptionTimeDependent::d_t)
-      .def_readonly("n_t_slices", &AbsorptionTimeDependent::n_t_slices)
-      .def_readonly("time_slices", &AbsorptionTimeDependent::time_slices)
-      .def("record_absorption", &AbsorptionTimeDependent::record_absorption,
-           py::arg("photon"), py::arg("d_weight"),
-           "Record absorption from a photon at its current position and time")
-      .def("get_absorption_image", &AbsorptionTimeDependent::get_absorption_image, py::arg("n_photons"), py::arg("time_index"),
-           "Get the 2D absorption image for a specific time slice");
+           "Record absorption from a photon at its current position (and time)")
+      .def("get_absorption_image", &Absorption::get_absorption_image,
+           py::arg("n_photons"), py::arg("time_index") = 0,
+           "Get the 2D absorption image for a given time bin (default: 0)")
+      .def("clone", &Absorption::clone,
+           "Create an empty clone with identical configuration but zeroed grids")
+      .def("merge_from", &Absorption::merge_from, py::arg("other"),
+           "Accumulate another recorder's data into this one");
 
   m.def("combine_absorptions", &combine_absorptions, py::arg("absorptions"),
-        "Combine multiple AbsorptionTimeDependent instances into one");
+        "Combine multiple Absorption instances into one (returns None on error)");
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t, Sample *, Laser *, SensorsGroup *, AbsorptionTimeDependent *, bool>(),
-           py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
+      .def(py::init<std::size_t, Sample *, Laser *, SensorsGroup *, Absorption *, bool>(),
+           py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"),
+           py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
            "Initialize a simulation configuration with given parameters")
-      .def(py::init<std::uint64_t, std::size_t, Sample *, Laser *, SensorsGroup *, AbsorptionTimeDependent *, bool>(),
-           py::arg("rng_seed"), py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"), py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
+      .def(py::init<std::uint64_t, std::size_t, Sample *, Laser *, SensorsGroup *, Absorption *, bool>(),
+           py::arg("rng_seed"), py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"),
+           py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
            "Initialize a simulation configuration with given parameters including RNG seed")
       .def_readonly("seed", &SimConfig::seed)
       .def_readonly("n_photons", &SimConfig::n_photons)

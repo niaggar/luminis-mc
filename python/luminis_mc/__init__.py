@@ -57,7 +57,6 @@ from ._core import (
     Sample,
     # Absorption
     Absorption,
-    AbsorptionTimeDependent,
     combine_absorptions,
     # Simulation
     SimConfig,
@@ -139,7 +138,6 @@ __all__ = [
     "Sample",
     # Absorption
     "Absorption",
-    "AbsorptionTimeDependent",
     "combine_absorptions",
     # Simulation
     "SimConfig",
