@@ -428,6 +428,50 @@ class Experiment:
                     ds.attrs[ak] = str(av)
         self.h5.flush()
 
+    # ── Absorption persistence ─────────────────────────────────────────────────
+
+    def save_absorption(self, absorption: Any, n_photons: int, name: str = "absorption") -> None:
+        """
+        Persist an ``Absorption`` recorder to ``/absorption/<name>/`` in the HDF5 file.
+
+        Stores the grid configuration as metadata attributes and each time-slice
+        matrix as a dataset.  For time-integrated recordings (``d_t == 0``)
+        only a single slice ``time_slice_0`` is written.
+
+        Parameters
+        ----------
+        absorption:
+            An ``Absorption`` object from the simulation.
+        name:
+            Key used to identify this absorption recorder inside the HDF5 file
+            (default ``"absorption"``).
+        """
+        g_abs = self.h5.require_group("absorption")
+        g = g_abs.require_group(name)
+        g_meta = g.require_group("meta")
+        g_data = g.require_group("data")
+
+        # ── Grid configuration ─────────────────────────────────────────────────
+        _write_attr(g_meta, "radius", absorption.radius)
+        _write_attr(g_meta, "depth", absorption.depth)
+        _write_attr(g_meta, "d_r", absorption.d_r)
+        _write_attr(g_meta, "d_z", absorption.d_z)
+        _write_attr(g_meta, "d_t", absorption.d_t)
+        _write_attr(g_meta, "t_max", absorption.t_max)
+        _write_attr(g_meta, "n_t", absorption.n_t)
+
+        # ── Time-slice data ────────────────────────────────────────────────────
+        for i, ts in enumerate(absorption.time_slices):
+            image = absorption.get_absorption_image(n_photons, i)
+            arr_image = _as_array(image)
+            arr = _as_array(ts)
+
+            if arr is not None:
+                _write_dataset(g_data, f"time_slice_{i}", arr)
+                _write_dataset(g_data, f"time_slice_{i}_image", arr_image)
+
+        self.h5.flush()
+
     # ── Sensor persistence ─────────────────────────────────────────────────────
 
     def save_sensor(self, sensor: Any, name: str) -> None:
@@ -717,3 +761,44 @@ class ResultsLoader:
             Path within the ``derived`` group, e.g. ``"farfield_cbs/S0_coh"``.
         """
         return np.asarray(self.h5[f"derived/{key}"])
+
+    # ── Absorption accessors ───────────────────────────────────────────────────
+
+    def absorption_meta(self, name: str = "absorption") -> Dict[str, Any]:
+        """
+        Return all metadata attributes of a saved absorption recorder as a dict.
+
+        Parameters
+        ----------
+        name:
+            Key used when the absorption was saved with
+            :py:meth:`Experiment.save_absorption`.
+        """
+        g = self.h5[f"absorption/{name}/meta"]
+        return dict(g.attrs.items())
+
+    def absorption_data(self, name: str = "absorption", time_index: int = 0) -> np.ndarray:
+        """
+        Load a time-slice dataset from ``/absorption/<name>/data/time_slice_<time_index>``.
+
+        Parameters
+        ----------
+        name:
+            Key used when the absorption was saved.
+        time_index:
+            Index of the time slice to load (default ``0``).
+        """
+        return np.asarray(self.h5[f"absorption/{name}/data/time_slice_{time_index}"])
+    
+    def absorption_image(self, name: str = "absorption", time_index: int = 0) -> np.ndarray:
+        """
+        Load the corresponding absorption image from ``/absorption/<name>/data/time_slice_<time_index>_image``.
+
+        Parameters
+        ----------
+        name:
+            Key used when the absorption was saved.
+        time_index:
+            Index of the time slice to load (default ``0``).
+        """
+        return np.asarray(self.h5[f"absorption/{name}/data/time_slice_{time_index}_image"])

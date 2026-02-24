@@ -49,6 +49,7 @@
 #include <luminis/core/laser.hpp>
 #include <luminis/math/rng.hpp>
 #include <luminis/log/logger.hpp>
+#include <luminis/log/progress.hpp>
 
 namespace luminis::core
 {
@@ -80,6 +81,8 @@ namespace luminis::core
     Laser *laser{nullptr};                        ///< Photon source (position, direction, polarization). Must not be null.
     SensorsGroup *detector{nullptr};              ///< Sensor group collecting detection data. Must not be null.
     Absorption *absorption{nullptr}; ///< Optional absorption recorder; may be null.
+
+    luminis::log::ProgressMonitor *progress{nullptr}; ///< Optional progress monitor; may be null.
 
     /**
      * @brief Constructs a SimConfig with an auto-generated RNG seed.
