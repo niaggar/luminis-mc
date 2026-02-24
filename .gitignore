@@ -10,3 +10,4 @@ build-app/
 cmake-build-debug/
 cmake-build-release/
 EMC_env/
+__pycache__/

@@ -6,7 +6,7 @@ from luminis_mc import (
     HistogramDetector,
     SpatialDetector,
     SpatialTimeDetector,
-    AbsorptionTimeDependent,
+    Absorption,
     SimConfig,
     RayleighDebyeEMCPhaseFunction,
     CVec2,
@@ -79,7 +79,7 @@ phase_function = RayleighDebyeEMCPhaseFunction(wavelength_real, radius_real, n_p
 medium = RGDMedium(mu_absortion_sim, mu_scattering_sim, phase_function, mean_free_path_sim, radius_real, n_particle_real, n_medium_real)
 sample = Sample(n_medium=n_medium_real)
 sample.add_layer(medium, 0.0, float('inf'))
-absorption = AbsorptionTimeDependent(
+absorption = Absorption(
     radius=10 * mean_free_path_sim,
     depth=100 * mean_free_path_sim,
     d_r=mean_free_path_sim / 50,

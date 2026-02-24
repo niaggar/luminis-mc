@@ -79,7 +79,7 @@ namespace luminis::core
     Sample *sample{nullptr};                       ///< Layered sample with shared host medium. Must not be null.
     Laser *laser{nullptr};                        ///< Photon source (position, direction, polarization). Must not be null.
     SensorsGroup *detector{nullptr};              ///< Sensor group collecting detection data. Must not be null.
-    AbsorptionTimeDependent *absorption{nullptr}; ///< Optional time-dependent absorption recorder; may be null.
+    Absorption *absorption{nullptr}; ///< Optional absorption recorder; may be null.
 
     /**
      * @brief Constructs a SimConfig with an auto-generated RNG seed.
@@ -91,7 +91,7 @@ namespace luminis::core
      * @param a  Pointer to the absorption recorder (may be null).
      * @param track_reverse_paths  Enable CBS reverse-path bookkeeping.
      */
-    SimConfig(std::size_t n, Sample *s = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
+    SimConfig(std::size_t n, Sample *s = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, Absorption *a = nullptr, bool track_reverse_paths = false);
 
     /**
      * @brief Constructs a SimConfig with an explicit RNG seed for reproducibility.
@@ -104,7 +104,7 @@ namespace luminis::core
      * @param a  Pointer to the absorption recorder (may be null).
      * @param track_reverse_paths  Enable CBS reverse-path bookkeeping.
      */
-    SimConfig(std::uint64_t s, std::size_t n, Sample *sa = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, AbsorptionTimeDependent *a = nullptr, bool track_reverse_paths = false);
+    SimConfig(std::uint64_t s, std::size_t n, Sample *sa = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, Absorption *a = nullptr, bool track_reverse_paths = false);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -159,9 +159,9 @@ namespace luminis::core
    * @param sample              Layered sample providing optical properties.
    * @param detector            Sensor group for hit recording and estimators.
    * @param rng                 Per-thread random number generator.
-   * @param absorption          Optional time-dependent absorption recorder.
+   * @param absorption          Optional absorption recorder (nullptr to skip recording).
    * @param track_reverse_paths Enable CBS reverse-path bookkeeping.
    */
-  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths);
+  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, Absorption *absorption, bool track_reverse_paths);
   
 } // namespace luminis::core

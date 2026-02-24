@@ -41,10 +41,10 @@ namespace luminis::core
   // SimConfig implementation
   // ═══════════════════════════════════════════════════════════════════════════
 
-  SimConfig::SimConfig(std::size_t n, Sample *s, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+  SimConfig::SimConfig(std::size_t n, Sample *s, Laser *l, SensorsGroup *d, Absorption *a, bool track_reverse_paths)
       : n_photons(n), sample(s), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
-  SimConfig::SimConfig(std::uint64_t seed, std::size_t n, Sample *s, Laser *l, SensorsGroup *d, AbsorptionTimeDependent *a, bool track_reverse_paths)
+  SimConfig::SimConfig(std::uint64_t seed, std::size_t n, Sample *s, Laser *l, SensorsGroup *d, Absorption *a, bool track_reverse_paths)
       : seed(seed), n_photons(n), sample(s), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -92,11 +92,11 @@ namespace luminis::core
 
     // --- Clone per-thread detector and absorption objects ---
     // Each thread must work on its own copy to avoid data races.
-    // SensorsGroup::clone() / AbsorptionTimeDependent::clone() perform deep
+    // SensorsGroup::clone() / Absorption::clone() perform deep
     // copies that preserve sensor configuration but start with zero-filled grids.
     std::vector<std::unique_ptr<SensorsGroup>> thread_detectors;
     thread_detectors.reserve(n_threads);
-    std::vector<AbsorptionTimeDependent> thread_absorptions;
+    std::vector<Absorption> thread_absorptions;
     if (config.absorption)
       thread_absorptions.reserve(n_threads);
 
@@ -133,7 +133,7 @@ namespace luminis::core
           LLOG_INFO(oss.str());
 
           SensorsGroup &det = *thread_detectors[t];
-          AbsorptionTimeDependent *abs_ptr = nullptr;
+          Absorption *abs_ptr = nullptr;
           if (config.absorption)
             abs_ptr = &thread_absorptions[t];
 
@@ -186,7 +186,7 @@ namespace luminis::core
   // Per-photon transport kernel
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, AbsorptionTimeDependent *absorption, bool track_reverse_paths)
+  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, Absorption *absorption, bool track_reverse_paths)
   {
     // --- Initialize CBS frame history ---
     // All CBS fields are reset to the launch state so the photon can be reused
