@@ -76,6 +76,11 @@ def run_single_simulation(exp, radius_real):
     config = SimConfig(n_photons=n_photons, sample=sample, detector=sens, laser=laser, track_reverse_paths=True)
     config.n_threads = 8
 
+
+    anysotropy = phase.get_anisotropy_factor()
+    print(f"Anisotropy factor for radius {radius_real:.3f}: {anysotropy[0]:.4f}")
+
+
      # 3) params
     exp.log_params(
         # Medium parameters
