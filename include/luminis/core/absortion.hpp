@@ -69,9 +69,4 @@ struct Absorption {
   Matrix get_absorption_image(int n_photons, int time_index = 0) const;
 };
 
-/// @brief Combine multiple Absorption instances (element-wise sum).
-/// @param absorptions Vector of Absorption objects with identical configurations.
-/// @return A new Absorption containing the summed data, or std::nullopt on error.
-std::optional<Absorption> combine_absorptions(const std::vector<Absorption> &absorptions);
-
 } // namespace luminis::core

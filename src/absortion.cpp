@@ -113,40 +113,4 @@ namespace luminis::core
     return image;
   }
 
-  std::optional<Absorption> combine_absorptions(const std::vector<Absorption> &absorptions)
-  {
-    if (absorptions.empty())
-    {
-      LLOG_ERROR("No absorption data to combine.");
-      return std::nullopt;
-    }
-
-    const auto &ref = absorptions[0];
-    Absorption combined(ref.radius, ref.depth, ref.d_r, ref.d_z, ref.d_t, ref.t_max);
-
-    for (const auto &abs : absorptions)
-    {
-      if (abs.radius != ref.radius || abs.depth != ref.depth ||
-          abs.d_r != ref.d_r || abs.d_z != ref.d_z ||
-          abs.d_t != ref.d_t || abs.n_t != ref.n_t)
-      {
-        LLOG_ERROR("Inconsistent absorption configurations found during combination.");
-        return std::nullopt;
-      }
-
-      for (int k = 0; k < combined.n_t; ++k)
-      {
-        for (std::size_t i = 0; i < combined.time_slices[k].rows; ++i)
-        {
-          for (std::size_t j = 0; j < combined.time_slices[k].cols; ++j)
-          {
-            combined.time_slices[k](i, j) += abs.time_slices[k](i, j);
-          }
-        }
-      }
-    }
-
-    return combined;
-  }
-
 } // namespace luminis::core

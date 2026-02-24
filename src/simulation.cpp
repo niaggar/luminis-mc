@@ -64,6 +64,9 @@ namespace luminis::core
       photon.velocity = initial_velocity;
       photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
       run_photon(photon, *config.sample, *config.detector, rng, config.absorption, config.track_reverse_paths);
+
+      if (config.progress)
+        config.progress->tick();
     }
   }
 
@@ -146,6 +149,9 @@ namespace luminis::core
             photon.velocity = initial_velocity;
             photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
             run_photon(photon, *config.sample, det, rng, abs_ptr, config.track_reverse_paths);
+
+            if (config.progress)
+              config.progress->tick();
           }
         }
         catch (...)
@@ -477,12 +483,17 @@ namespace luminis::core
       // Implicit absorption: fraction mu_a/mu_t is deposited, surviving weight
       // is rescaled by mu_s/mu_t so the photon continues with reduced weight.
       // Uses the medium of the layer where scattering occurred.
-      const double d_weight = photon.weight * (scatter_medium.mu_absorption / scatter_medium.mu_attenuation);
+      double d_weight = photon.weight * (scatter_medium.mu_absorption / scatter_medium.mu_attenuation);
       photon.weight = photon.weight * (scatter_medium.mu_scattering / scatter_medium.mu_attenuation);
       photon.events++;
 
       if (absorption)
       {
+        if (scatter_medium.mu_absorption == 0.0)
+        {
+          d_weight = 1.0;
+        }
+
         absorption->record_absorption(photon, d_weight);
       }
 

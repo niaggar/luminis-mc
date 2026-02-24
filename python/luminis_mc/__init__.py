@@ -57,12 +57,12 @@ from ._core import (
     Sample,
     # Absorption
     Absorption,
-    combine_absorptions,
     # Simulation
     SimConfig,
     run_simulation,
     run_simulation_parallel,
     # Logger
+    ProgressMonitor,
     LogLevel,
     set_log_level,
     # Mean free path / MCMC
@@ -138,12 +138,12 @@ __all__ = [
     "Sample",
     # Absorption
     "Absorption",
-    "combine_absorptions",
     # Simulation
     "SimConfig",
     "run_simulation",
     "run_simulation_parallel",
     # Logger
+    "ProgressMonitor",
     "LogLevel",
     "set_log_level",
     # Mean free path / MCMC
