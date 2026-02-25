@@ -81,7 +81,7 @@ def run_single_simulation(exp, radius_real):
     print(f"Anisotropy factor for radius {radius_real:.3f}: {anysotropy[0]:.4f}")
 
 
-     # 3) params
+    # 3) params
     exp.log_params(
         # Medium parameters
         mean_free_path_sim=mean_free_path_sim,
