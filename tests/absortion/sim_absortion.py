@@ -13,7 +13,7 @@ from luminis_mc import (
 
 set_log_level(LogLevel.info)
 
-exp_name = "absorption_test"
+exp_name = "absorption_2-layer"
 base_dir = "/Users/niaggar/Documents/Thesis/Progress/02Mar26"
 
 
@@ -65,8 +65,8 @@ with Experiment(exp_name, base_dir, timestamped=False) as exp:
     medium_2 = MieMedium(mu_absortion_sim, mu_scattering_sim, phase_2, mean_free_path_sim, radius_real_2, n_particle_real, n_medium_real, wavelength_real)
 
     sample = Sample(n_medium=n_medium_real)
-    sample.add_layer(medium_1, z_min, 10 * mean_free_path_sim)
-    sample.add_layer(medium_2, 10 * mean_free_path_sim, z_max)
+    sample.add_layer(medium_1, z_min, 6 * mean_free_path_sim)
+    sample.add_layer(medium_2, 6 * mean_free_path_sim, z_max)
 
     anysotropy_1 = phase_1.get_anisotropy_factor()
     anysotropy_2 = phase_2.get_anisotropy_factor()
@@ -97,7 +97,7 @@ with Experiment(exp_name, base_dir, timestamped=False) as exp:
     absorption_dr = 0.1 * mean_free_path_sim
     absorption_dz = 0.1 * mean_free_path_sim
     absorption_dt = 1.0
-    absorption_tmax = 30.0
+    absorption_tmax = 40.0
 
     absorption = Absorption(absorption_radius, absorption_depth, absorption_dr, absorption_dz, absorption_dt, absorption_tmax)
 
@@ -108,29 +108,31 @@ with Experiment(exp_name, base_dir, timestamped=False) as exp:
     config.n_threads = 7
     config.progress = monitor
 
-    # # 3) params
-    # exp.log_params(
-    #     # Medium parameters
-    #     mean_free_path_sim=mean_free_path_sim,
-    #     mean_free_path_real=mean_free_path_real,
-    #     radius_real=radius_real,
-    #     n_particle_real=n_particle_real,
-    #     n_medium_real=n_medium_real,
-    #     mu_absortion_sim=mu_absortion_sim,
-    #     mu_scattering_sim=mu_scattering_sim,
-    #     # Laser parameters
-    #     wavelength_real=wavelength_real,
-    #     laser_m_polarization_state=laser_m_polarization_state,
-    #     laser_n_polarization_state=laser_n_polarization_state,
-    #     laser_radius=laser_radius,
-    #     laser_type=laser_type,
-    #     # Phase function parameters
-    #     phasef_theta_min=phasef_theta_min,
-    #     phasef_theta_max=phasef_theta_max,
-    #     phasef_ndiv=phasef_ndiv,
-    #     # Simulation parameters
-    #     n_photons=n_photons,
-    # )
+    # 3) params
+    exp.log_params(
+        # Medium parameters
+        mean_free_path_sim=mean_free_path_sim,
+        mean_free_path_real=mean_free_path_real,
+        radius_real=radius_real,
+        n_particle_real=n_particle_real,
+        n_medium_real=n_medium_real,
+        mu_absortion_sim=mu_absortion_sim,
+        mu_scattering_sim=mu_scattering_sim,
+        # Laser parameters
+        wavelength_real=wavelength_real,
+        laser_m_polarization_state=laser_m_polarization_state,
+        laser_n_polarization_state=laser_n_polarization_state,
+        laser_radius=laser_radius,
+        laser_type=laser_type,
+        # Phase function parameters
+        phasef_theta_min=phasef_theta_min,
+        phasef_theta_max=phasef_theta_max,
+        phasef_ndiv=phasef_ndiv,
+        # Simulation parameters
+        n_photons=n_photons,
+        anysotropy_1=anysotropy_1,
+        anysotropy_2=anysotropy_2,
+    )
 
     # 4) run
     t0 = time.time()
