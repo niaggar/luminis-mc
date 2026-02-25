@@ -4,18 +4,12 @@ import numpy as np
 from datetime import datetime
 
 from luminis_mc import (
-    Experiment, ProgressMonitor,
+    Experiment, ProgressMonitor, on_progress,
     Absorption,
     Laser, MieMedium, Sample, PlanarFluenceSensor, StatisticsSensor, SensorsGroup, SimConfig, MiePhaseFunction,
     run_simulation_parallel,
     set_log_level, LogLevel, LaserSource, TemporalProfile
 )
-
-def on_progress(done, total):
-    pct = done * 100 // total
-    print(f"\rSimulation progress: {pct}%", end="", flush=True)
-    if done == total:
-        print()
 
 set_log_level(LogLevel.info)
 

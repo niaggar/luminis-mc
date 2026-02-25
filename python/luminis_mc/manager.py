@@ -41,6 +41,16 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 import h5py
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  Helpers
+# ══════════════════════════════════════════════════════════════════════════════
+
+def on_progress(done, total):
+    pct = done * 100 // total
+    print(f"\rSimulation progress: {pct}%", end="", flush=True)
+    if done == total:
+        print()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Internal helpers
