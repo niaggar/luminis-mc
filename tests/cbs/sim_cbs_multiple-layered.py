@@ -171,6 +171,23 @@ def run_cbs_layered(exp, n_depth_layer):
         exp.save_derived(f"farfieldcbs_timed/incoherent/t{i_inc}_s3", s3_inc)
         i_inc += 1
 
+    cbs_total = postprocess_farfield_cbs(det_total, n_photons)
+    s0_total_coh = np.array(cbs_total.coherent[0].S0, copy=False)
+    s1_total_coh = np.array(cbs_total.coherent[0].S1, copy=False)
+    s2_total_coh = np.array(cbs_total.coherent[0].S2, copy=False)
+    s3_total_coh = np.array(cbs_total.coherent[0].S3, copy=False)
+    s0_total_inc = np.array(cbs_total.incoherent[0].S0, copy=False)
+    s1_total_inc = np.array(cbs_total.incoherent[0].S1, copy=False)
+    s2_total_inc = np.array(cbs_total.incoherent[0].S2, copy=False)
+    s3_total_inc = np.array(cbs_total.incoherent[0].S3, copy=False)
+    exp.save_derived(f"farfieldcbs_total/coherent/s0", s0_total_coh)
+    exp.save_derived(f"farfieldcbs_total/coherent/s1", s1_total_coh)
+    exp.save_derived(f"farfieldcbs_total/coherent/s2", s2_total_coh)
+    exp.save_derived(f"farfieldcbs_total/coherent/s3", s3_total_coh)
+    exp.save_derived(f"farfieldcbs_total/incoherent/s0", s0_total_inc)
+    exp.save_derived(f"farfieldcbs_total/incoherent/s1", s1_total_inc)
+    exp.save_derived(f"farfieldcbs_total/incoherent/s2", s2_total_inc)
+    exp.save_derived(f"farfieldcbs_total/incoherent/s3", s3_total_inc)
 
 
 sweep_A = SweepManager("cbs_sweep_layered", base_dir, timestamped=True)
