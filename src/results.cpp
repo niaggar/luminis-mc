@@ -6,8 +6,13 @@ namespace luminis::core
   FarFieldCBSProcessed postprocess_farfield_cbs(const FarFieldCBSSensor &det, std::size_t n_photons, bool normalize_per_solid_angle, bool normalize_per_photon, double eps)
   {
     Matrix dOmega(det.N_theta, det.N_phi);
-    StokesMatrixProcessed coherent{Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi)};
-    StokesMatrixProcessed incoherent{Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi)};
+    std::vector<StokesMatrixProcessed> coherent(det.N_t);
+    std::vector<StokesMatrixProcessed> incoherent(det.N_t);
+    for (int t = 0; t < det.N_t; ++t)
+    {
+      coherent[t] = {Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi)};
+      incoherent[t] = {Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi), Matrix(det.N_theta, det.N_phi)};
+    }
 
     const double invN = (normalize_per_photon && n_photons > 0) ? (1.0 / double(n_photons)) : 1.0;
 
@@ -22,15 +27,18 @@ namespace luminis::core
 
         const double norm = invN * invOm;
 
-        coherent.S0(i, j) = det.S0_coh(i, j) * norm;
-        coherent.S1(i, j) = det.S1_coh(i, j) * norm;
-        coherent.S2(i, j) = det.S2_coh(i, j) * norm;
-        coherent.S3(i, j) = det.S3_coh(i, j) * norm;
+        for (int t = 0; t < det.N_t; ++t)
+        {
+          coherent[t].S0(i, j) = det.S0_coh[t](i, j) * norm;
+          coherent[t].S1(i, j) = det.S1_coh[t](i, j) * norm;
+          coherent[t].S2(i, j) = det.S2_coh[t](i, j) * norm;
+          coherent[t].S3(i, j) = det.S3_coh[t](i, j) * norm;
 
-        incoherent.S0(i, j) = det.S0_incoh(i, j) * norm;
-        incoherent.S1(i, j) = det.S1_incoh(i, j) * norm;
-        incoherent.S2(i, j) = det.S2_incoh(i, j) * norm;
-        incoherent.S3(i, j) = det.S3_incoh(i, j) * norm;
+          incoherent[t].S0(i, j) = det.S0_incoh[t](i, j) * norm;
+          incoherent[t].S1(i, j) = det.S1_incoh[t](i, j) * norm;
+          incoherent[t].S2(i, j) = det.S2_incoh[t](i, j) * norm;
+          incoherent[t].S3(i, j) = det.S3_incoh[t](i, j) * norm;
+        }
       }
     }
 

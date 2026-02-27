@@ -267,6 +267,13 @@ PYBIND11_MODULE(_core, m)
           self.add_detector(std::move(cloned_det));
           return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Agrega un detector y devuelve una referencia a la copia interna");
 
+  // CrossingDirection enum
+  py::enum_<CrossingDirection>(m, "CrossingDirection")
+      .value("Forward", CrossingDirection::Forward, "Photon traveling toward z+ (increasing z)")
+      .value("Backward", CrossingDirection::Backward, "Photon traveling toward z- (decreasing z)")
+      .value("Both", CrossingDirection::Both, "Accept either direction")
+      .export_values();
+
   // Sensor bindings
   py::class_<Sensor>(m, "Sensor")
       .def_readonly("id", &Sensor::id)
@@ -289,6 +296,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("filter_x_max", &Sensor::filter_x_max)
       .def_readonly("filter_y_min", &Sensor::filter_y_min)
       .def_readonly("filter_y_max", &Sensor::filter_y_max)
+      .def_readonly("filter_direction_enabled", &Sensor::filter_direction_enabled)
+      .def_readonly("filter_direction", &Sensor::filter_direction)
       .def("set_theta_limit", &Sensor::set_theta_limit,
            py::arg("min_theta"), py::arg("max_theta"),
            "Set the polar angle detection limits (in radians)")
@@ -297,7 +306,10 @@ PYBIND11_MODULE(_core, m)
            "Set the azimuthal angle detection limits (in radians)")
       .def("set_position_limit", &Sensor::set_position_limit,
            py::arg("x_min"), py::arg("x_max"), py::arg("y_min"), py::arg("y_max"),
-           "Set the detection limits for the position on the sensor plane");
+           "Set the detection limits for the position on the sensor plane")
+      .def("set_direction_limit", &Sensor::set_direction_limit,
+           py::arg("direction"),
+           "Set the crossing direction filter (Forward, Backward, or Both)");
 
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
       .def(py::init<double, bool>(),
@@ -367,15 +379,18 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S3", &FarFieldFluenceSensor::S3);
 
   py::class_<FarFieldCBSSensor, Sensor>(m, "FarFieldCBSSensor")
-      .def(py::init<double, double, int, int, bool>(),
-           py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"), py::arg("estimator") = false,
+      .def(py::init<double, double, double, int, int, int, bool>(),
+           py::arg("theta_max"), py::arg("phi_max"), py::arg("t_max"), py::arg("n_theta"), py::arg("n_phi"), py::arg("n_t"), py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_theta", &FarFieldCBSSensor::N_theta)
       .def_readonly("N_phi", &FarFieldCBSSensor::N_phi)
+      .def_readonly("N_t", &FarFieldCBSSensor::N_t)
       .def_readonly("theta_max", &FarFieldCBSSensor::theta_max)
       .def_readonly("phi_max", &FarFieldCBSSensor::phi_max)
+      .def_readonly("t_max", &FarFieldCBSSensor::t_max)
       .def_readonly("dtheta", &FarFieldCBSSensor::dtheta)
       .def_readonly("dphi", &FarFieldCBSSensor::dphi)
+      .def_readonly("dt", &FarFieldCBSSensor::dt)
       .def_readonly("S0_coh", &FarFieldCBSSensor::S0_coh)
       .def_readonly("S1_coh", &FarFieldCBSSensor::S1_coh)
       .def_readonly("S2_coh", &FarFieldCBSSensor::S2_coh)

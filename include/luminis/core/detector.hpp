@@ -47,13 +47,24 @@ namespace luminis::core
     bool operator()(double a, double b) const { return a < b - 1e-9; }
   };
 
+  /// @brief Direction of photon crossing relative to the detector z-plane.
+  /// @details Used both in InteractionInfo (to record which way the photon was traveling)
+  ///          and in Sensor's direction filter (to accept only a specific crossing direction).
+  enum class CrossingDirection
+  {
+    Forward,  ///< Photon is traveling toward z+ (increasing z).
+    Backward, ///< Photon is traveling toward z- (decreasing z).
+    Both      ///< Accept either direction (only used as a sensor filter value, never in InteractionInfo).
+  };
+
   /// @brief Information about a photon-detector intersection event.
   /// @details Computed by SensorsGroup::record_hit() when a photon's trajectory
   ///          crosses a detector z-plane, then passed to each sensor's process_hit().
   struct InteractionInfo
   {
-    Vec3 intersection_point;    ///< Exact (x, y, z) coordinates where the photon crossed the detector plane.
-    std::complex<double> phase; ///< Accumulated optical phase exp(i * k * optical_path) at the intersection point.
+    Vec3 intersection_point;              ///< Exact (x, y, z) coordinates where the photon crossed the detector plane.
+    std::complex<double> phase;           ///< Accumulated optical phase exp(i * k * optical_path) at the intersection point.
+    CrossingDirection crossing_direction; ///< Whether the photon was traveling toward z+ (Forward) or z- (Backward) when crossing.
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -132,6 +143,13 @@ namespace luminis::core
     double filter_y_max = 0.0; ///< Maximum accepted y-coordinate at the detector plane.
     /// @}
 
+    /// @name Crossing direction filter
+    /// @brief Accepts photons based on whether they cross the detector plane going forward (z+) or backward (z-).
+    /// @{
+    bool filter_direction_enabled = false;
+    CrossingDirection filter_direction = CrossingDirection::Both; ///< Accepted crossing direction (Forward, Backward, or Both).
+    /// @}
+
     /// @brief Construct a sensor centered at the given z-coordinate.
     /// @param z The z-position of the detection plane.
     /// @param absorb If true, photons are terminated after being detected.
@@ -203,13 +221,21 @@ namespace luminis::core
     ///          will be accepted.
     void set_position_limit(double x_min, double x_max, double y_min, double y_max);
 
+    /// @brief Set the crossing direction acceptance filter.
+    /// @param dir The accepted crossing direction: Forward (z+), Backward (z-), or Both.
+    /// @details Enables the direction filter. When set to Forward, only photons traveling
+    ///          toward z+ will be detected. When Backward, only toward z-. When Both,
+    ///          photons crossing in either direction are accepted (equivalent to disabling
+    ///          the filter, but kept explicit for clarity).
+    void set_direction_limit(CrossingDirection dir);
+
     /// @brief Test whether a photon passes all enabled acceptance filters.
     /// @param hit_point     The (x, y, z) intersection point on the detector plane.
     /// @param hit_direction The photon's propagation direction at the hit point.
     /// @return true if the photon satisfies ALL enabled filters, false if any filter rejects it.
-    /// @details Filters are evaluated in order: theta, phi, position. Evaluation
-    ///          short-circuits on the first failing filter for efficiency.
-    bool check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction) const;
+    /// @details Filters are evaluated in order: direction, theta, phi, position.
+    ///          Evaluation short-circuits on the first failing filter for efficiency.
+    bool check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction, CrossingDirection crossing_dir) const;
 
     /// @brief Enable or disable estimator-based detection for this sensor.
     /// @param enabled If true, process_estimation() will be called after every scattering event.
@@ -472,6 +498,11 @@ namespace luminis::core
     double theta_max, phi_max; ///< Maximum angular extents [rad].
     double dtheta, dphi;       ///< Angular bin widths [rad].
 
+    // Timed sensor
+    double t_max;        ///< Total time window length (0 for time-integrated).
+    double dt;           ///< Time bin width (0 for time-integrated, meaning N_t = 1).
+    int N_t;             ///< Number of time bins (1 if time-integrated).
+
     // --- NEW: partial photon / next-event estimator control ---
     double theta_pp_max{-1.0};     // si <0 => usa theta_max
     int theta_stride{1};           // subsampling para performance
@@ -486,7 +517,7 @@ namespace luminis::core
     /// @details These capture the interference between forward and reverse paths,
     ///          producing the CBS enhancement cone centered at theta=0.
     /// @{
-    Matrix S0_coh, S1_coh, S2_coh, S3_coh;
+    std::vector<Matrix> S0_coh, S1_coh, S2_coh, S3_coh;
     /// @}
 
     /// @name Incoherent Stokes grids
@@ -494,17 +525,19 @@ namespace luminis::core
     /// @details These represent the sum of individual intensities without interference,
     ///          serving as the flat baseline for computing the enhancement factor.
     /// @{
-    Matrix S0_incoh, S1_incoh, S2_incoh, S3_incoh;
+    std::vector<Matrix> S0_incoh, S1_incoh, S2_incoh, S3_incoh;
     /// @}
 
     /// @brief Construct a far-field CBS sensor at z=0.
     /// @param theta_max Maximum polar angle [rad] (measured from exact backscattering).
     /// @param phi_max   Maximum azimuthal angle [rad] (typically 2*pi).
+    /// @param t_max     Total time window length (0 for time-integrated).
     /// @param n_theta   Number of polar angle bins.
     /// @param n_phi     Number of azimuthal angle bins.
+    /// @param n_t       Number of time bins (ignored if t_max=0).
     /// @param estimator If true, this sensor participates in estimator-based detection.
     /// @details Automatically sets theta and phi filters to [0, theta_max] and [0, phi_max].
-    FarFieldCBSSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator = false);
+    FarFieldCBSSensor(double theta_max, double phi_max, double t_max, int n_theta, int n_phi, int n_t, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
 
