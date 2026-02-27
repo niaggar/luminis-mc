@@ -24,8 +24,8 @@ namespace luminis::core
   struct FarFieldCBSProcessed
   {
     Matrix dOmega; // [N_theta x N_phi]
-    StokesMatrixProcessed coherent;
-    StokesMatrixProcessed incoherent;
+    std::vector<StokesMatrixProcessed> coherent;
+    std::vector<StokesMatrixProcessed> incoherent;
   };
 
   struct FarFieldCBSRadialProcessed

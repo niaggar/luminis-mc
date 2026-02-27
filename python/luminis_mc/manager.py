@@ -534,8 +534,8 @@ class Experiment:
         _write_attr(g_meta, "filter_x_max", sensor.filter_x_max)
         _write_attr(g_meta, "filter_y_min", sensor.filter_y_min)
         _write_attr(g_meta, "filter_y_max", sensor.filter_y_max)
-
-        
+        _write_attr(g_meta, "filter_direction_enabled", sensor.filter_direction_enabled)
+        _write_attr(g_meta, "filter_direction", sensor.filter_direction.name)
 
         t = sensor.__class__.__name__
 
@@ -611,7 +611,7 @@ class Experiment:
         # ── FarFieldCBSSensor ──────────────────────────────────────────────────
         elif t == "FarFieldCBSSensor":
             for k in [
-                "N_theta", "N_phi", "theta_max", "phi_max", "dtheta", "dphi",
+                "N_theta", "N_phi", "N_t", "t_max", "theta_max", "phi_max", "dtheta", "dphi",
                 "theta_pp_max", "theta_stride", "phi_stride",
             ]:
                 if hasattr(sensor, k):
