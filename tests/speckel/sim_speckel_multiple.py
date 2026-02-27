@@ -250,5 +250,4 @@ sweep_B.log_readme(
 
 for i, r in enumerate(radius_sweep):
     run_name = f"radius_{r:.3f}"
-    sweep_B.run(i, run_name,
-                lambda exp, r=r: run_speckle(exp, r, FIXED_N_FOR_B))
+    sweep_B.run(i, run_name, lambda exp, r=r: run_speckle(exp, r, FIXED_N_FOR_B))

@@ -6,6 +6,7 @@ from luminis_mc import (
     RayleighDebyePhaseFunction,
     DrainePhaseFunction,
     RayleighDebyeEMCPhaseFunction,
+    MiePhaseFunction,
 )
 from luminis_mc import set_log_level
 from luminis_mc import LogLevel
@@ -61,15 +62,16 @@ set_log_level(LogLevel.debug)
 
 # Study of anysotropy factor vs size parameter
 
-thetaMin = 0.00001
+thetaMin = 0.0
 thetaMax = np.pi
 
 nDiv = 100_000
 nSamples = 5_000_000
 
-radius = np.array([0.001, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 1.7, 2.0])
-wavelength = 1
-n_particle_real = 1.31
+# radius = np.array([0.001, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 1.7, 2.0])
+radius = np.array([0.05, 0.1, 0.15, 0.2, 0.3, 0.35, 0.4, 0.45, 0.5, 0.7, 1.0])
+wavelength = 0.632
+n_particle_real = 1.59
 n_medium_real = 1.33
 rng = np.random.default_rng()
 mus = rng.random(nSamples)
@@ -78,9 +80,9 @@ data = []
 condition_1 = np.abs(n_particle_real / n_medium_real - 1)
 
 for r in radius:
-    rng_test = Rng()
+    phase = MiePhaseFunction(wavelength, r, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
     rayleigh_debye_emc = RayleighDebyeEMCPhaseFunction(wavelength, r, n_particle_real, n_medium_real, nDiv, thetaMin, thetaMax)
-    anysotropy = rayleigh_debye_emc.get_anisotropy_factor(rng_test)
+    anysotropy = phase.get_anisotropy_factor()
     size_parameter = 2 * np.pi * r / wavelength
     condition_2 = size_parameter * condition_1
     data.append((r, size_parameter, anysotropy[0], condition_2))
