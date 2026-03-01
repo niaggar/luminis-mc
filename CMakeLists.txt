@@ -48,7 +48,7 @@ set_target_properties(_core_c PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --- Python bindings ---
 find_package(pybind11 CONFIG REQUIRED)
-python_add_library(_core python/python_module.cpp)
+pybind11_add_module(_core python/python_module.cpp)
 target_link_libraries(_core PRIVATE pybind11::headers _core_headers _core_c)
 set_target_properties(_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
