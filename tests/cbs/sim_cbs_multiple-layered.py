@@ -12,7 +12,7 @@ from luminis_mc import (
 
 set_log_level(LogLevel.info)
 
-exp_name = "sim_cbs"
+exp_name = "Aaaaaaaaaaassadasdasdas"
 base_dir = "/Users/niaggar/Documents/Thesis/Progress/02Mar26"
 
 
@@ -63,6 +63,12 @@ def run_cbs_layered(exp, n_depth_layer):
     sample.add_layer(medium_a, zmin_medium_a, zmax_medium_a)
     sample.add_layer(medium_b, zmin_medium_b, zmax_medium_b)
 
+
+    anysotropy_a = phase_a.get_anisotropy_factor()
+    anisotropy_b = phase_b.get_anisotropy_factor()
+    print(f"Layer A: radius={radious_real_a} μm, anisotropy={anysotropy_a[0]:.4f}")
+    print(f"Layer B: radius={radious_real_b} μm, anisotropy={anisotropy_b[0]:.4f}")
+
     # Sensor parameters
     theta_max_far_field = np.deg2rad(45)
     phi_max_far_field = 2 * np.pi
@@ -91,6 +97,8 @@ def run_cbs_layered(exp, n_depth_layer):
     stats.set_theta_histogram_bins(0, np.pi/2, 180)
     stats.set_phi_histogram_bins(0, 2*np.pi, 360)
     stats.set_depth_histogram_bins(10*mean_free_path_sim, 100)
+
+    
 
     monitor = ProgressMonitor()
     monitor.setup(total=n_photons, callback=on_progress, interval_pct=5)
@@ -190,12 +198,13 @@ def run_cbs_layered(exp, n_depth_layer):
     exp.save_derived(f"farfieldcbs_total/incoherent/s3", s3_total_inc)
 
 
-sweep_A = SweepManager("cbs_sweep_layered", base_dir, timestamped=True)
+sweep_A = SweepManager(exp_name, base_dir, timestamped=False)
 sweep_A.snapshot_master_script(__main__.__file__)
 sweep_A.log_readme(
     f"Sweep of CBS simulations with different number of layers, using circularly polarized light (m={laser_m_polarization_state}, n={laser_n_polarization_state})"
 )
 
 for i, n_layers in enumerate(n_layers_sweep):
-    run_name = f"n_layers_{n_layers}"
+    print(n_layers)
+    run_name = "holas"
     sweep_A.run(i, run_name, lambda exp, n=n_layers: run_cbs_layered(exp, n))

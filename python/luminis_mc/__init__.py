@@ -72,7 +72,7 @@ from ._core import (
     HardSpheres,
 )
 
-from .manager import Experiment, ResultsLoader, on_progress
+from .manager import Experiment, ResultsLoader, on_progress, load_sweep_data
 from .sweepmanager import SweepManager
 
 __all__ = [
@@ -81,6 +81,7 @@ __all__ = [
     "ResultsLoader",
     "SweepManager",
     "on_progress",
+    "load_sweep_data",
     # RNG
     "Rng",
     # Math
