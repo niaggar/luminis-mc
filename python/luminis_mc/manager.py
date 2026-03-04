@@ -470,6 +470,15 @@ class Experiment:
         _write_attr(g_meta, "t_max", absorption.t_max)
         _write_attr(g_meta, "n_t", absorption.n_t)
 
+        # ── Total (time-integrated) data ────────────────────────────────────────
+        total_arr = _as_array(absorption.total)
+        if total_arr is not None:
+            _write_dataset(g_data, "total", total_arr)
+            total_image = absorption.get_total_image(n_photons)
+            total_image_arr = _as_array(total_image)
+            if total_image_arr is not None:
+                _write_dataset(g_data, "total_image", total_image_arr)
+
         # ── Time-slice data ────────────────────────────────────────────────────
         for i, ts in enumerate(absorption.time_slices):
             image = absorption.get_absorption_image(n_photons, i)
@@ -812,6 +821,28 @@ class ResultsLoader:
             Index of the time slice to load (default ``0``).
         """
         return np.asarray(self.h5[f"absorption/{name}/data/time_slice_{time_index}_image"])
+
+    def absorption_total_data(self, name: str = "absorption") -> np.ndarray:
+        """
+        Load the total (time-integrated) absorption grid from ``/absorption/<name>/data/total``.
+
+        Parameters
+        ----------
+        name:
+            Key used when the absorption was saved.
+        """
+        return np.asarray(self.h5[f"absorption/{name}/data/total"])
+
+    def absorption_total_image(self, name: str = "absorption") -> np.ndarray:
+        """
+        Load the total (time-integrated) absorption image from ``/absorption/<name>/data/total_image``.
+
+        Parameters
+        ----------
+        name:
+            Key used when the absorption was saved.
+        """
+        return np.asarray(self.h5[f"absorption/{name}/data/total_image"])
 
 
 def load_sweep_data(sweep_path: str) -> dict:

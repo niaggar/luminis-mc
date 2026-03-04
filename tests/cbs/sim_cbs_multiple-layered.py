@@ -103,7 +103,7 @@ def run_cbs_layered(exp, n_depth_layer):
     monitor = ProgressMonitor()
     monitor.setup(total=n_photons, callback=on_progress, interval_pct=5)
 
-    config = SimConfig(n_photons=n_photons, sample=sample, detector=sens, laser=laser, track_reverse_paths=True)
+    config = SimConfig(n_photons=n_photons, sample=sample, detector=sens, laser=laser, track_reverse_paths=False)
     config.n_threads = 7
     config.progress = monitor
 
