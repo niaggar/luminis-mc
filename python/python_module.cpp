@@ -563,12 +563,16 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("t_max", &Absorption::t_max)
       .def_readonly("n_t", &Absorption::n_t)
       .def_readonly("time_slices", &Absorption::time_slices)
+      .def_readonly("total", &Absorption::total)
       .def("record_absorption", &Absorption::record_absorption,
            py::arg("photon"), py::arg("d_weight"),
            "Record absorption from a photon at its current position (and time)")
       .def("get_absorption_image", &Absorption::get_absorption_image,
            py::arg("n_photons"), py::arg("time_index") = 0,
            "Get the 2D absorption image for a given time bin (default: 0)")
+      .def("get_total_image", &Absorption::get_total_image,
+           py::arg("n_photons"),
+           "Get the 2D absorption image from the total (time-integrated) grid")
       .def("clone", &Absorption::clone,
            "Create an empty clone with identical configuration but zeroed grids")
       .def("merge_from", &Absorption::merge_from, py::arg("other"),

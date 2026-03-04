@@ -41,6 +41,9 @@ struct Absorption {
   /// @brief Per-time-bin absorption grids. Each element is an n_r × n_z Matrix.
   std::vector<Matrix> time_slices;
 
+  /// @brief Total (time-integrated) absorption grid, always accumulated regardless of d_t.
+  Matrix total;
+
   /// @brief Construct an absorption recorder.
   /// @param r      Maximum radial extent.
   /// @param z      Maximum depth extent.
@@ -67,6 +70,12 @@ struct Absorption {
   /// @return An (2·n_r) × n_z Matrix normalized by voxel volume and photon count,
   ///         mirrored along the radial axis.
   Matrix get_absorption_image(int n_photons, int time_index = 0) const;
+
+  /// @brief Produce a symmetric 2D absorption image from the total (time-integrated) grid.
+  /// @param n_photons   Total number of simulated photons (for normalization).
+  /// @return An (2·n_r) × n_z Matrix normalized by voxel volume and photon count,
+  ///         mirrored along the radial axis.
+  Matrix get_total_image(int n_photons) const;
 };
 
 } // namespace luminis::core

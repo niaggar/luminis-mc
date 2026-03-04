@@ -27,6 +27,9 @@ namespace luminis::core
     time_slices.reserve(n_t);
     for (int i = 0; i < n_t; ++i)
       time_slices.emplace_back(n_r, n_z);
+
+    // Allocate the total (time-integrated) grid
+    total = Matrix(n_r, n_z);
   }
 
   Absorption Absorption::clone() const
@@ -46,20 +49,19 @@ namespace luminis::core
         }
       }
     }
+
+    // Merge the total grid
+    for (std::size_t i = 0; i < total.rows; ++i)
+    {
+      for (std::size_t j = 0; j < total.cols; ++j)
+      {
+        total(i, j) += other.total(i, j);
+      }
+    }
   }
 
   void Absorption::record_absorption(const Photon &photon, double d_weight)
   {
-    // Determine which time bin to deposit into
-    int k = 0;
-    if (d_t > 0.0)
-    {
-      const double time = photon.launch_time + (photon.opticalpath / photon.velocity);
-      k = static_cast<int>(std::floor(time / d_t));
-      if (k < 0 || k >= n_t)
-        return;
-    }
-
     // Compute cylindrical (r, z) bin indices
     const Vec3 &pos = photon.pos;
     const double r = std::sqrt(pos.x * pos.x + pos.y * pos.y);
@@ -71,14 +73,23 @@ namespace luminis::core
     const std::size_t i_r = static_cast<std::size_t>(std::floor(r / d_r));
     const std::size_t i_z = static_cast<std::size_t>(std::floor(z / d_z));
 
-    Matrix &grid = time_slices[k];
-    if (i_r >= grid.rows || i_z >= grid.cols)
+    if (i_r >= total.rows || i_z >= total.cols)
     {
       LLOG_WARN("Calculated indices out of bounds: i_r={}, i_z={}", i_r, i_z);
       return;
     }
 
-    grid(i_r, i_z) += d_weight;
+    // Always accumulate into the total grid
+    total(i_r, i_z) += d_weight;
+
+    // If time-resolved, also deposit into the appropriate time slice
+    if (d_t > 0.0)
+    {
+      const double time = photon.launch_time + (photon.opticalpath / photon.velocity);
+      int k = static_cast<int>(std::floor(time / d_t));
+      if (k >= 0 && k < n_t)
+        time_slices[k](i_r, i_z) += d_weight;
+    }
   }
 
   Matrix Absorption::get_absorption_image(int n_photons, int time_index) const
@@ -105,6 +116,31 @@ namespace luminis::core
       for (int j = 0; j < len_z; ++j)
       {
         const double per_vol = grid(i, j) / (static_cast<double>(n_photons) * voxel_vol);
+        image(n_r - i, j) = per_vol;
+        if (i != 0)
+          image(n_r + i, j) = per_vol;
+      }
+    }
+    return image;
+  }
+
+  Matrix Absorption::get_total_image(int n_photons) const
+  {
+    const int n_r = total.rows;
+    const int len_r = n_r * 2;
+    const int len_z = total.cols;
+    Matrix image(len_r, len_z);
+
+    for (int i = 0; i < n_r; ++i)
+    {
+      const double r_in  = i * d_r;
+      const double r_out = (i + 1) * d_r;
+      const double ring_area = M_PI * (r_out * r_out - r_in * r_in);
+      const double voxel_vol = ring_area * d_z;
+
+      for (int j = 0; j < len_z; ++j)
+      {
+        const double per_vol = total(i, j) / (static_cast<double>(n_photons) * voxel_vol);
         image(n_r - i, j) = per_vol;
         if (i != 0)
           image(n_r + i, j) = per_vol;
