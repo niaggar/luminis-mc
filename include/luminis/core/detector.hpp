@@ -150,6 +150,15 @@ namespace luminis::core
     CrossingDirection filter_direction = CrossingDirection::Both; ///< Accepted crossing direction (Forward, Backward, or Both).
     /// @}
 
+    /// @name Event count filter
+    /// @brief Accepts photons whose number of scattering events is within the specified range.
+    /// @details Only photons with a number of scattering events between min and max (inclusive) will be accepted.
+    /// @{
+    bool filter_events_enabled = false;
+    int filter_events_min = 0; ///< Minimum accepted number of scattering events.
+    int filter_events_max = 0; ///< Maximum accepted number of scattering events.
+    /// @}
+
     /// @brief Construct a sensor centered at the given z-coordinate.
     /// @param z The z-position of the detection plane.
     /// @param absorb If true, photons are terminated after being detected.
@@ -229,17 +238,22 @@ namespace luminis::core
     ///          the filter, but kept explicit for clarity).
     void set_direction_limit(CrossingDirection dir);
 
+    /// @brief Set the event count acceptance window.
+    /// @param min Minimum number of events.
+    /// @param max Maximum number of events.
+    /// @details Enables the event count filter. Only photons with a number of scattering
+    ///          events between min and max (inclusive) will be accepted.
+    void set_events_limit(int min, int max);
+
     /// @brief Test whether a photon passes all enabled acceptance filters.
     /// @param hit_point     The (x, y, z) intersection point on the detector plane.
     /// @param hit_direction The photon's propagation direction at the hit point.
+    /// @param crossing_dir  The direction of crossing (Forward, Backward) at the hit point.
+    /// @param events        The number of scattering events the photon has undergone.
     /// @return true if the photon satisfies ALL enabled filters, false if any filter rejects it.
     /// @details Filters are evaluated in order: direction, theta, phi, position.
     ///          Evaluation short-circuits on the first failing filter for efficiency.
-    bool check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction, CrossingDirection crossing_dir) const;
-
-    /// @brief Enable or disable estimator-based detection for this sensor.
-    /// @param enabled If true, process_estimation() will be called after every scattering event.
-    void set_estimator_mode(bool enabled);
+    bool check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction, CrossingDirection crossing_dir, int events) const;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -309,7 +309,10 @@ PYBIND11_MODULE(_core, m)
            "Set the detection limits for the position on the sensor plane")
       .def("set_direction_limit", &Sensor::set_direction_limit,
            py::arg("direction"),
-           "Set the crossing direction filter (Forward, Backward, or Both)");
+           "Set the crossing direction filter (Forward, Backward, or Both)")
+     .def("set_events_limit", &Sensor::set_events_limit,
+          py::arg("min_events"), py::arg("max_events"),
+          "Set the limits for the number of scattering events (inclusive)");;
 
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
       .def(py::init<double, bool>(),
