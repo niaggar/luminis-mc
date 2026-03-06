@@ -43,6 +43,7 @@ from ._core import (
     FarFieldCBSSensor,
     StatisticsSensor,
     SensorsGroup,
+    CrossingDirection,
     # Results
     StokesMatrixProcessed,
     StokesRadialProcessed,
@@ -126,6 +127,7 @@ __all__ = [
     "FarFieldCBSSensor",
     "StatisticsSensor",
     "SensorsGroup",
+    "CrossingDirection",
     # Results
     "StokesMatrixProcessed",
     "StokesRadialProcessed",
