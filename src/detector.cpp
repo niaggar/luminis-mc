@@ -181,7 +181,7 @@ namespace luminis::core
         for (Sensor *det : it->second)
         {
           Vec3 direction = {photon.P_local(2, 0), photon.P_local(2, 1), photon.P_local(2, 2)};
-          const bool valid_photon = det->check_conditions(hit_point, direction, crossing_dir);
+          const bool valid_photon = det->check_conditions(hit_point, direction, crossing_dir, photon.events);
           if (valid_photon)
           {
             det->process_hit(photon, info, medium);
@@ -292,13 +292,26 @@ namespace luminis::core
     filter_direction = dir;
   }
 
-  bool Sensor::check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction, CrossingDirection crossing_dir) const
+  void Sensor::set_events_limit(int min, int max)
+  {
+    filter_events_enabled = true;
+    filter_events_min = min;
+    filter_events_max = max;
+  }
+
+  bool Sensor::check_conditions(const Vec3 &hit_point, const Vec3 &hit_direction, CrossingDirection crossing_dir, int events) const
   {
     // Apply all enabled filters in sequence (direction, theta, phi, position).
     // Returns false as soon as any filter rejects the photon.
     if (filter_direction_enabled)
     {
       if (filter_direction != CrossingDirection::Both && filter_direction != crossing_dir)
+        return false;
+    }
+
+    if (filter_events_enabled)
+    {
+      if (events < filter_events_min || events > filter_events_max)
         return false;
     }
 
