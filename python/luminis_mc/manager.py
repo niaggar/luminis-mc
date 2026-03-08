@@ -844,34 +844,3 @@ class ResultsLoader:
         """
         return np.asarray(self.h5[f"absorption/{name}/data/total_image"])
 
-
-def load_sweep_data(sweep_path: str) -> dict:
-    """
-    Load all runs from a sweep directory into a dict of ResultsLoader instances.
-
-    Parameters
-    ----------
-    sweep_path:
-        Path to the sweep directory containing a ``runs/`` subdirectory with individual run folders.
-    """
-    # Validate the input path
-    if not sweep_path:
-        raise ValueError("The sweep path cannot be empty.")
-    
-    # Get all the folder names in sweep_path / runs
-    runs_path = f"{sweep_path}/runs"
-    try:
-        run_folders = [f for f in os.listdir(runs_path) if os.path.isdir(os.path.join(runs_path, f))]
-    except FileNotFoundError:
-        raise FileNotFoundError(f"The specified path '{runs_path}' does not exist.")
-    
-    data = {}
-    for run_folder in run_folders:
-        run_path = os.path.join(runs_path, run_folder)
-        try:
-            loader = ResultsLoader(run_path)
-            data[run_folder] = loader
-        except Exception as e:
-            print(f"Error loading data from {run_path}: {e}")
-
-    return data
