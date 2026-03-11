@@ -38,7 +38,7 @@ namespace luminis::core
     std::exit(EXIT_FAILURE);
   }
 
-  double ScatteringMedium::sample_conditional_azimuthal_angle(Rng &rng, CMatrix &S, CVec2 &E, double k, double theta) const
+  double ScatteringMedium::sample_conditional_azimuthal_angle(Rng &rng, CMatrix &S, CVec2 &E, double theta) const
   {
     if (phase_function)
     {
@@ -62,13 +62,15 @@ namespace luminis::core
 //  RGDMedium — Rayleigh-Gans-Debye (RGD) approximation
 // ══════════════════════════════════════════════════════════════════════════════
 
-  RGDMedium::RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium)
+  RGDMedium::RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength)
       : ScatteringMedium(absorption, scattering, phase_func)
   {
     mean_free_path = mfp;
     radius = r;
     this->n_particle = n_particle;
     this->n_medium = n_medium;
+    this->wavelength = wavelength;
+    this->k = 2 * M_PI * n_medium / wavelength; // Compute wave number from wavelength
   }
 
   /// Exponential distribution: l = -l_mean · ln(U), U ~ Uniform(0, 1).
@@ -87,7 +89,7 @@ namespace luminis::core
    *
    * where V = (4π/3) r³ is the sphere volume and F is the form factor.
    */
-  CMatrix RGDMedium::scattering_matrix(const double theta, const double phi, const double k) const
+  CMatrix RGDMedium::scattering_matrix(const double theta, const double phi) const
   {
     const double F = form_factor(theta, k, radius);
     const double kkk = std::pow(k, 3);
@@ -106,6 +108,49 @@ namespace luminis::core
     return res;
   }
 
+  double RGDMedium::scattering_efficiency() const
+  {
+    const double x = radius * k;
+    const std::complex<double> m = std::complex<double>(n_particle / n_medium, 0);
+
+    double qext, qsca, g;
+		mievinfo(x, m, &qext, &qsca, &g);
+    LLOG_INFO("MieMedium::scattering_efficiency: x = {}, Q_ext = {}, Q_sca = {}, g = {}", x, qext, qsca, g);
+
+    const double V = 4 * M_PI * std::pow(radius, 3) / 3.0;
+    const double a = (std::pow(k, 6) * std::pow((n_particle / n_medium - 1.0), 2) * V * V) / (4 * std::pow(M_PI, 2));
+    const double c = a / std::pow(x, 2);
+
+    // Numerical integration of F^2(theta) * sin(theta) * (1 + cos^2(theta)) over [0, pi]
+    // using Simpson's rule with N subintervals (N must be even).
+    const int N = 100000;
+    const double h = M_PI / N;
+
+    auto integrand = [&](double theta) -> double {
+      const double F = form_factor(theta, k, radius);
+      const double cos_t = std::cos(theta);
+      return F * F * std::sin(theta) * (1.0 + cos_t * cos_t);
+    };
+
+    double sum = integrand(0.0) + integrand(M_PI);
+    for (int i = 1; i < N; i += 2)
+      sum += 4.0 * integrand(i * h);
+    for (int i = 2; i < N; i += 2)
+      sum += 2.0 * integrand(i * h);
+
+    const double integral = sum * h / 3.0;
+
+    return c * integral;
+  }
+
+  double RGDMedium::scattering_cross_section() const
+  {
+    const double Q_sca = scattering_efficiency();
+    const double geometric_cross_section = M_PI * std::pow(radius, 2);
+    return Q_sca * geometric_cross_section;
+  }
+
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  MieMedium — Mie theory via MIEV0 with precomputed S1/S2 tables
 // ══════════════════════════════════════════════════════════════════════════════
@@ -119,6 +164,7 @@ namespace luminis::core
     this->n_medium = n_medium;
     this->m = std::complex<double>(n_particle/n_medium, 0); // purely real relative index
     this->wavelength = wavelength;
+    this->k = 2 * M_PI * n_medium / wavelength; // Compute wave number from wavelength
 
     // Precompute S1/S2 tables at x = 2π r / λ with 1000 angle samples.
     precompute_scattering_tables(wavelength, 2 * M_PI * radius / wavelength, 1000);
@@ -131,7 +177,7 @@ namespace luminis::core
   }
 
   /// Interpolates S1(θ) and S2(θ) from the precomputed DataTables.
-  CMatrix MieMedium::scattering_matrix(const double theta, const double phi, const double k) const
+  CMatrix MieMedium::scattering_matrix(const double theta, const double phi) const
   {
     std::complex<double> s1;
     std::complex<double> s2;
@@ -145,6 +191,25 @@ namespace luminis::core
     res(1, 0) = std::complex<double>(0, 0);
     res(1, 1) = s1;
     return res;
+  }
+
+  double MieMedium::scattering_efficiency() const
+  {
+    const double x = radius * k;
+    double qext, qsca, g;
+		mievinfo(x, m, &qext, &qsca, &g);
+
+    // Log all the values
+    LLOG_INFO("MieMedium::scattering_efficiency: x = {}, Q_ext = {}, Q_sca = {}, g = {}", x, qext, qsca, g);
+
+    return qsca;
+  }
+
+  double MieMedium::scattering_cross_section() const
+  {
+    const double Q_sca = scattering_efficiency();
+    const double geometric_cross_section = M_PI * std::pow(radius, 2);
+    return Q_sca * geometric_cross_section;
   }
 
   /**

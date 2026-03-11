@@ -146,7 +146,7 @@ RayleighDebyeEMCPhaseFunction::RayleighDebyeEMCPhaseFunction(double wavelength, 
   this->wavelength = wavelength;
   this->n_particle = n_particle;
   this->n_medium = n_medium;
-  this->k = 2 * M_PI / wavelength;
+  this->k = 2 * M_PI * n_medium / wavelength;
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
 double RayleighDebyeEMCPhaseFunction::sample_cos(double x) const {
@@ -205,7 +205,7 @@ MiePhaseFunction::MiePhaseFunction(double wavelength, double radius, double n_pa
   this->wavelength = wavelength;
   this->n_particle = n_particle;
   this->n_medium = n_medium;
-  this->k = 2 * M_PI / wavelength;
+  this->k = 2 * M_PI * n_medium / wavelength;
   this->m = std::complex<double>(n_particle / n_medium, 0.0);
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }

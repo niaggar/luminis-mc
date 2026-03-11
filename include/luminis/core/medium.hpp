@@ -72,6 +72,12 @@ struct ScatteringMedium {
   const double mu_scattering{0.0};  ///< Scattering coefficient μ_s [1/mm]
   const double mu_attenuation{0.0}; ///< Total attenuation coefficient μ_t = μ_a + μ_s [1/mm]
 
+  double n_particle;     ///< Real refractive index of the scatterer
+  double n_medium;       ///< Real refractive index of the surrounding medium (used for contrast ratio)
+
+  double wavelength;       ///< Vacuum wavelength of light [mm]
+  double k;                ///< Wave number in the medium [1/mm]
+
   virtual ~ScatteringMedium() = default;
 
   /**
@@ -114,11 +120,10 @@ struct ScatteringMedium {
    * @param rng    Random number generator.
    * @param S      2×2 amplitude scattering matrix J(θ) for the current event.
    * @param E      Current Jones vector of the photon.
-   * @param k      Wave number [1/mm].
    * @param theta  Polar scattering angle θ [rad].
    * @return       Azimuthal angle φ ∈ [0, 2π) [rad].
    */
-  virtual double sample_conditional_azimuthal_angle(Rng &rng, CMatrix& S, CVec2& E, double k, double theta) const;
+  virtual double sample_conditional_azimuthal_angle(Rng &rng, CMatrix& S, CVec2& E, double theta) const;
 
   /**
    * @brief Sample a polar scattering angle θ from the phase function.
@@ -142,10 +147,13 @@ struct ScatteringMedium {
    *
    * @param theta  Polar scattering angle θ [rad].
    * @param phi    Azimuthal scattering angle φ [rad].
-   * @param k      Wave number in the medium [1/mm].
    * @return       2×2 complex amplitude scattering matrix.
    */
-  virtual CMatrix scattering_matrix(const double theta, const double phi, const double k) const = 0;
+  virtual CMatrix scattering_matrix(const double theta, const double phi) const = 0;
+
+  virtual double scattering_efficiency() const = 0;
+
+  virtual double scattering_cross_section() const = 0;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -163,8 +171,6 @@ struct ScatteringMedium {
  */
 struct RGDMedium : public ScatteringMedium {
   double mean_free_path; ///< Mean free path l = 1/μ_s [mm]
-  double n_particle;     ///< Real refractive index of the scatterer
-  double n_medium;       ///< Real refractive index of the surrounding medium (used for contrast ratio)
   double radius;         ///< Particle radius [mm]
 
   /**
@@ -177,8 +183,9 @@ struct RGDMedium : public ScatteringMedium {
    * @param r           Particle radius [mm].
    * @param n_particle  Refractive index of the particle.
    * @param n_medium    Refractive index of the surrounding medium.
+   * @param wavelength  Vacuum wavelength of light [mm].
    */
-  RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium);
+  RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength);
 
   /**
    * @brief Sample an exponentially-distributed free path.
@@ -199,10 +206,13 @@ struct RGDMedium : public ScatteringMedium {
    *
    * @param theta  Polar scattering angle θ [rad].
    * @param phi    Azimuthal scattering angle φ [rad] (unused in RGD).
-   * @param k      Wave number [1/mm].
    * @return       2×2 complex amplitude scattering matrix.
    */
-  CMatrix scattering_matrix(const double theta, const double phi, const double k) const override;
+  CMatrix scattering_matrix(const double theta, const double phi) const override;
+
+  double scattering_efficiency() const override;
+
+  double scattering_cross_section() const override;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -220,8 +230,6 @@ struct RGDMedium : public ScatteringMedium {
  */
 struct MieMedium : public ScatteringMedium {
   double mean_free_path;          ///< Mean free path l = 1/μ_s [mm]
-  double n_particle;              ///< Real refractive index of the particle
-  double n_medium;                ///< Real refractive index of the surrounding medium
   double radius;                  ///< Particle radius [mm]
   double wavelength;              ///< Vacuum wavelength of light [mm]
   std::complex<double> m;         ///< Relative refractive index m = n_particle / n_medium (real part only)
@@ -260,10 +268,9 @@ struct MieMedium : public ScatteringMedium {
    *
    * @param theta  Polar scattering angle θ [rad].
    * @param phi    Azimuthal scattering angle φ [rad] (unused; symmetry is handled upstream).
-   * @param k      Wave number [1/mm] (unused; tables are pre-evaluated at construction wavelength).
    * @return       2×2 complex amplitude scattering matrix.
    */
-  CMatrix scattering_matrix(const double theta, const double phi, const double k) const override;
+  CMatrix scattering_matrix(const double theta, const double phi) const override;
 
   /**
    * @brief Precompute S1 and S2 Mie amplitude functions over [0, π].
@@ -277,6 +284,10 @@ struct MieMedium : public ScatteringMedium {
    * @param n_samples       Number of uniformly-spaced angle samples in [0, π].
    */
   void precompute_scattering_tables(double wavelength, double size_parameter, std::size_t n_samples = 1000);
+
+  double scattering_efficiency() const override;
+
+  double scattering_cross_section() const override;
 };
 
 } // namespace luminis::core

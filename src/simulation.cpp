@@ -337,8 +337,8 @@ namespace luminis::core
 
       // --- Step 5: Sample scattering angles ---
       const double theta = scatter_medium.sample_scattering_angle(rng);
-      CMatrix S_matrix = scatter_medium.scattering_matrix(theta, 0, photon.k);
-      const double phi = scatter_medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, photon.k, theta);
+      CMatrix S_matrix = scatter_medium.scattering_matrix(theta, 0);
+      const double phi = scatter_medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, theta);
 
       // --- Step 6: Update local frame (P_local) ---
       // Build the 3×3 rotation matrix A that transforms the current local

@@ -310,9 +310,10 @@ PYBIND11_MODULE(_core, m)
       .def("set_direction_limit", &Sensor::set_direction_limit,
            py::arg("direction"),
            "Set the crossing direction filter (Forward, Backward, or Both)")
-     .def("set_events_limit", &Sensor::set_events_limit,
-          py::arg("min_events"), py::arg("max_events"),
-          "Set the limits for the number of scattering events (inclusive)");;
+      .def("set_events_limit", &Sensor::set_events_limit,
+           py::arg("min_events"), py::arg("max_events"),
+           "Set the limits for the number of scattering events (inclusive)");
+  ;
 
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
       .def(py::init<double, bool>(),
@@ -485,6 +486,10 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("mu_a", &ScatteringMedium::mu_absorption)
       .def_readonly("mu_s", &ScatteringMedium::mu_scattering)
       .def_readonly("mu_t", &ScatteringMedium::mu_attenuation)
+      .def_readonly("n_particle", &ScatteringMedium::n_particle)
+      .def_readonly("n_medium", &ScatteringMedium::n_medium)
+      .def_readonly("wavelength", &ScatteringMedium::wavelength)
+      .def_readonly("k", &ScatteringMedium::k)
       .def_readonly("phase_function", &ScatteringMedium::phase_function)
       .def("sample_free_path", &ScatteringMedium::sample_free_path, py::arg("rng"),
            "Sample the free path length in the medium")
@@ -493,29 +498,28 @@ PYBIND11_MODULE(_core, m)
       .def("sample_azimuthal_angle", &ScatteringMedium::sample_azimuthal_angle,
            py::arg("rng"), "Sample the azimuthal angle in the medium")
       .def("sample_conditional_azimuthal_angle", &ScatteringMedium::sample_conditional_azimuthal_angle,
-           py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("k"), py::arg("theta"),
+           py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("theta"),
            "Sample the azimuthal angle conditioned on scattering angle theta")
+      .def("scattering_efficiency", &ScatteringMedium::scattering_efficiency,
+            "Calculate the scattering efficiency Q_sca for the medium")
+      .def("scattering_cross_section", &ScatteringMedium::scattering_cross_section,
+            "Calculate the scattering cross-section sigma_sca for the medium")
       .def("scattering_matrix", &ScatteringMedium::scattering_matrix, py::arg("theta"),
-           py::arg("phi"), py::arg("k"),
+           py::arg("phi"),
            "Get the scattering matrix for given angles and wavenumber");
 
   py::class_<RGDMedium, ScatteringMedium>(m, "RGDMedium")
-      .def(py::init<double, double, PhaseFunction *, double, double, double, double>(),
+      .def(py::init<double, double, PhaseFunction *, double, double, double, double, double>(),
            py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"),
-           py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"))
+           py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
       .def_readonly("mean_free_path", &RGDMedium::mean_free_path)
-      .def_readonly("radius", &RGDMedium::radius)
-      .def_readonly("n_particle", &RGDMedium::n_particle)
-      .def_readonly("n_medium", &RGDMedium::n_medium);
+      .def_readonly("radius", &RGDMedium::radius);
 
   py::class_<MieMedium, ScatteringMedium>(m, "MieMedium")
       .def(py::init<double, double, PhaseFunction *, double, double, double, double, double>(),
            py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"), py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
       .def_readonly("mean_free_path", &MieMedium::mean_free_path)
       .def_readonly("radius", &MieMedium::radius)
-      .def_readonly("n_particle", &MieMedium::n_particle)
-      .def_readonly("n_medium", &MieMedium::n_medium)
-      .def_readonly("wavelength", &MieMedium::wavelength)
       .def_readonly("m", &MieMedium::m);
 
   // Sample bindings
@@ -626,11 +630,7 @@ PYBIND11_MODULE(_core, m)
   // ProgressMonitor bindings
   py::class_<luminis::log::ProgressMonitor>(m, "ProgressMonitor")
       .def(py::init<>(), "Create a new progress monitor")
-      .def("setup",
-           [](luminis::log::ProgressMonitor &self,
-              std::size_t total,
-              py::object callback,
-              std::size_t interval_pct)
+      .def("setup", [](luminis::log::ProgressMonitor &self, std::size_t total, py::object callback, std::size_t interval_pct)
            {
              if (callback.is_none())
              {
@@ -648,20 +648,11 @@ PYBIND11_MODULE(_core, m)
                             (*py_cb)(done, total);
                           },
                           interval_pct);
-             }
-           },
-           py::arg("total"),
-           py::arg("callback") = py::none(),
-           py::arg("interval_pct") = 5,
-           "Configure the monitor with total photon count, optional callback, and reporting interval (%)")
-      .def("completed", &luminis::log::ProgressMonitor::completed,
-           "Number of photons completed so far")
-      .def("total", &luminis::log::ProgressMonitor::total,
-           "Total photon budget")
-      .def("is_enabled", &luminis::log::ProgressMonitor::is_enabled,
-           "Whether the monitor is active")
-      .def("disable", &luminis::log::ProgressMonitor::disable,
-           "Disable the monitor (stops further callbacks)");
+             } }, py::arg("total"), py::arg("callback") = py::none(), py::arg("interval_pct") = 5, "Configure the monitor with total photon count, optional callback, and reporting interval (%)")
+      .def("completed", &luminis::log::ProgressMonitor::completed, "Number of photons completed so far")
+      .def("total", &luminis::log::ProgressMonitor::total, "Total photon budget")
+      .def("is_enabled", &luminis::log::ProgressMonitor::is_enabled, "Whether the monitor is active")
+      .def("disable", &luminis::log::ProgressMonitor::disable, "Disable the monitor (stops further callbacks)");
 
   // Logger bindings
   py::enum_<Level>(m, "LogLevel")
