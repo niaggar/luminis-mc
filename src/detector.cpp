@@ -53,7 +53,7 @@ namespace luminis::core
     for (int i = 0; i < n; i++)
     {
       const double th = (i + 0.5) * dth;
-      const CMatrix S = medium.scattering_matrix(th, 0.0, k);
+      const CMatrix S = medium.scattering_matrix(th, 0.0);
       const double s22 = std::norm(S(0, 0));
       const double s11 = std::norm(S(1, 1));
       acc += (s11 + s22) * std::sin(th);
@@ -519,7 +519,7 @@ namespace luminis::core
       // Photon is on the same direction as the detector normal
       Q = Pold;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -538,7 +538,7 @@ namespace luminis::core
       Q(2, 1) *= -1;
       Q(2, 2) *= -1;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -571,7 +571,7 @@ namespace luminis::core
       matmul(A, Pold, Q);
 
       double theta = std::acos(mu);
-      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -776,7 +776,7 @@ namespace luminis::core
       // Photon is on the same direction as the detector normal
       Q = Pold;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -795,7 +795,7 @@ namespace luminis::core
       Q(2, 1) *= -1;
       Q(2, 2) *= -1;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -828,7 +828,7 @@ namespace luminis::core
       matmul(A, Pold, Q);
 
       double theta = std::acos(mu);
-      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0, photon.k);
+      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0);
       double s2 = std::norm(Smatrix(0, 0));
       double s1 = std::norm(Smatrix(1, 1));
 
@@ -1645,7 +1645,7 @@ namespace luminis::core
     const ScatteringMedium *medium_at_n = medium.get_layer(photon.last_scatter_layer).medium;
 
     const double th_a = std::acos(clamp_pm1(dot(s_in_a, s_out_a)));
-    const CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0, photon.k);
+    const CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0);
 
     const Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
     const Vec3 mprime_in = safe_unit(cross(nprime, s_in_a), m0);
@@ -1682,7 +1682,7 @@ namespace luminis::core
     const ScatteringMedium *medium_at_1 = medium.get_layer(0).medium; // capa del scatter inicial
 
     const double th_c = std::acos(clamp_pm1(dot(s_in_c, s_out_c)));
-    const CMatrix S_c = medium_at_1->scattering_matrix(th_c, 0.0, photon.k);
+    const CMatrix S_c = medium_at_1->scattering_matrix(th_c, 0.0);
 
     const Vec3 npp = safe_unit(cross(s_in_c, s_out_c), n1 * (-1.0));
     const Vec3 mpp_in = safe_unit(cross(npp, s_in_c), m1);
@@ -1735,7 +1735,7 @@ namespace luminis::core
     double cos_th_a = clamp_pm1(dot(s_in_a, s_out_a));
     double th_a = std::acos(cos_th_a);
     const ScatteringMedium *medium_at_n = medium.get_layer(photon.last_scatter_layer).medium;
-    CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0, photon.k);
+    CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0);
 
     // Scattering plane normal: n' = s_in x s_out
     Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
@@ -1800,7 +1800,7 @@ namespace luminis::core
     double cos_th_b = clamp_pm1(dot(s_in_b, s_out_b));
     double th_b = std::acos(cos_th_b);
     const ScatteringMedium *medium_at_1 = medium.get_layer(photon.first_scatter_layer).medium;
-    CMatrix S_b = medium_at_1->scattering_matrix(th_b, 0.0, photon.k);
+    CMatrix S_b = medium_at_1->scattering_matrix(th_b, 0.0);
 
     // Scattering plane normal: n'' = (-s1) x sn
     Vec3 npp = safe_unit(cross(s_in_b, s_out_b), n1 * (-1.0));

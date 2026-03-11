@@ -1,4 +1,3 @@
-#pragma once
 #include <luminis/core/results.hpp>
 
 namespace luminis::core
