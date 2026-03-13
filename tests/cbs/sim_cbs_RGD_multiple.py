@@ -59,10 +59,19 @@ n_photons = 100_000
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 
 
-# Size for detectors nanometers
+
+# Sensor parameters
+theta_max_far_field = np.deg2rad(5)
+phi_max_far_field = 2 * np.pi
+n_theta_far_field = 400
+n_phi_far_field = 360
+t_max_far_field = 0
+
 # Light speed is always 1 nm/s
-d_lenght = 0.1
-d_time = 0.5
+d_theta = theta_max_far_field / n_theta_far_field
+d_phi = phi_max_far_field / n_phi_far_field
+d_time = 0.0
+
 
 
 def run_single_simulation(exp, radius, volume_fraction):
@@ -87,16 +96,8 @@ def run_single_simulation(exp, radius, volume_fraction):
 
 
 
-    # Sensor parameters
-    theta_max_far_field = np.deg2rad(5)
-    phi_max_far_field = 2 * np.pi
-    n_theta_far_field = 400
-    n_phi_far_field = 360
-    t_max_far_field = 0
-    n_t_far_field = 1
-
     sens = SensorsGroup()
-    det = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max_far_field, n_theta_far_field, n_phi_far_field, n_t_far_field, False))
+    det = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max_far_field, d_theta, d_phi, d_time, False))
     det.set_theta_limit(0, theta_max_far_field)
 
     stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
@@ -110,7 +111,7 @@ def run_single_simulation(exp, radius, volume_fraction):
     }
 
     for order in scattering_order_bins:
-        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max_far_field, n_theta_far_field, n_phi_far_field, n_t_far_field, False))
+        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max_far_field, d_theta, d_phi, d_time, False))
         det_order.set_theta_limit(0, theta_max_far_field)
         det_order.set_events_limit(order, order)
         scattering_order_detectors[order] = det_order
@@ -178,22 +179,27 @@ def run_single_simulation(exp, radius, volume_fraction):
 
     # 6) guarda READY-TO-PLOT (recomendado)
     cbs_total = postprocess_farfield_cbs(det, n_photons)
-    s0_total_coh = np.array(cbs_total.coherent[0].S0, copy=False)
-    s1_total_coh = np.array(cbs_total.coherent[0].S1, copy=False)
-    s2_total_coh = np.array(cbs_total.coherent[0].S2, copy=False)
-    s3_total_coh = np.array(cbs_total.coherent[0].S3, copy=False)
-    s0_total_inc = np.array(cbs_total.incoherent[0].S0, copy=False)
-    s1_total_inc = np.array(cbs_total.incoherent[0].S1, copy=False)
-    s2_total_inc = np.array(cbs_total.incoherent[0].S2, copy=False)
-    s3_total_inc = np.array(cbs_total.incoherent[0].S3, copy=False)
-    exp.save_derived(f"farfield_cbs/coherent/s0", s0_total_coh)
-    exp.save_derived(f"farfield_cbs/coherent/s1", s1_total_coh)
-    exp.save_derived(f"farfield_cbs/coherent/s2", s2_total_coh)
-    exp.save_derived(f"farfield_cbs/coherent/s3", s3_total_coh)
-    exp.save_derived(f"farfield_cbs/incoherent/s0", s0_total_inc)
-    exp.save_derived(f"farfield_cbs/incoherent/s1", s1_total_inc)
-    exp.save_derived(f"farfield_cbs/incoherent/s2", s2_total_inc)
-    exp.save_derived(f"farfield_cbs/incoherent/s3", s3_total_inc)
+
+
+    timed_N = len(cbs_total.coherent)
+    for t in range(timed_N):
+        s0_total_coh = np.array(cbs_total.coherent[t].S0, copy=False)
+        s1_total_coh = np.array(cbs_total.coherent[t].S1, copy=False)
+        s2_total_coh = np.array(cbs_total.coherent[t].S2, copy=False)
+        s3_total_coh = np.array(cbs_total.coherent[t].S3, copy=False)
+        s0_total_inc = np.array(cbs_total.incoherent[t].S0, copy=False)
+        s1_total_inc = np.array(cbs_total.incoherent[t].S1, copy=False)
+        s2_total_inc = np.array(cbs_total.incoherent[t].S2, copy=False)
+        s3_total_inc = np.array(cbs_total.incoherent[t].S3, copy=False)
+
+        exp.save_derived(f"farfield_cbs_timed_{t}/coherent/s0", s0_total_coh)
+        exp.save_derived(f"farfield_cbs_timed_{t}/coherent/s1", s1_total_coh)
+        exp.save_derived(f"farfield_cbs_timed_{t}/coherent/s2", s2_total_coh)
+        exp.save_derived(f"farfield_cbs_timed_{t}/coherent/s3", s3_total_coh)
+        exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s0", s0_total_inc)
+        exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s1", s1_total_inc)
+        exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s2", s2_total_inc)
+        exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s3", s3_total_inc)
 
     theta  = np.linspace(0, det.theta_max, det.N_theta)
     phi   = np.linspace(0, det.phi_max, det.N_phi)
@@ -224,11 +230,12 @@ def run_single_simulation(exp, radius, volume_fraction):
         exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3", s3_order_inc)
 
 
+
 for i, data in enumerate(params_sweep):
     radius = data["radius"]
     volume_fraction = data["volume_fraction"]
 
-    run_name = f"radius_{radius:.3f}_mfp_{volume_fraction:.1f}"
+    run_name = f"radius_{radius:.3f}_volumefraction_{volume_fraction:.3f}"
     fun = lambda exp, r=radius, v=volume_fraction: run_single_simulation(exp, r, v)
 
     print(f"Running simulation for radius={radius:.3f}, volume_fraction={volume_fraction:.1f}")
