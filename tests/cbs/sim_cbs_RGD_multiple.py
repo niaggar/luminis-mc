@@ -13,8 +13,8 @@ from luminis_mc import (
 
 set_log_level(LogLevel.info)
 
-exp_name = "sim_cbs_RGD_multiple"
-base_dir = "/Users/niaggar/Documents/Thesis/Progress/16Mar26"
+exp_name = "sim_cbs_RGD_multiple-volumefraction_radius-1000M"
+base_dir = "/home/niaggar/Developer/results"
 
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
@@ -54,8 +54,8 @@ mu_absortion = 0.0
 wavelength = 0.514
 
 # Laser parameters
-laser_m_polarization_state = 1
-laser_n_polarization_state = 0
+laser_m_polarization_state = 1/np.sqrt(2)
+laser_n_polarization_state = -1j/np.sqrt(2)
 laser_radius = 0.0
 laser_type = LaserSource.Point
 
@@ -65,7 +65,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 1
+n_photons = 1_000_000_000
 
 # Events study
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
@@ -75,13 +75,13 @@ scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 theta_max_far_field = np.deg2rad(5)
 phi_max_far_field = 2 * np.pi
 n_theta_far_field = 400
-n_phi_far_field = 360
+n_phi_far_field = 1
 d_theta = theta_max_far_field / n_theta_far_field
 d_phi = phi_max_far_field / n_phi_far_field
 
 # Light speed is always 1 nm/s
-t_max = 200
-d_time = 50
+t_max = 500
+d_time = 10
 
 
 
@@ -89,7 +89,7 @@ d_time = 50
 stats_t_max = t_max
 stats_d_time = d_time
 max_events = 1000
-max_depth = 100 * 10.0  # mean free path is expected to be around 10 nm, so this covers up to 100 mfp
+max_depth = 100 * 100.0  # mean free path is expected to be around 10 nm, so this covers up to 100 mfp
 n_depth = 10
 
 
@@ -118,9 +118,10 @@ def run_single_simulation(exp, radius, volume_fraction):
     det.set_theta_limit(0, theta_max_far_field)
 
     stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
+    stats.set_theta_limit(0, theta_max_far_field)
     stats.set_time_resolution(stats_t_max, stats_d_time)
     stats.set_events_histogram_bins(max_events)
-    stats.set_theta_histogram_bins(0, np.pi/2, 180)
+    stats.set_theta_histogram_bins(0, theta_max_far_field, 180)
     stats.set_phi_histogram_bins(0, 2*np.pi, 360)
     stats.set_depth_histogram_bins(max_depth, n_depth)
 
@@ -144,8 +145,8 @@ def run_single_simulation(exp, radius, volume_fraction):
     config.detector = sens
     config.laser = laser
     config.track_reverse_paths = True
-    config.pin_threads_to_cores = False
-    config.n_threads = 7
+    config.pin_threads_to_cores = True
+    config.n_threads = 14
     config.progress = monitor
 
     anysotropy = phase.get_anisotropy_factor()
@@ -162,6 +163,8 @@ def run_single_simulation(exp, radius, volume_fraction):
     exp.log_params(
         # Medium parameters
         mean_free_path_real=mean_free_path,
+        scattering_efficiency=scattering_efficiency,
+        volume_fraction=volume_fraction,
         radius_real=radius,
         n_particle_real=n_particle,
         n_medium_real=n_medium,
