@@ -643,7 +643,8 @@ namespace luminis::core
   ///   - **theta**: exit polar angle [min_theta, max_theta)
   ///   - **phi**: exit azimuthal angle [min_phi, max_phi)
   ///   - **depth**: maximum penetration depth [0, max_depth)
-  ///   - **time**: arrival time [0, max_time)
+  ///   - **time**: arrival time with optional time windows.
+  ///              Bin 0 is always time-integrated; bins >=1 are temporal windows.
   ///   - **weight**: statistical weight [0, max_weight)
   ///
   /// Each histogram must be explicitly enabled and configured using the corresponding
@@ -657,13 +658,17 @@ namespace luminis::core
     /// @name Histogram data
     /// @brief Integer bin counts for each configured histogram.
     /// @{
-    std::vector<int> events_histogram; ///< Scattering event count distribution.
-    std::vector<int> theta_histogram;  ///< Exit polar angle distribution.
-    std::vector<int> phi_histogram;    ///< Exit azimuthal angle distribution.
-    std::vector<int> depth_histogram;  ///< Penetration depth distribution.
+    std::vector<std::vector<int>> events_histogram; ///< Scattering event count distribution.
+    std::vector<std::vector<int>> theta_histogram;  ///< Exit polar angle distribution.
+    std::vector<std::vector<int>> phi_histogram;    ///< Exit azimuthal angle distribution.
+    std::vector<std::vector<int>> depth_histogram;  ///< Penetration depth distribution.
     std::vector<int> time_histogram;   ///< Arrival time distribution.
     std::vector<int> weight_histogram; ///< Statistical weight distribution.
     /// @}
+
+    int N_t = 1; ///< Number of time bins (for time-resolved histograms; default is 1 for time-integrated).
+    double dt = 0.0; ///< Time bin width (ignored if N_t=1).
+    double t_max = 0.0; ///< Total time window length (ignored if N_t=1).
 
     /// @name Histogram configuration
     /// @details Each histogram has a flag (*_bins_set), range parameters, and a bin width.
@@ -671,7 +676,7 @@ namespace luminis::core
     /// @{
     bool events_histogram_bins_set = false;
     int max_events = 0; ///< Upper bound for events histogram (exclusive).
-
+    
     bool theta_histogram_bins_set = false;
     double min_theta = 0.0; ///< Lower bound for theta histogram [rad].
     double max_theta = 0.0; ///< Upper bound for theta histogram [rad].
@@ -690,9 +695,9 @@ namespace luminis::core
     double ddepth = 0.0;    ///< Depth bin width.
 
     bool time_histogram_bins_set = false;
-    double max_time = 0.0; ///< Upper bound for time histogram.
-    int n_bins_time = 0;   ///< Number of time bins.
-    double dtime = 0.0;    ///< Time bin width.
+    double h_max_time = 0.0; ///< Upper bound for temporal windows [0, max_time).
+    int n_bins_time = 0;   ///< Total number of bins (includes integrated bin 0).
+    double h_dtime = 0.0;    ///< Time window width for bins >=1 (0 means integrated-only).
 
     bool weight_histogram_bins_set = false;
     double max_weight = 0.0; ///< Upper bound for weight histogram.
@@ -705,6 +710,14 @@ namespace luminis::core
     /// @param absorb If true, photons hitting this sensor are absorbed.
     /// @note No histograms are active by default; call set_*_histogram_bins() to enable them.
     StatisticsSensor(double z, bool absorb = true);
+
+    /// @brief Configure temporal histogram using physical window and time step.
+    /// @param len_t Total temporal window length.
+    /// @param dt    Time window width.
+    ///              - dt == 0: integrated-only mode (n_bins_time = 1, bin 0 only).
+    ///              - dt > 0: n_bins_time = ceil(len_t / dt) + 1, where bin 0 is
+    ///                        integrated and bins [1, n_bins_time-1] are windows.
+    void set_time_resolution(double len_t, double dt);
 
     /// @brief Configure the scattering events histogram.
     /// @param max_events Number of bins (one bin per event count, from 0 to max_events-1).
@@ -727,9 +740,11 @@ namespace luminis::core
     /// @param n_bins    Number of bins.
     void set_depth_histogram_bins(double max_depth, int n_bins);
 
-    /// @brief Configure the arrival time histogram.
-    /// @param max_time Upper bound.
-    /// @param n_bins   Number of bins.
+    /// @brief Configure the arrival-time histogram with explicit number of bins.
+    /// @param max_time Upper bound for temporal windows [0, max_time).
+    /// @param n_bins   Total number of bins including integrated bin 0.
+    ///                 - n_bins <= 1: integrated-only mode.
+    ///                 - n_bins > 1: bins [1, n_bins-1] are temporal windows.
     void set_time_histogram_bins(double max_time, int n_bins);
 
     /// @brief Configure the statistical weight histogram.

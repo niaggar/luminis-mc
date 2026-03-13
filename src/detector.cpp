@@ -1775,10 +1775,10 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
   StatisticsSensor::StatisticsSensor(double z, bool absorb) : Sensor(z, absorb, false)
   {
-    events_histogram = std::vector<int>();
-    theta_histogram = std::vector<int>();
-    phi_histogram = std::vector<int>();
-    depth_histogram = std::vector<int>();
+    events_histogram = std::vector<std::vector<int>>();
+    theta_histogram = std::vector<std::vector<int>>();
+    phi_histogram = std::vector<std::vector<int>>();
+    depth_histogram = std::vector<std::vector<int>>();
     time_histogram = std::vector<int>();
     weight_histogram = std::vector<int>();
   }
@@ -1817,29 +1817,33 @@ namespace luminis::core
     det->n_bins_depth = n_bins_depth;
     det->ddepth = ddepth;
     det->time_histogram_bins_set = time_histogram_bins_set;
-    det->max_time = max_time;
+    det->h_max_time = h_max_time;
     det->n_bins_time = n_bins_time;
-    det->dtime = dtime;
+    det->h_dtime = h_dtime;
     det->weight_histogram_bins_set = weight_histogram_bins_set;
     det->max_weight = max_weight;
     det->n_bins_weight = n_bins_weight;
     det->dweight = dweight;
 
+    det->N_t = N_t;
+    det->dt = dt;
+    det->t_max = t_max;
+
     if (events_histogram_bins_set)
     {
-      det->events_histogram.resize(max_events, 0);
+      det->events_histogram.assign(N_t, std::vector<int>(max_events, 0));
     }
     if (theta_histogram_bins_set)
     {
-      det->theta_histogram.resize(n_bins_theta, 0);
+      det->theta_histogram.assign(N_t, std::vector<int>(n_bins_theta, 0));
     }
     if (phi_histogram_bins_set)
     {
-      det->phi_histogram.resize(n_bins_phi, 0);
+      det->phi_histogram.assign(N_t, std::vector<int>(n_bins_phi, 0));
     }
     if (depth_histogram_bins_set)
     {
-      det->depth_histogram.resize(n_bins_depth, 0);
+      det->depth_histogram.assign(N_t, std::vector<int>(n_bins_depth, 0));
     }
     if (time_histogram_bins_set)
     {
@@ -1859,30 +1863,42 @@ namespace luminis::core
 
     if (events_histogram_bins_set && o.events_histogram_bins_set)
     {
-      for (size_t i = 0; i < events_histogram.size(); ++i)
+      for (size_t t = 0; t < events_histogram.size(); ++t)
       {
-        events_histogram[i] += o.events_histogram[i];
+        for (size_t i = 0; i < events_histogram[t].size(); ++i)
+        {
+          events_histogram[t][i] += o.events_histogram[t][i];
+        }
       }
     }
     if (theta_histogram_bins_set && o.theta_histogram_bins_set)
     {
-      for (size_t i = 0; i < theta_histogram.size(); ++i)
+      for (size_t t = 0; t < theta_histogram.size(); ++t)
       {
-        theta_histogram[i] += o.theta_histogram[i];
+        for (size_t i = 0; i < theta_histogram[t].size(); ++i)
+        {
+          theta_histogram[t][i] += o.theta_histogram[t][i];
+        }
       }
     }
     if (phi_histogram_bins_set && o.phi_histogram_bins_set)
     {
-      for (size_t i = 0; i < phi_histogram.size(); ++i)
+      for (size_t t = 0; t < phi_histogram.size(); ++t)
       {
-        phi_histogram[i] += o.phi_histogram[i];
+        for (size_t i = 0; i < phi_histogram[t].size(); ++i)
+        {
+          phi_histogram[t][i] += o.phi_histogram[t][i];
+        }
       }
     }
     if (depth_histogram_bins_set && o.depth_histogram_bins_set)
     {
-      for (size_t i = 0; i < depth_histogram.size(); ++i)
+      for (size_t t = 0; t < depth_histogram.size(); ++t)
       {
-        depth_histogram[i] += o.depth_histogram[i];
+        for (size_t i = 0; i < depth_histogram[t].size(); ++i)
+        {
+          depth_histogram[t][i] += o.depth_histogram[t][i];
+        }
       }
     }
     if (time_histogram_bins_set && o.time_histogram_bins_set)
@@ -1903,12 +1919,35 @@ namespace luminis::core
 
   void StatisticsSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
+    const double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+    int t_idx = -1;
+    if (N_t > 1 && dt > 0.0 && arrival_time >= 0.0 && arrival_time < t_max)
+    {
+      t_idx = static_cast<int>(arrival_time / dt) + 1;
+      if (t_idx >= N_t)
+        t_idx = -1;
+    }
+
+    auto deposit_temporal = [t_idx](std::vector<std::vector<int>> &hist, int bin_idx, int t_id)
+    {
+      if (hist.empty())
+        return;
+
+      hist[0][bin_idx]++;
+
+
+      if (t_id >= 1 && t_id < static_cast<int>(hist.size()))
+      {
+        hist[t_id][bin_idx]++;
+      }
+    };
+
     if (events_histogram_bins_set)
     {
       int events = photon.events;
       if (events >= 0 && events < max_events)
       {
-        events_histogram[events]++;
+        deposit_temporal(events_histogram, events, t_idx);
       }
     }
     if (theta_histogram_bins_set)
@@ -1917,7 +1956,7 @@ namespace luminis::core
       if (theta >= min_theta && theta < max_theta)
       {
         int idx = static_cast<int>((theta - min_theta) / dtheta);
-        theta_histogram[idx]++;
+        deposit_temporal(theta_histogram, idx, t_idx);
       }
     }
     if (phi_histogram_bins_set)
@@ -1928,7 +1967,7 @@ namespace luminis::core
       if (phi >= min_phi && phi < max_phi)
       {
         int idx = static_cast<int>((phi - min_phi) / dphi);
-        phi_histogram[idx]++;
+        deposit_temporal(phi_histogram, idx, t_idx);
       }
     }
     if (depth_histogram_bins_set)
@@ -1937,15 +1976,14 @@ namespace luminis::core
       if (depth >= 0 && depth < max_depth)
       {
         int idx = static_cast<int>(depth / ddepth);
-        depth_histogram[idx]++;
+        deposit_temporal(depth_histogram, idx, t_idx);
       }
     }
     if (time_histogram_bins_set)
     {
-      double time = photon.launch_time + (photon.opticalpath / photon.velocity);
-      if (time >= 0 && time < max_time)
+      int idx = static_cast<int>(arrival_time / h_dtime);
+      if (idx >= 1 && idx < n_bins_time)
       {
-        int idx = static_cast<int>(time / dtime);
         time_histogram[idx]++;
       }
     }
@@ -1962,11 +2000,45 @@ namespace luminis::core
     hits += 1;
   }
 
+  void StatisticsSensor::set_time_resolution(double len_t, double dt)
+  {
+    t_max = len_t;
+    this->dt = dt;
+
+    if (dt <= 0.0)
+    {
+      N_t = 1;
+      this->dt = 0.0;
+    }
+    else
+    {
+      // Bin 0 is integrated; temporal windows are in [1, n_bins_time-1].
+      N_t = static_cast<int>(std::ceil(len_t / dt)) + 1;
+    }
+
+    if (events_histogram_bins_set)
+    {
+      events_histogram.assign(N_t, std::vector<int>(max_events, 0));
+    }
+    if (theta_histogram_bins_set)
+    {
+      theta_histogram.assign(N_t, std::vector<int>(n_bins_theta, 0));
+    }
+    if (phi_histogram_bins_set)
+    {
+      phi_histogram.assign(N_t, std::vector<int>(n_bins_phi, 0));
+    }
+    if (depth_histogram_bins_set)
+    {
+      depth_histogram.assign(N_t, std::vector<int>(n_bins_depth, 0));
+    }
+  }
+
   void StatisticsSensor::set_events_histogram_bins(int max_events)
   {
     this->max_events = max_events;
     events_histogram_bins_set = true;
-    events_histogram.resize(max_events, 0);
+    events_histogram.assign(N_t, std::vector<int>(max_events, 0));
   }
 
   void StatisticsSensor::set_theta_histogram_bins(double min_theta, double max_theta, int n_bins)
@@ -1976,7 +2048,7 @@ namespace luminis::core
     this->n_bins_theta = n_bins;
     dtheta = (max_theta - min_theta) / n_bins;
     theta_histogram_bins_set = true;
-    theta_histogram.resize(n_bins, 0);
+    theta_histogram.assign(N_t, std::vector<int>(n_bins, 0));
   }
 
   void StatisticsSensor::set_phi_histogram_bins(double min_phi, double max_phi, int n_bins)
@@ -1986,7 +2058,7 @@ namespace luminis::core
     this->n_bins_phi = n_bins;
     dphi = (max_phi - min_phi) / n_bins;
     phi_histogram_bins_set = true;
-    phi_histogram.resize(n_bins, 0);
+    phi_histogram.assign(N_t, std::vector<int>(n_bins, 0));
   }
 
   void StatisticsSensor::set_depth_histogram_bins(double max_depth, int n_bins)
@@ -1995,14 +2067,14 @@ namespace luminis::core
     this->n_bins_depth = n_bins;
     ddepth = max_depth / n_bins;
     depth_histogram_bins_set = true;
-    depth_histogram.resize(n_bins, 0);
+    depth_histogram.assign(N_t, std::vector<int>(n_bins, 0));
   }
 
   void StatisticsSensor::set_time_histogram_bins(double max_time, int n_bins)
   {
-    this->max_time = max_time;
-    this->n_bins_time = n_bins;
-    dtime = max_time / n_bins;
+    this->h_max_time = max_time;
+    this->n_bins_time = std::max(1, n_bins);
+    this->h_dtime = max_time / n_bins;
     time_histogram_bins_set = true;
     time_histogram.resize(n_bins, 0);
   }

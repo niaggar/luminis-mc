@@ -642,7 +642,8 @@ class Experiment:
                 "theta_histogram_bins_set", "min_theta", "max_theta", "n_bins_theta", "dtheta",
                 "phi_histogram_bins_set", "min_phi", "max_phi", "n_bins_phi", "dphi",
                 "depth_histogram_bins_set", "max_depth", "n_bins_depth", "ddepth",
-                "time_histogram_bins_set", "max_time", "n_bins_time", "dtime",
+                "N_t", "dt", "t_max",
+                "time_histogram_bins_set", "h_max_time", "n_bins_time", "h_dtime",
                 "weight_histogram_bins_set", "max_weight", "n_bins_weight", "dweight",
             ]:
                 _write_attr(g_meta, k, getattr(sensor, k))
