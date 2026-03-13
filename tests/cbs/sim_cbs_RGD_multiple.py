@@ -58,6 +58,13 @@ n_photons = 100_000
 # Events study
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 
+
+# Size for detectors nanometers
+# Light speed is always 1 nm/s
+d_lenght = 0.1
+d_time = 0.5
+
+
 def run_single_simulation(exp, radius, volume_fraction):
     laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius, laser_type)
     phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
