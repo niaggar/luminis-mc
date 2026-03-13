@@ -122,12 +122,6 @@ namespace luminis::core
   double RGDMedium::scattering_efficiency() const
   {
     const double x = radius * k;
-    const std::complex<double> m = std::complex<double>(n_particle / n_medium, 0);
-
-    double qext, qsca, g;
-		mievinfo(x, m, &qext, &qsca, &g);
-    LLOG_INFO("MieMedium::scattering_efficiency: x = {}, Q_ext = {}, Q_sca = {}, g = {}", x, qext, qsca, g);
-
     const double V = 4 * M_PI * std::pow(radius, 3) / 3.0;
     const double a = (std::pow(k, 6) * std::pow((n_particle / n_medium - 1.0), 2) * V * V) / (4 * std::pow(M_PI, 2));
     const double c = a / std::pow(x, 2);
