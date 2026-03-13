@@ -27,12 +27,24 @@ params_sweep = [
         "volume_fraction": 0.1,
     },
     {
+        "radius": 0.070 / 2,
+        "volume_fraction": 0.2,
+    },
+    {
         "radius": 0.110 / 2,
         "volume_fraction": 0.1,
     },
     {
+        "radius": 0.110 / 2,
+        "volume_fraction": 0.2,
+    },
+    {
         "radius": 0.350 / 2,
         "volume_fraction": 0.1,
+    },
+    {
+        "radius": 0.350 / 2,
+        "volume_fraction": 0.2,
     }
 ]
 
@@ -53,11 +65,10 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 100_000
+n_photons = 1
 
 # Events study
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
-
 
 
 # Sensor parameters
@@ -65,13 +76,21 @@ theta_max_far_field = np.deg2rad(5)
 phi_max_far_field = 2 * np.pi
 n_theta_far_field = 400
 n_phi_far_field = 360
-t_max_far_field = 0
-
-# Light speed is always 1 nm/s
 d_theta = theta_max_far_field / n_theta_far_field
 d_phi = phi_max_far_field / n_phi_far_field
-d_time = 0.0
 
+# Light speed is always 1 nm/s
+t_max = 200
+d_time = 50
+
+
+
+# Statistics sensor parameters
+stats_t_max = t_max
+stats_d_time = d_time
+max_events = 1000
+max_depth = 100 * 10.0  # mean free path is expected to be around 10 nm, so this covers up to 100 mfp
+n_depth = 10
 
 
 def run_single_simulation(exp, radius, volume_fraction):
@@ -94,24 +113,23 @@ def run_single_simulation(exp, radius, volume_fraction):
     medium.set_scattering_coefficient(mu_scattering)
     medium.set_absorption_coefficient(mu_absortion)
 
-
-
     sens = SensorsGroup()
-    det = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max_far_field, d_theta, d_phi, d_time, False))
+    det = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False))
     det.set_theta_limit(0, theta_max_far_field)
 
     stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
-    stats.set_events_histogram_bins(1000)
+    stats.set_time_resolution(stats_t_max, stats_d_time)
+    stats.set_events_histogram_bins(max_events)
     stats.set_theta_histogram_bins(0, np.pi/2, 180)
     stats.set_phi_histogram_bins(0, 2*np.pi, 360)
-    stats.set_depth_histogram_bins(100*mean_free_path, 200)
+    stats.set_depth_histogram_bins(max_depth, n_depth)
 
     scattering_order_detectors = {
         order: None for order in scattering_order_bins
     }
 
     for order in scattering_order_bins:
-        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max_far_field, d_theta, d_phi, d_time, False))
+        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False))
         det_order.set_theta_limit(0, theta_max_far_field)
         det_order.set_events_limit(order, order)
         scattering_order_detectors[order] = det_order

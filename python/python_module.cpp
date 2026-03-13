@@ -435,9 +435,12 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("max_depth", &StatisticsSensor::max_depth)
       .def_readonly("n_bins_depth", &StatisticsSensor::n_bins_depth)
       .def_readonly("ddepth", &StatisticsSensor::ddepth)
-      .def_readonly("max_time", &StatisticsSensor::max_time)
+     .def_readonly("N_t", &StatisticsSensor::N_t)
+     .def_readonly("dt", &StatisticsSensor::dt)
+     .def_readonly("t_max", &StatisticsSensor::t_max)
+      .def_readonly("h_max_time", &StatisticsSensor::h_max_time)
       .def_readonly("n_bins_time", &StatisticsSensor::n_bins_time)
-      .def_readonly("dtime", &StatisticsSensor::dtime)
+      .def_readonly("h_dtime", &StatisticsSensor::h_dtime)
       .def_readonly("max_weight", &StatisticsSensor::max_weight)
       .def_readonly("n_bins_weight", &StatisticsSensor::n_bins_weight)
       .def_readonly("dweight", &StatisticsSensor::dweight)
@@ -449,6 +452,8 @@ PYBIND11_MODULE(_core, m)
            "Set the bins for the phi histogram")
       .def("set_depth_histogram_bins", &StatisticsSensor::set_depth_histogram_bins, py::arg("max_depth"), py::arg("n_bins"),
            "Set the bins for the depth histogram")
+      .def("set_time_resolution", &StatisticsSensor::set_time_resolution, py::arg("len_t"), py::arg("dt"),
+           "Configure temporal resolution: bin 0 integrated, bins >=1 time windows")
       .def("set_time_histogram_bins", &StatisticsSensor::set_time_histogram_bins, py::arg("max_time"), py::arg("n_bins"),
            "Set the bins for the time histogram")
       .def("set_weight_histogram_bins", &StatisticsSensor::set_weight_histogram_bins, py::arg("max_weight"), py::arg("n_bins"),
