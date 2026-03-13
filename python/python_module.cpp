@@ -501,26 +501,33 @@ PYBIND11_MODULE(_core, m)
            py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("theta"),
            "Sample the azimuthal angle conditioned on scattering angle theta")
       .def("scattering_efficiency", &ScatteringMedium::scattering_efficiency,
-            "Calculate the scattering efficiency Q_sca for the medium")
+           "Calculate the scattering efficiency Q_sca for the medium")
       .def("scattering_cross_section", &ScatteringMedium::scattering_cross_section,
-            "Calculate the scattering cross-section sigma_sca for the medium")
+           "Calculate the scattering cross-section sigma_sca for the medium")
       .def("scattering_matrix", &ScatteringMedium::scattering_matrix, py::arg("theta"),
            py::arg("phi"),
-           "Get the scattering matrix for given angles and wavenumber");
+           "Get the scattering matrix for given angles and wavenumber")
+      .def("set_scattering_coefficient", &ScatteringMedium::set_scattering_coefficient, py::arg("mu_s"),
+           "Set the scattering coefficient mu_s for the medium")
+      .def("set_absorption_coefficient", &ScatteringMedium::set_absorption_coefficient, py::arg("mu_a"),
+           "Set the absorption coefficient mu_a for the medium");
 
   py::class_<RGDMedium, ScatteringMedium>(m, "RGDMedium")
-      .def(py::init<double, double, PhaseFunction *, double, double, double, double, double>(),
-           py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"),
-           py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
+      .def(py::init<PhaseFunction *, double, double, double, double>(),
+           py::arg("phase_func"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
       .def_readonly("mean_free_path", &RGDMedium::mean_free_path)
-      .def_readonly("radius", &RGDMedium::radius);
+      .def_readonly("radius", &RGDMedium::radius)
+      .def("set_mean_free_path", &RGDMedium::set_mean_free_path, py::arg("mfp"),
+           "Set the mean free path for the medium (overrides n_particle) and updates mu_s accordingly");
 
   py::class_<MieMedium, ScatteringMedium>(m, "MieMedium")
-      .def(py::init<double, double, PhaseFunction *, double, double, double, double, double>(),
-           py::arg("absorption"), py::arg("scattering"), py::arg("phase_func"), py::arg("mfp"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
+      .def(py::init<PhaseFunction *, double, double, double, double>(),
+           py::arg("phase_func"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
       .def_readonly("mean_free_path", &MieMedium::mean_free_path)
       .def_readonly("radius", &MieMedium::radius)
-      .def_readonly("m", &MieMedium::m);
+      .def_readonly("m", &MieMedium::m)
+      .def("set_mean_free_path", &MieMedium::set_mean_free_path, py::arg("mfp"),
+           "Set the mean free path for the medium (overrides n_particle) and updates mu_s accordingly");
 
   // Sample bindings
   py::class_<SampleLayer>(m, "SampleLayer")
@@ -587,34 +594,18 @@ PYBIND11_MODULE(_core, m)
 
   // Simulation bindings
   py::class_<SimConfig>(m, "SimConfig")
-      .def(py::init<std::size_t, Sample *, Laser *, SensorsGroup *, Absorption *, bool>(),
-           py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"),
-           py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
-           "Initialize a simulation configuration with given parameters")
-      .def(py::init<std::uint64_t, std::size_t, Sample *, Laser *, SensorsGroup *, Absorption *, bool>(),
-           py::arg("rng_seed"), py::arg("n_photons"), py::arg("sample"), py::arg("laser"), py::arg("detector"),
-           py::arg("absorption") = nullptr, py::arg("track_reverse_paths") = false,
-           "Initialize a simulation configuration with given parameters including RNG seed")
-      .def_readonly("seed", &SimConfig::seed)
-      .def_readonly("n_photons", &SimConfig::n_photons)
-      .def_readonly("sample", &SimConfig::sample, pybind11::return_value_policy::reference)
-      .def_readonly("laser", &SimConfig::laser, pybind11::return_value_policy::reference)
-      .def_readonly("detector", &SimConfig::detector, pybind11::return_value_policy::reference)
-      .def_readonly("absorption", &SimConfig::absorption, pybind11::return_value_policy::reference)
-      .def_readonly("track_reverse_paths", &SimConfig::track_reverse_paths)
+      .def(py::init<>(), "Create a default simulation configuration")
+      .def_readwrite("MAX_EVENTS", &SimConfig::MAX_EVENTS)
+      .def_readwrite("seed", &SimConfig::seed)
       .def_readwrite("n_threads", &SimConfig::n_threads)
+      .def_readwrite("n_photons", &SimConfig::n_photons)
+      .def_readwrite("pin_threads_to_cores", &SimConfig::pin_threads_to_cores)
+      .def_readwrite("track_reverse_paths", &SimConfig::track_reverse_paths)
+      .def_readwrite("sample", &SimConfig::sample, pybind11::return_value_policy::reference)
+      .def_readwrite("laser", &SimConfig::laser, pybind11::return_value_policy::reference)
+      .def_readwrite("detector", &SimConfig::detector, pybind11::return_value_policy::reference)
+      .def_readwrite("absorption", &SimConfig::absorption, pybind11::return_value_policy::reference)
       .def_readwrite("progress", &SimConfig::progress);
-
-  m.def(
-      "run_simulation",
-      [](SimConfig &config)
-      {
-        py::gil_scoped_release release;
-        run_simulation(config);
-      },
-      py::arg("config"),
-      "Run the Monte Carlo simulation with the given configuration, medium, "
-      "detector, and laser");
 
   m.def(
       "run_simulation_parallel",

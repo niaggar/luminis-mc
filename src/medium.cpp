@@ -24,9 +24,9 @@ namespace luminis::core
 //  ScatteringMedium — base class
 // ══════════════════════════════════════════════════════════════════════════════
 
-  /// Initialises μ_a, μ_s, μ_t = μ_a + μ_s, and the phase-function pointer.
-  ScatteringMedium::ScatteringMedium(double absorption, double scattering, PhaseFunction *phase_func)
-      : mu_absorption(absorption), mu_scattering(scattering), mu_attenuation(absorption + scattering), phase_function(phase_func) {}
+    /// Initialises the phase-function pointer; optical coefficients default to zero.
+    ScatteringMedium::ScatteringMedium(PhaseFunction *phase_func)
+      : phase_function(phase_func) {}
 
   double ScatteringMedium::sample_azimuthal_angle(Rng &rng) const
   {
@@ -58,14 +58,25 @@ namespace luminis::core
     std::exit(EXIT_FAILURE);
   }
 
+  void ScatteringMedium::set_scattering_coefficient(double mu_s)
+  {
+    mu_scattering = mu_s;
+    mu_attenuation = mu_absorption + mu_scattering;
+  }
+
+  void ScatteringMedium::set_absorption_coefficient(double mu_a)
+  {
+    mu_absorption = mu_a;
+    mu_attenuation = mu_absorption + mu_scattering;
+  }
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  RGDMedium — Rayleigh-Gans-Debye (RGD) approximation
 // ══════════════════════════════════════════════════════════════════════════════
 
-  RGDMedium::RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength)
-      : ScatteringMedium(absorption, scattering, phase_func)
+  RGDMedium::RGDMedium(PhaseFunction *phase_func, double r, double n_particle, double n_medium, double wavelength)
+      : ScatteringMedium(phase_func)
   {
-    mean_free_path = mfp;
     radius = r;
     this->n_particle = n_particle;
     this->n_medium = n_medium;
@@ -150,16 +161,20 @@ namespace luminis::core
     return Q_sca * geometric_cross_section;
   }
 
+  void RGDMedium::set_mean_free_path(double mfp)
+  {
+    mean_free_path = mfp;
+  }
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  MieMedium — Mie theory via MIEV0 with precomputed S1/S2 tables
 // ══════════════════════════════════════════════════════════════════════════════
 
-  MieMedium::MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength)
-      : ScatteringMedium(absorption, scattering, phase_func)
+  MieMedium::MieMedium(PhaseFunction *phase_func, double r, double n_particle, double n_medium, double wavelength)
+      : ScatteringMedium(phase_func)
   {
-    mean_free_path = mfp;
-    radius = r;
+    this->radius = r;
     this->n_particle = n_particle;
     this->n_medium = n_medium;
     this->m = std::complex<double>(n_particle/n_medium, 0); // purely real relative index
@@ -252,6 +267,11 @@ namespace luminis::core
 
     S1_table.initialize(theta_values, s1_values);
     S2_table.initialize(theta_values, s2_values);
+  }
+
+  void MieMedium::set_mean_free_path(double mfp)
+  {
+    mean_free_path = mfp;
   }
 
 } // namespace luminis::core

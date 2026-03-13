@@ -137,9 +137,12 @@ con polarización vectorial (matrices de Jones / parámetros de Stokes).
 4.1 Configuración (SimConfig)
 ─────────────────────────────
 SimConfig agrupa todos los componentes necesarios:
+  - MAX_EVENTS:          límite de eventos de scattering por fotón (default 1000)
   - n_photons:           número total de fotones a simular
   - n_threads:           número de hilos para ejecución paralela
+                         (si n_threads = 0, usa hardware_concurrency)
   - seed:                semilla del RNG (por defecto, std::random_device{})
+  - pin_threads_to_cores:flag reservado para afinidad de hilos (actualmente no aplicado)
   - sample:              puntero al Sample (muestra por capas compartiendo n_medio)
   - laser:               puntero a la fuente láser
   - detector:            puntero al grupo de sensores
@@ -148,24 +151,22 @@ SimConfig agrupa todos los componentes necesarios:
   - track_reverse_paths: si true, calcula el path reverso para CBS
   - progress:            (opcional) ProgressMonitor para reportar avance
 
-Constructores:
-  - SimConfig(n_photons, sample, laser, detector, absorption, track_reverse_paths)
-      → semilla auto-generada desde std::random_device.
-  - SimConfig(seed, n_photons, sample, laser, detector, absorption, track_reverse_paths)
-      → semilla explícita para reproducibilidad.
-
 4.2 Ejecución paralela (run_simulation_parallel)
 ─────────────────────────────────────────────────
-1. Se distribuyen los n_photons entre n_threads hilos.
-2. Cada hilo recibe:
+1. Se calcula el número efectivo de hilos:
+  - si n_threads = 0, se usa hardware_concurrency
+  - nunca se lanzan más hilos que fotones
+2. Se distribuyen los n_photons entre esos hilos.
+3. Cada hilo recibe:
    - Un clon del SensorsGroup (thread-local, sin locks)
-   - Un clon del Absorption (thread-local)
+  - Un clon del Absorption (thread-local, si absorption != nullptr)
    - Un RNG con semilla derivada (mix_seed(base_seed, thread_id))
-3. Cada hilo ejecuta run_photon() para cada uno de sus fotones.
-4. Si hay un ProgressMonitor, cada hilo llama tick() tras cada fotón
+4. Cada hilo ejecuta run_photon() para cada uno de sus fotones.
+5. Si hay un ProgressMonitor, cada hilo llama tick() tras cada fotón
    (operación atómica lock-free).
-5. Al finalizar todos los hilos, se hace merge de los detectores locales
+6. Al finalizar todos los hilos, se hace merge de los detectores locales
    al detector principal (merge_from), y lo mismo con Absorption.
+7. Si un hilo lanza una excepción, se propaga al hilo principal tras el join.
 
 4.3 Loop de propagación del fotón (run_photon)
 ───────────────────────────────────────────────
@@ -181,8 +182,9 @@ Para cada fotón:
         m y n son los ejes de polarización y s es la dirección de propagación.
       - La velocidad del fotón se establece como v = light_speed_in_medium()
         del Sample.
-      - El fotón se ubica en la capa inicial (current_layer = 0).
-      - Para CBS: se guardan P0, r_0, polarización inicial, T = I.
+      - El fotón se ubica en la capa inicial usando get_layer_index_at(pos.z).
+      - Para CBS: se reinician P0, P1, Pn2, Pn1, Pn, r_1, r_n,
+        polarización inicial y T = I.
 
   (b) Step + cruce de interfaces:
       1. Muestrea un camino libre desde el medio de la capa actual.
@@ -244,7 +246,7 @@ Para cada fotón:
   (i) Absorción parcial y Russian roulette:
       - El peso se reduce: w *= μ_s / μ_t (albedo)
       - Si w < 1e-4: ruleta rusa (10% chance de sobrevivir con w/0.1)
-      - Si events > 1000: el fotón muere.
+      - Si events > MAX_EVENTS: el fotón muere (configurable en SimConfig).
 
 
 5. EL FOTÓN (Photon)

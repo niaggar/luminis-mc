@@ -14,7 +14,7 @@ from luminis_mc import (
 set_log_level(LogLevel.info)
 
 exp_name = "sim_cbs_RGD_multiple"
-base_dir = "/Users/niaggar/Documents/Thesis/Progress/09Mar26"
+base_dir = "/Users/niaggar/Documents/Thesis/Progress/16Mar26"
 
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
@@ -23,19 +23,16 @@ sweep.log_readme("CBS Rayleigh-Gans-Debye simulation test - sweep over particle 
 
 params_sweep = [
     {
-        "radius": 0.070,
-        "mean_free_path": 121.3,
-        "mu_scattering": 1.0 / 121.3,
+        "radius": 0.070 / 2,
+        "volume_fraction": 0.1,
     },
     {
-        "radius": 0.110,
-        "mean_free_path": 34.6,
-        "mu_scattering": 1.0 / 34.6,
+        "radius": 0.110 / 2,
+        "volume_fraction": 0.1,
     },
     {
-        "radius": 0.350,
-        "mean_free_path": 4.9,
-        "mu_scattering": 1.0 / 4.9,
+        "radius": 0.350 / 2,
+        "volume_fraction": 0.1,
     }
 ]
 
@@ -56,18 +53,31 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 1_000_000
-
+n_photons = 100_000
 
 # Events study
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 
-def run_single_simulation(exp, radius, mean_free_path, mu_scattering):
+def run_single_simulation(exp, radius, volume_fraction):
     laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius, laser_type)
     phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
-    medium = RGDMedium(mu_absortion, mu_scattering, phase, mean_free_path, radius, n_particle, n_medium)
-    sample = Sample(n_medium=n_medium)
+    medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
+    sample = Sample(n_medium)
     sample.add_layer(medium, 0.0, float('inf'))
+
+
+    scattering_efficiency = medium.scattering_efficiency()
+    mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
+    mu_scattering = 1 / mean_free_path
+    mu_absortion = 0.0
+
+    print(f"scattering_efficiency {scattering_efficiency:.3f} nm:")
+    print(f"Calculated mean free path: {mean_free_path:.2f} nm, scattering coefficient: {mu_scattering:.4f} 1/nm")
+
+    medium.set_mean_free_path(mean_free_path)
+    medium.set_scattering_coefficient(mu_scattering)
+    medium.set_absorption_coefficient(mu_absortion)
+
 
 
     # Sensor parameters
@@ -102,7 +112,13 @@ def run_single_simulation(exp, radius, mean_free_path, mu_scattering):
     monitor = ProgressMonitor()
     monitor.setup(total=n_photons, callback=on_progress, interval_pct=5)
 
-    config = SimConfig(n_photons=n_photons, sample=sample, detector=sens, laser=laser, track_reverse_paths=True)
+    config = SimConfig()
+    config.n_photons = n_photons
+    config.sample = sample
+    config.detector = sens
+    config.laser = laser
+    config.track_reverse_paths = True
+    config.pin_threads_to_cores = False
     config.n_threads = 7
     config.progress = monitor
 
@@ -203,11 +219,12 @@ def run_single_simulation(exp, radius, mean_free_path, mu_scattering):
 
 for i, data in enumerate(params_sweep):
     radius = data["radius"]
-    mean_free_path = data["mean_free_path"]
-    mu_scattering = data["mu_scattering"]
+    volume_fraction = data["volume_fraction"]
 
-    run_name = f"radius_{radius:.3f}_mfp_{mean_free_path:.1f}_ms_{mu_scattering:.1f}"
-    fun = lambda exp, r=radius, mfp=mean_free_path, ms=mu_scattering: run_single_simulation(exp, r, mfp, ms)
+    run_name = f"radius_{radius:.3f}_mfp_{volume_fraction:.1f}"
+    fun = lambda exp, r=radius, v=volume_fraction: run_single_simulation(exp, r, v)
+
+    print(f"Running simulation for radius={radius:.3f}, volume_fraction={volume_fraction:.1f}")
     sweep.run(i, run_name, fun)
 
 
