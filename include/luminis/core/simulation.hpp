@@ -1,24 +1,19 @@
 /**
  * @file simulation.hpp
- * @brief Simulation configuration and transport loop entry points.
+ * @brief Simulation configuration and Monte Carlo transport entry points.
  *
- * This header exposes the top-level API for running a Monte Carlo photon
- * transport simulation:
+ * This header exposes the public API used by the simulation engine:
  *
- * - **SimConfig** — aggregates all run parameters (photon count, threads,
- *   RNG seed, pointers to medium, laser, detector group, and optional
- *   time-dependent absorption) into a single configuration struct.
+ * - **SimConfig**: non-owning run configuration (sample, laser, sensors,
+ *   optional absorption recorder, RNG seed, thread count, and execution flags).
  *
- * - **run_simulation()** — single-threaded driver: emits each photon from
- *   the laser and calls `run_photon()` in sequence.
+ * - **run_simulation_parallel()**: multi-threaded driver that partitions the
+ *   photon budget across workers, runs independent detector/absorption clones,
+ *   and merges thread-local results into the shared objects.
  *
- * - **run_simulation_parallel()** — multi-threaded driver: splits the photon
- *   budget across worker threads, each with its own cloned detector and RNG,
- *   then merges results back into the shared detector after completion.
- *
- * - **run_photon()** — the core transport loop for a single photon: free-path
- *   sampling, detector intersection, scattering angle sampling, polarization
- *   update, CBS frame-history bookkeeping, weight update, and Russian roulette.
+ * - **run_photon()**: core per-photon transport kernel (free-path sampling,
+ *   interface handling, detection, scattering, polarization update, optional
+ *   CBS bookkeeping, absorption split, and Russian roulette termination).
  *
  * ## Parallelism model
  * `run_simulation_parallel()` follows a clone-merge pattern: before launching
@@ -30,7 +25,7 @@
  *
  * ## CBS bookkeeping
  * When `SimConfig::track_reverse_paths` is `true`, `run_photon()` maintains
- * the CBS frame history fields on the `Photon` struct (P0, P1, Pn1, Pn, r_0,
+ * the CBS frame history fields on the `Photon` struct (P0, P1, Pn1, Pn, r_1,
  * r_n, matrix_T). These are consumed by `coherent_calculation()` inside
  * `FarFieldCBSSensor::process_hit()` to compute the reverse-path amplitude.
  *
@@ -61,9 +56,9 @@ namespace luminis::core
   /**
    * @brief Aggregates all parameters required to run a Monte Carlo simulation.
    *
-   * Pass a fully populated `SimConfig` to `run_simulation()` or
-   * `run_simulation_parallel()`. All pointer members are non-owning; the
-   * caller is responsible for the lifetime of the referenced objects.
+   * Pass a fully populated `SimConfig` to `run_simulation_parallel()`. All
+   * pointer members are non-owning; the caller is responsible for the lifetime
+   * of the referenced objects.
    *
    * @note Setting `track_reverse_paths = true` enables CBS bookkeeping inside
    *       `run_photon()` at a small per-scattering overhead. Only needed when
@@ -71,9 +66,15 @@ namespace luminis::core
    */
   struct SimConfig
   {
+    /// Maximum scattering events per photon before forced termination.
+    /// Guards against infinite loops in highly scattering media.
+    int MAX_EVENTS = 1000;
+
     std::uint64_t seed = std::random_device{}(); ///< RNG seed. Defaults to a non-deterministic device seed.
     std::size_t n_threads = 1;                   ///< Number of worker threads for parallel execution.
     std::size_t n_photons;                       ///< Total number of photon packets to simulate.
+
+    bool pin_threads_to_cores{false}; ///< Requests per-worker thread affinity in run_simulation_parallel (best effort, platform dependent).
 
     bool track_reverse_paths{false}; ///< Enable CBS reverse-path tracking (populates P0/P1/Pn/matrix_T on each Photon).
 
@@ -83,31 +84,6 @@ namespace luminis::core
     Absorption *absorption{nullptr}; ///< Optional absorption recorder; may be null.
 
     luminis::log::ProgressMonitor *progress{nullptr}; ///< Optional progress monitor; may be null.
-
-    /**
-     * @brief Constructs a SimConfig with an auto-generated RNG seed.
-     *
-     * @param n  Total number of photons to simulate.
-     * @param s  Pointer to the layered sample.
-     * @param l  Pointer to the photon source.
-     * @param d  Pointer to the sensor group.
-     * @param a  Pointer to the absorption recorder (may be null).
-     * @param track_reverse_paths  Enable CBS reverse-path bookkeeping.
-     */
-    SimConfig(std::size_t n, Sample *s = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, Absorption *a = nullptr, bool track_reverse_paths = false);
-
-    /**
-     * @brief Constructs a SimConfig with an explicit RNG seed for reproducibility.
-     *
-     * @param s  64-bit RNG seed.
-     * @param n  Total number of photons to simulate.
-     * @param sa Pointer to the layered sample.
-     * @param l  Pointer to the photon source.
-     * @param d  Pointer to the sensor group.
-     * @param a  Pointer to the absorption recorder (may be null).
-     * @param track_reverse_paths  Enable CBS reverse-path bookkeeping.
-     */
-    SimConfig(std::uint64_t s, std::size_t n, Sample *sa = nullptr, Laser *l = nullptr, SensorsGroup *d = nullptr, Absorption *a = nullptr, bool track_reverse_paths = false);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -115,15 +91,16 @@ namespace luminis::core
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * @brief Runs the simulation on a single thread.
+   * @brief Validates that the minimum required SimConfig pointers are set.
    *
-   * Emits `config.n_photons` photons from the laser in sequence, propagating
-   * each through the medium and recording hits in the sensor group.
-   * Suitable for debugging and small-photon-count runs.
+   * Checks that `config.sample`, `config.laser`, and `config.detector` are
+   * non-null. Throws `std::invalid_argument` when any required pointer is
+   * missing.
    *
-   * @param config  Fully populated simulation configuration.
+   * @param config  Simulation configuration to validate.
+   * @throws std::invalid_argument if a required pointer is null.
    */
-  void run_simulation(const SimConfig &config);
+  void validate_sim_config(const SimConfig &config);
 
   /**
    * @brief Runs the simulation using multiple threads.
@@ -137,7 +114,10 @@ namespace luminis::core
    * Thread RNG streams are seeded with `mix_seed(config.seed, thread_index)`
    * to guarantee statistical independence.
    *
-   * @param config  Fully populated simulation configuration.
+  * @param config  Fully populated simulation configuration.
+  *
+  * @note The function expects valid non-null pointers in `config.sample`,
+  *       `config.laser`, and `config.detector`.
    * @throws Any exception thrown inside a worker thread is re-thrown after
    *         all threads have joined.
    */
@@ -164,7 +144,8 @@ namespace luminis::core
    * @param rng                 Per-thread random number generator.
    * @param absorption          Optional absorption recorder (nullptr to skip recording).
    * @param track_reverse_paths Enable CBS reverse-path bookkeeping.
+   * @param max_events          Maximum scattering events per photon before forced termination.
    */
-  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, Absorption *absorption, bool track_reverse_paths);
+  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, Absorption *absorption, bool track_reverse_paths, int max_events);
   
 } // namespace luminis::core

@@ -3,10 +3,11 @@
  * @brief Implementation of the Monte Carlo photon transport engine.
  *
  * Contains the implementations of:
- * - `SimConfig` constructors
- * - `run_simulation()` — single-threaded driver
  * - `run_simulation_parallel()` — multi-threaded driver (clone-merge pattern)
  * - `run_photon()` — per-photon transport kernel
+ *
+ * The single-thread path currently routes through the same transport kernel
+ * by selecting `n_threads = 1` in `SimConfig`.
  *
  * @see simulation.hpp for the full API documentation and design notes.
  */
@@ -23,67 +24,98 @@
 #include <exception>
 #include <atomic>
 #include <sstream>
+#include <stdexcept>
+
+#if defined(__linux__)
+#include <pthread.h>
+#include <sched.h>
+#elif defined(__APPLE__)
+#include <pthread.h>
+#include <mach/mach.h>
+#include <mach/thread_act.h>
+#include <mach/thread_policy.h>
+#endif
 
 namespace luminis::core
 {
+  bool pin_current_thread_to_core(std::size_t core_index, std::string &error_msg)
+    {
+#if defined(__linux__)
+      const unsigned int hw_threads = std::thread::hardware_concurrency();
+      const std::size_t target_core = (hw_threads > 0) ? (core_index % hw_threads) : 0;
+
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(static_cast<int>(target_core), &cpuset);
+
+      const int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+      if (rc != 0)
+      {
+        error_msg = "pthread_setaffinity_np failed with error code " + std::to_string(rc);
+        return false;
+      }
+      return true;
+#elif defined(__APPLE__)
+      // macOS does not expose strict core pinning in public APIs. The
+      // affinity tag is a scheduler hint used as a best-effort alternative.
+      const integer_t tag = static_cast<integer_t>((core_index % 65535u) + 1u);
+      thread_affinity_policy_data_t policy = {tag};
+      const thread_port_t mach_thread = pthread_mach_thread_np(pthread_self());
+      const kern_return_t kr = thread_policy_set(
+          mach_thread,
+          THREAD_AFFINITY_POLICY,
+          reinterpret_cast<thread_policy_t>(&policy),
+          THREAD_AFFINITY_POLICY_COUNT);
+      if (kr != KERN_SUCCESS)
+      {
+        error_msg = "thread_policy_set(THREAD_AFFINITY_POLICY) failed with code " + std::to_string(kr);
+        return false;
+      }
+      return true;
+#else
+      (void)core_index;
+      error_msg = "thread affinity is not supported on this platform";
+      return false;
+#endif
+    }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Constants
   // ═══════════════════════════════════════════════════════════════════════════
-
-  /// Maximum scattering events per photon before forced termination.
-  /// Guards against infinite loops in highly scattering media.
-  const int MAX_EVENTS = 1000;
 
   using luminis::math::mix_seed;
   using luminis::math::Rng;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SimConfig implementation
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  SimConfig::SimConfig(std::size_t n, Sample *s, Laser *l, SensorsGroup *d, Absorption *a, bool track_reverse_paths)
-      : n_photons(n), sample(s), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
-
-  SimConfig::SimConfig(std::uint64_t seed, std::size_t n, Sample *s, Laser *l, SensorsGroup *d, Absorption *a, bool track_reverse_paths)
-      : seed(seed), n_photons(n), sample(s), laser(l), detector(d), absorption(a), track_reverse_paths(track_reverse_paths) {}
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Single-threaded driver
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  void run_simulation(const SimConfig &config)
-  {
-    Rng rng(config.seed);
-
-    // Photon velocity is uniform across all layers (shared host medium).
-    const double initial_velocity = config.sample->light_speed_in_medium();
-
-    for (std::size_t i = 0; i < config.n_photons; ++i)
-    {
-      Photon photon = config.laser->emit_photon(rng);
-      photon.velocity = initial_velocity;
-      photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
-      run_photon(photon, *config.sample, *config.detector, rng, config.absorption, config.track_reverse_paths);
-
-      if (config.progress)
-        config.progress->tick();
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // Multi-threaded driver
   // ═══════════════════════════════════════════════════════════════════════════
 
+  void validate_sim_config(const SimConfig &config)
+  {
+    if (config.sample == nullptr)
+      throw std::invalid_argument("SimConfig::sample must not be null");
+    if (config.laser == nullptr)
+      throw std::invalid_argument("SimConfig::laser must not be null");
+    if (config.detector == nullptr)
+      throw std::invalid_argument("SimConfig::detector must not be null");
+  }
+
   void run_simulation_parallel(const SimConfig &config)
   {
+    validate_sim_config(config);
+
     // --- Determine effective thread count ---
     // If n_threads == 0, fall back to the hardware concurrency hint.
     // Never spawn more threads than there are photons.
+    int thread_count = std::thread::hardware_concurrency();
+
     std::size_t n_threads = config.n_threads;
     if (n_threads == 0)
       n_threads = std::thread::hardware_concurrency();
     if (n_threads > config.n_photons)
       n_threads = config.n_photons;
+
+    LLOG_INFO("Configuring simulation for {} threads of {} available hardware threads", n_threads, thread_count);
 
     // --- Distribute photons across threads ---
     // Remainder photons are assigned one-per-thread to the first `rem` threads
@@ -126,6 +158,15 @@ namespace luminis::core
                            {
         try
         {
+          if (config.pin_threads_to_cores)
+          {
+            std::string affinity_error;
+            if (!pin_current_thread_to_core(t, affinity_error))
+            {
+              LLOG_WARN("Thread {} affinity request failed: {}", t, affinity_error);
+            }
+          }
+
           // Each thread gets a deterministic but independent seed derived from
           // the global seed and its thread index via mix_seed().
           const std::uint64_t thread_seed = mix_seed(config.seed, static_cast<std::uint64_t>(t));
@@ -148,7 +189,7 @@ namespace luminis::core
             Photon photon = config.laser->emit_photon(rng);
             photon.velocity = initial_velocity;
             photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
-            run_photon(photon, *config.sample, det, rng, abs_ptr, config.track_reverse_paths);
+            run_photon(photon, *config.sample, det, rng, abs_ptr, config.track_reverse_paths, config.MAX_EVENTS);
 
             if (config.progress)
               config.progress->tick();
@@ -192,7 +233,7 @@ namespace luminis::core
   // Per-photon transport kernel
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, Absorption *absorption, bool track_reverse_paths)
+  void run_photon(Photon &photon, Sample &sample, SensorsGroup &detector, Rng &rng, Absorption *absorption, bool track_reverse_paths, int max_events)
   {
     // --- Initialize CBS frame history ---
     // All CBS fields are reset to the launch state so the photon can be reused
@@ -483,17 +524,18 @@ namespace luminis::core
       // Implicit absorption: fraction mu_a/mu_t is deposited, surviving weight
       // is rescaled by mu_s/mu_t so the photon continues with reduced weight.
       // Uses the medium of the layer where scattering occurred.
-      double d_weight = photon.weight * (scatter_medium.mu_absorption / scatter_medium.mu_attenuation);
-      photon.weight = photon.weight * (scatter_medium.mu_scattering / scatter_medium.mu_attenuation);
       photon.events++;
+      double d_weight = 1.0;
+      if (scatter_medium.mu_attenuation > 0)
+      { 
+        const double absorption_prob = scatter_medium.mu_absorption / scatter_medium.mu_attenuation;
+        const double scattering_prob = scatter_medium.mu_scattering / scatter_medium.mu_attenuation;
+        d_weight = photon.weight * absorption_prob;
+        photon.weight *= scattering_prob;
+      }
 
       if (absorption)
       {
-        if (scatter_medium.mu_absorption == 0.0)
-        {
-          d_weight = 1.0;
-        }
-
         absorption->record_absorption(photon, d_weight);
       }
 
@@ -512,7 +554,7 @@ namespace luminis::core
         }
       }
 
-      if (photon.events > MAX_EVENTS)
+      if (photon.events > max_events)
       {
         photon.alive = false;
         break;

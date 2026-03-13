@@ -60,7 +60,6 @@ from ._core import (
     Absorption,
     # Simulation
     SimConfig,
-    run_simulation,
     run_simulation_parallel,
     # Logger
     ProgressMonitor,
@@ -143,7 +142,6 @@ __all__ = [
     "Absorption",
     # Simulation
     "SimConfig",
-    "run_simulation",
     "run_simulation_parallel",
     # Logger
     "ProgressMonitor",

@@ -68,9 +68,9 @@ namespace luminis::core {
 struct ScatteringMedium {
   const PhaseFunction *phase_function{nullptr}; ///< Pointer to the phase-function sampler (not owned)
 
-  const double mu_absorption{0.0};  ///< Absorption coefficient μ_a [1/mm]
-  const double mu_scattering{0.0};  ///< Scattering coefficient μ_s [1/mm]
-  const double mu_attenuation{0.0}; ///< Total attenuation coefficient μ_t = μ_a + μ_s [1/mm]
+  double mu_absorption{0.0};  ///< Absorption coefficient μ_a [1/mm]
+  double mu_scattering{0.0};  ///< Scattering coefficient μ_s [1/mm]
+  double mu_attenuation{0.0}; ///< Total attenuation coefficient μ_t = μ_a + μ_s [1/mm]
 
   double n_particle;     ///< Real refractive index of the scatterer
   double n_medium;       ///< Real refractive index of the surrounding medium (used for contrast ratio)
@@ -83,12 +83,10 @@ struct ScatteringMedium {
   /**
    * @brief Construct a scattering medium from its bulk optical coefficients.
    *
-   * @param absorption     Absorption coefficient μ_a [1/mm].
-   * @param scattering     Scattering coefficient μ_s [1/mm].
    * @param phase_func     Pointer to the phase-function sampler.
    *                       Must remain valid for the lifetime of this object.
    */
-  ScatteringMedium(double absorption, double scattering, PhaseFunction *phase_func);
+  ScatteringMedium(PhaseFunction *phase_func);
 
   // ── Sampling interface ─────────────────────────────────────────────────────
 
@@ -154,6 +152,10 @@ struct ScatteringMedium {
   virtual double scattering_efficiency() const = 0;
 
   virtual double scattering_cross_section() const = 0;
+
+  void set_scattering_coefficient(double mu_s);
+
+  void set_absorption_coefficient(double mu_a);
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -176,16 +178,13 @@ struct RGDMedium : public ScatteringMedium {
   /**
    * @brief Construct a RGDMedium.
    *
-   * @param absorption  Absorption coefficient μ_a [1/mm].
-   * @param scattering  Scattering coefficient μ_s [1/mm].
    * @param phase_func  Phase-function sampler (borrowing pointer).
-   * @param mfp         Mean free path [mm].
    * @param r           Particle radius [mm].
    * @param n_particle  Refractive index of the particle.
    * @param n_medium    Refractive index of the surrounding medium.
    * @param wavelength  Vacuum wavelength of light [mm].
    */
-  RGDMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength);
+  RGDMedium(PhaseFunction *phase_func, double r, double n_particle, double n_medium, double wavelength);
 
   /**
    * @brief Sample an exponentially-distributed free path.
@@ -213,6 +212,8 @@ struct RGDMedium : public ScatteringMedium {
   double scattering_efficiency() const override;
 
   double scattering_cross_section() const override;
+
+  void set_mean_free_path(double mfp);
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -242,16 +243,13 @@ struct MieMedium : public ScatteringMedium {
    *
    * Calls `precompute_scattering_tables()` internally with 1000 angle samples.
    *
-   * @param absorption  Absorption coefficient μ_a [1/mm].
-   * @param scattering  Scattering coefficient μ_s [1/mm].
    * @param phase_func  Phase-function sampler (borrowing pointer).
-   * @param mfp         Mean free path [mm].
    * @param r           Particle radius [mm].
    * @param n_particle  Refractive index of the particle.
    * @param n_medium    Refractive index of the surrounding medium.
    * @param wavelength  Vacuum wavelength [mm].
    */
-  MieMedium(double absorption, double scattering, PhaseFunction *phase_func, double mfp, double r, double n_particle, double n_medium, double wavelength);
+  MieMedium(PhaseFunction *phase_func, double r, double n_particle, double n_medium, double wavelength);
 
   /**
    * @brief Sample an exponentially-distributed free path.
@@ -288,6 +286,8 @@ struct MieMedium : public ScatteringMedium {
   double scattering_efficiency() const override;
 
   double scattering_cross_section() const override;
+
+  void set_mean_free_path(double mfp);
 };
 
 } // namespace luminis::core
