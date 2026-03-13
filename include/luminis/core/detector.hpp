@@ -356,8 +356,10 @@ namespace luminis::core
   ///   S3 = 2 * Im(Ex * Ey*)   (circular polarization preference)
   ///
   /// Time resolution:
-  ///   - If dt > 0, data is stored as S0_t[t_idx](x_idx, y_idx) with N_t time bins.
-  ///   - If dt == 0, a single time bin is used (time-integrated).
+  ///   - If dt == 0, only one bin exists (n=0), which stores the time-integrated signal.
+  ///   - If dt > 0, bin n=0 always stores the time-integrated signal and bins n>=1
+  ///     store time windows of width dt. The total number of bins is:
+  ///       N_t = ceil(len_t / dt) + 1.
   ///
   /// Also supports estimator-based detection for improved convergence.
   ///
@@ -382,7 +384,8 @@ namespace luminis::core
     /// @param len_t Total time window length (0 for time-integrated).
     /// @param dx    Pixel size in x.
     /// @param dy    Pixel size in y.
-    /// @param dt    Time bin width (0 for time-integrated, meaning N_t = 1).
+    /// @param dt    Time bin width (0 for time-integrated, meaning N_t = 1;
+    ///              otherwise N_t = ceil(len_t / dt) + 1 with bin 0 integrated).
     /// @details Automatically sets a position filter to the sensor area bounds.
     PlanarFluenceSensor(double z, double len_x, double len_y, double len_t, double dx, double dy, double dt, bool absorb = true, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
@@ -460,7 +463,6 @@ namespace luminis::core
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
     void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
-    void process_estimation(const Photon &photon, const Sample &medium) override;
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -545,13 +547,13 @@ namespace luminis::core
     /// @brief Construct a far-field CBS sensor at z=0.
     /// @param theta_max Maximum polar angle [rad] (measured from exact backscattering).
     /// @param phi_max   Maximum azimuthal angle [rad] (typically 2*pi).
-    /// @param t_max     Total time window length (0 for time-integrated).
-    /// @param n_theta   Number of polar angle bins.
-    /// @param n_phi     Number of azimuthal angle bins.
-    /// @param n_t       Number of time bins (ignored if t_max=0).
+    /// @param len_t     Total time window length (0 for time-integrated).
+    /// @param d_theta   Polar angle bin width [rad].
+    /// @param d_phi     Azimuthal angle bin width [rad].
+    /// @param d_t       Time bin width (0 for time-integrated).
     /// @param estimator If true, this sensor participates in estimator-based detection.
     /// @details Automatically sets theta and phi filters to [0, theta_max] and [0, phi_max].
-    FarFieldCBSSensor(double theta_max, double phi_max, double t_max, int n_theta, int n_phi, int n_t, bool estimator = false);
+    FarFieldCBSSensor(double theta_max, double phi_max, double len_t, double d_theta, double d_phi, double d_t, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
 

@@ -484,134 +484,135 @@ namespace luminis::core
     hits += 1;
   }
 
+  // TODO: Implement
   void PlanarFieldSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
-    const double x = photon.pos.x;
-    const double y = photon.pos.y;
-    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
-    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
-    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
-      return;
+    // const double x = photon.pos.x;
+    // const double y = photon.pos.y;
+    // const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    // const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+    // if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+    //   return;
 
-    // Local base of the detector plane
-    double ud = 0;
-    double vd = 0;
-    double wd = 1;
+    // // Local base of the detector plane
+    // double ud = 0;
+    // double vd = 0;
+    // double wd = 1;
 
-    Matrix Pold = photon.P_local;
-    Matrix Q = Matrix(3, 3);
-    Matrix A = Matrix(3, 3);
+    // Matrix Pold = photon.P_local;
+    // Matrix Q = Matrix(3, 3);
+    // Matrix A = Matrix(3, 3);
 
-    double mu = Pold(2, 0) * ud + Pold(2, 1) * vd + Pold(2, 2) * wd; // Cosine of angle between photon direction and detector normal
-    double nu = sqrt(1 - mu * mu);                                   // Sine of the same angle
-    double F = 1;
+    // double mu = Pold(2, 0) * ud + Pold(2, 1) * vd + Pold(2, 2) * wd; // Cosine of angle between photon direction and detector normal
+    // double nu = sqrt(1 - mu * mu);                                   // Sine of the same angle
+    // double F = 1;
 
-    std::complex<double> E1old = photon.polarization.m;
-    std::complex<double> E2old = photon.polarization.n;
-    std::complex<double> Ed1;
-    std::complex<double> Ed2;
-    Vec3 p;
+    // std::complex<double> E1old = photon.polarization.m;
+    // std::complex<double> E2old = photon.polarization.n;
+    // std::complex<double> Ed1;
+    // std::complex<double> Ed2;
+    // Vec3 p;
 
-    const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
+    // const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
 
-    if (std::abs(1 - mu) < 1e-11)
-    {
-      // Photon is on the same direction as the detector normal
-      Q = Pold;
+    // if (std::abs(1 - mu) < 1e-11)
+    // {
+    //   // Photon is on the same direction as the detector normal
+    //   Q = Pold;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0);
-      double s2 = std::norm(Smatrix(0, 0));
-      double s1 = std::norm(Smatrix(1, 1));
+    //   CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0);
+    //   double s2 = std::norm(Smatrix(0, 0));
+    //   double s1 = std::norm(Smatrix(1, 1));
 
-      F = (s2 + s1) / 2.0;
-      Ed1 = E1old * s2 / sqrt(F);
-      Ed2 = E2old * s1 / sqrt(F);
-    }
-    else if (std::abs(1 + mu) < 1e-11)
-    {
-      // Photon is on the opposite direction of the detector normal
-      Q = Pold;
-      Q(1, 0) *= -1;
-      Q(1, 1) *= -1;
-      Q(1, 2) *= -1;
-      Q(2, 0) *= -1;
-      Q(2, 1) *= -1;
-      Q(2, 2) *= -1;
+    //   F = (s2 + s1) / 2.0;
+    //   Ed1 = E1old * s2 / sqrt(F);
+    //   Ed2 = E2old * s1 / sqrt(F);
+    // }
+    // else if (std::abs(1 + mu) < 1e-11)
+    // {
+    //   // Photon is on the opposite direction of the detector normal
+    //   Q = Pold;
+    //   Q(1, 0) *= -1;
+    //   Q(1, 1) *= -1;
+    //   Q(1, 2) *= -1;
+    //   Q(2, 0) *= -1;
+    //   Q(2, 1) *= -1;
+    //   Q(2, 2) *= -1;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0);
-      double s2 = std::norm(Smatrix(0, 0));
-      double s1 = std::norm(Smatrix(1, 1));
+    //   CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0);
+    //   double s2 = std::norm(Smatrix(0, 0));
+    //   double s1 = std::norm(Smatrix(1, 1));
 
-      F = (s2 + s1) / 2.0;
-      Ed1 = E1old * s2 / sqrt(F);
-      Ed2 = E2old * s1 / sqrt(F);
-    }
-    else
-    {
-      // Cross product to find the rotation axis and angle
-      p = {
-          (Pold(2, 1) * wd - Pold(2, 2) * vd) / nu,
-          (Pold(2, 2) * ud - Pold(2, 0) * wd) / nu,
-          (Pold(2, 0) * vd - Pold(2, 1) * ud) / nu};
+    //   F = (s2 + s1) / 2.0;
+    //   Ed1 = E1old * s2 / sqrt(F);
+    //   Ed2 = E2old * s1 / sqrt(F);
+    // }
+    // else
+    // {
+    //   // Cross product to find the rotation axis and angle
+    //   p = {
+    //       (Pold(2, 1) * wd - Pold(2, 2) * vd) / nu,
+    //       (Pold(2, 2) * ud - Pold(2, 0) * wd) / nu,
+    //       (Pold(2, 0) * vd - Pold(2, 1) * ud) / nu};
 
-      // Dot product to find the cosine and sine of the rotation angle
-      double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
-      double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z;    // n dot p
+    //   // Dot product to find the cosine and sine of the rotation angle
+    //   double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
+    //   double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z;    // n dot p
 
-      A(0, 0) = mu * cosphi;
-      A(0, 1) = mu * sinphi;
-      A(0, 2) = -nu;
-      A(1, 0) = -sinphi;
-      A(1, 1) = cosphi;
-      A(1, 2) = 0;
-      A(2, 0) = nu * cosphi;
-      A(2, 1) = nu * sinphi;
-      A(2, 2) = mu;
+    //   A(0, 0) = mu * cosphi;
+    //   A(0, 1) = mu * sinphi;
+    //   A(0, 2) = -nu;
+    //   A(1, 0) = -sinphi;
+    //   A(1, 1) = cosphi;
+    //   A(1, 2) = 0;
+    //   A(2, 0) = nu * cosphi;
+    //   A(2, 1) = nu * sinphi;
+    //   A(2, 2) = mu;
 
-      matmul(A, Pold, Q);
+    //   matmul(A, Pold, Q);
 
-      double theta = std::acos(mu);
-      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0);
-      double s2 = std::norm(Smatrix(0, 0));
-      double s1 = std::norm(Smatrix(1, 1));
+    //   double theta = std::acos(mu);
+    //   CMatrix Smatrix = current_medium->scattering_matrix(theta, 0);
+    //   double s2 = std::norm(Smatrix(0, 0));
+    //   double s1 = std::norm(Smatrix(1, 1));
 
-      double s2sq = std::norm(Smatrix(0, 0));
-      double s1sq = std::norm(Smatrix(1, 1));
+    //   double s2sq = std::norm(Smatrix(0, 0));
+    //   double s1sq = std::norm(Smatrix(1, 1));
 
-      double e1sq = std::norm(E1old);
-      double e2sq = std::norm(E2old);
-      double e12 = (E1old * conj(E2old)).real();
+    //   double e1sq = std::norm(E1old);
+    //   double e2sq = std::norm(E2old);
+    //   double e12 = (E1old * conj(E2old)).real();
 
-      F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
-      Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
-      Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
-    }
+    //   F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
+    //   Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
+    //   Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
+    // }
 
-    double deposit = 0.0;
-    double z = photon.pos.z;
-    double zd = origin.z;
-    double weight = photon.weight;
-    double csca = 1.0;
+    // double deposit = 0.0;
+    // double z = photon.pos.z;
+    // double zd = origin.z;
+    // double weight = photon.weight;
+    // double csca = 1.0;
 
-    if (photon.events == 0)
-      /* ballistic light */
-      if (std::abs(1 - mu) < 1e-11)
-        deposit = weight * exp(-fabs((z - zd) / wd));
-      else
-        deposit = 0;
-    else
-      deposit = weight * F / csca * exp(-fabs((z - zd) / wd));
+    // if (photon.events == 0)
+    //   /* ballistic light */
+    //   if (std::abs(1 - mu) < 1e-11)
+    //     deposit = weight * exp(-fabs((z - zd) / wd));
+    //   else
+    //     deposit = 0;
+    // else
+    //   deposit = weight * F / csca * exp(-fabs((z - zd) / wd));
 
-    double t = photon.launch_time + (photon.opticalpath / photon.velocity);
-    double td = t + fabs((z - zd) / wd);
+    // double t = photon.launch_time + (photon.opticalpath / photon.velocity);
+    // double td = t + fabs((z - zd) / wd);
 
-    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
-    std::complex<double> Ex = (Ed1 * Q(0, 0) + Ed2 * Q(1, 0)) * phase;
-    std::complex<double> Ey = (Ed1 * Q(0, 1) + Ed2 * Q(1, 1)) * phase;
+    // std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
+    // std::complex<double> Ex = (Ed1 * Q(0, 0) + Ed2 * Q(1, 0)) * phase;
+    // std::complex<double> Ey = (Ed1 * Q(0, 1) + Ed2 * Q(1, 1)) * phase;
 
-    this->Ex(x_idx, y_idx) += Ex * sqrt(deposit);
-    this->Ey(x_idx, y_idx) += Ey * sqrt(deposit);
-    hits += 1;
+    // this->Ex(x_idx, y_idx) += Ex * sqrt(deposit);
+    // this->Ey(x_idx, y_idx) += Ey * sqrt(deposit);
+    // hits += 1;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -632,7 +633,9 @@ namespace luminis::core
     }
     else
     {
-      N_t = static_cast<int>(std::ceil(len_t / dt));
+      // Bin 0 is reserved for time-integrated accumulation.
+      // Time windows occupy bins [1, N_t-1].
+      N_t = static_cast<int>(std::ceil(len_t / dt)) + 1;
     }
 
     N_x = static_cast<int>(std::ceil(len_x / dx));
@@ -690,17 +693,15 @@ namespace luminis::core
   {
     // --- Time-resolved binning ---
     // If dt==0, all photons go into a single time bin (steady-state mode).
-    int t_idx;
-    if (dt == 0)
-    {
-      t_idx = 0;
-    }
-    else
+    int t_idx = -1;
+    if (dt > 0)
     {
       double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
       if (arrival_time < 0 || arrival_time >= len_t)
         return;
-      t_idx = static_cast<int>(arrival_time / dt);
+      t_idx = static_cast<int>(arrival_time / dt) + 1;
+      if (t_idx >= N_t)
+        return;
     }
 
     // --- Spatial binning (grid centered at origin) ---
@@ -733,162 +734,173 @@ namespace luminis::core
     const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
     const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
 
-    S0_t[t_idx](x_idx, y_idx) += S0_contribution;
-    S1_t[t_idx](x_idx, y_idx) += S1_contribution;
-    S2_t[t_idx](x_idx, y_idx) += S2_contribution;
-    S3_t[t_idx](x_idx, y_idx) += S3_contribution;
+    // If time windows are enabled, accumulate into the corresponding temporal bin.
+    if (dt > 0)
+    {
+      S0_t[t_idx](x_idx, y_idx) += S0_contribution;
+      S1_t[t_idx](x_idx, y_idx) += S1_contribution;
+      S2_t[t_idx](x_idx, y_idx) += S2_contribution;
+      S3_t[t_idx](x_idx, y_idx) += S3_contribution;
+    }
+
+    // Always accumulate in bin 0 for time-integrated fluence.
+    S0_t[0](x_idx, y_idx) += S0_contribution;
+    S1_t[0](x_idx, y_idx) += S1_contribution;
+    S2_t[0](x_idx, y_idx) += S2_contribution;
+    S3_t[0](x_idx, y_idx) += S3_contribution;
 
     hits += 1;
   }
 
+  // TODO: Implement
   void PlanarFluenceSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
-    const double x = photon.pos.x;
-    const double y = photon.pos.y;
-    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
-    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
-    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
-      return;
+    // const double x = photon.pos.x;
+    // const double y = photon.pos.y;
+    // const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
+    // const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
+    // if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
+    //   return;
 
-    // Local base of the detector plane
-    double ud = 0;
-    double vd = 0;
-    double wd = 1;
+    // // Local base of the detector plane
+    // double ud = 0;
+    // double vd = 0;
+    // double wd = 1;
 
-    Matrix Pold = photon.P_local;
-    Matrix Q = Matrix(3, 3);
-    Matrix A = Matrix(3, 3);
+    // Matrix Pold = photon.P_local;
+    // Matrix Q = Matrix(3, 3);
+    // Matrix A = Matrix(3, 3);
 
-    double mu = Pold(2, 0) * ud + Pold(2, 1) * vd + Pold(2, 2) * wd; // Cosine of angle between photon direction and detector normal
-    double nu = sqrt(1 - mu * mu);                                   // Sine of the same angle
-    double F = 1;
+    // double mu = Pold(2, 0) * ud + Pold(2, 1) * vd + Pold(2, 2) * wd; // Cosine of angle between photon direction and detector normal
+    // double nu = sqrt(1 - mu * mu);                                   // Sine of the same angle
+    // double F = 1;
 
-    std::complex<double> E1old = photon.polarization.m;
-    std::complex<double> E2old = photon.polarization.n;
-    std::complex<double> Ed1;
-    std::complex<double> Ed2;
-    Vec3 p;
+    // std::complex<double> E1old = photon.polarization.m;
+    // std::complex<double> E2old = photon.polarization.n;
+    // std::complex<double> Ed1;
+    // std::complex<double> Ed2;
+    // Vec3 p;
 
-    const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
+    // const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
 
-    if (std::abs(1 - mu) < 1e-11)
-    {
-      // Photon is on the same direction as the detector normal
-      Q = Pold;
+    // if (std::abs(1 - mu) < 1e-11)
+    // {
+    //   // Photon is on the same direction as the detector normal
+    //   Q = Pold;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0);
-      double s2 = std::norm(Smatrix(0, 0));
-      double s1 = std::norm(Smatrix(1, 1));
+    //   CMatrix Smatrix = current_medium->scattering_matrix(1.0, 0.0);
+    //   double s2 = std::norm(Smatrix(0, 0));
+    //   double s1 = std::norm(Smatrix(1, 1));
 
-      F = (s2 + s1) / 2.0;
-      Ed1 = E1old * s2 / sqrt(F);
-      Ed2 = E2old * s1 / sqrt(F);
-    }
-    else if (std::abs(1 + mu) < 1e-11)
-    {
-      // Photon is on the opposite direction of the detector normal
-      Q = Pold;
-      Q(1, 0) *= -1;
-      Q(1, 1) *= -1;
-      Q(1, 2) *= -1;
-      Q(2, 0) *= -1;
-      Q(2, 1) *= -1;
-      Q(2, 2) *= -1;
+    //   F = (s2 + s1) / 2.0;
+    //   Ed1 = E1old * s2 / sqrt(F);
+    //   Ed2 = E2old * s1 / sqrt(F);
+    // }
+    // else if (std::abs(1 + mu) < 1e-11)
+    // {
+    //   // Photon is on the opposite direction of the detector normal
+    //   Q = Pold;
+    //   Q(1, 0) *= -1;
+    //   Q(1, 1) *= -1;
+    //   Q(1, 2) *= -1;
+    //   Q(2, 0) *= -1;
+    //   Q(2, 1) *= -1;
+    //   Q(2, 2) *= -1;
 
-      CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0);
-      double s2 = std::norm(Smatrix(0, 0));
-      double s1 = std::norm(Smatrix(1, 1));
+    //   CMatrix Smatrix = current_medium->scattering_matrix(M_PI, 0.0);
+    //   double s2 = std::norm(Smatrix(0, 0));
+    //   double s1 = std::norm(Smatrix(1, 1));
 
-      F = (s2 + s1) / 2.0;
-      Ed1 = E1old * s2 / sqrt(F);
-      Ed2 = E2old * s1 / sqrt(F);
-    }
-    else
-    {
-      // Cross product to find the rotation axis and angle
-      p = {
-          (Pold(2, 1) * wd - Pold(2, 2) * vd) / nu,
-          (Pold(2, 2) * ud - Pold(2, 0) * wd) / nu,
-          (Pold(2, 0) * vd - Pold(2, 1) * ud) / nu};
+    //   F = (s2 + s1) / 2.0;
+    //   Ed1 = E1old * s2 / sqrt(F);
+    //   Ed2 = E2old * s1 / sqrt(F);
+    // }
+    // else
+    // {
+    //   // Cross product to find the rotation axis and angle
+    //   p = {
+    //       (Pold(2, 1) * wd - Pold(2, 2) * vd) / nu,
+    //       (Pold(2, 2) * ud - Pold(2, 0) * wd) / nu,
+    //       (Pold(2, 0) * vd - Pold(2, 1) * ud) / nu};
 
-      // Dot product to find the cosine and sine of the rotation angle
-      double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
-      double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z;    // n dot p
+    //   // Dot product to find the cosine and sine of the rotation angle
+    //   double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
+    //   double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z;    // n dot p
 
-      A(0, 0) = mu * cosphi;
-      A(0, 1) = mu * sinphi;
-      A(0, 2) = -nu;
-      A(1, 0) = -sinphi;
-      A(1, 1) = cosphi;
-      A(1, 2) = 0;
-      A(2, 0) = nu * cosphi;
-      A(2, 1) = nu * sinphi;
-      A(2, 2) = mu;
+    //   A(0, 0) = mu * cosphi;
+    //   A(0, 1) = mu * sinphi;
+    //   A(0, 2) = -nu;
+    //   A(1, 0) = -sinphi;
+    //   A(1, 1) = cosphi;
+    //   A(1, 2) = 0;
+    //   A(2, 0) = nu * cosphi;
+    //   A(2, 1) = nu * sinphi;
+    //   A(2, 2) = mu;
 
-      matmul(A, Pold, Q);
+    //   matmul(A, Pold, Q);
 
-      double theta = std::acos(mu);
-      CMatrix Smatrix = current_medium->scattering_matrix(theta, 0);
-      double s2 = std::norm(Smatrix(0, 0));
-      double s1 = std::norm(Smatrix(1, 1));
+    //   double theta = std::acos(mu);
+    //   CMatrix Smatrix = current_medium->scattering_matrix(theta, 0);
+    //   double s2 = std::norm(Smatrix(0, 0));
+    //   double s1 = std::norm(Smatrix(1, 1));
 
-      double s2sq = std::norm(Smatrix(0, 0));
-      double s1sq = std::norm(Smatrix(1, 1));
+    //   double s2sq = std::norm(Smatrix(0, 0));
+    //   double s1sq = std::norm(Smatrix(1, 1));
 
-      double e1sq = std::norm(E1old);
-      double e2sq = std::norm(E2old);
-      double e12 = (E1old * conj(E2old)).real();
+    //   double e1sq = std::norm(E1old);
+    //   double e2sq = std::norm(E2old);
+    //   double e12 = (E1old * conj(E2old)).real();
 
-      F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
-      Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
-      Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
-    }
+    //   F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
+    //   Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
+    //   Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
+    // }
 
-    double deposit = 0.0;
-    double z = photon.pos.z;
-    double zd = origin.z;
-    double weight = photon.weight;
-    double csca = 1.0;
+    // double deposit = 0.0;
+    // double z = photon.pos.z;
+    // double zd = origin.z;
+    // double weight = photon.weight;
+    // double csca = 1.0;
 
-    if (photon.events == 0)
-      /* ballistic light */
-      if (std::abs(1 - mu) < 1e-11)
-        deposit = weight * exp(-fabs((z - zd) / wd));
-      else
-        deposit = 0;
-    else
-      deposit = weight * F / csca * exp(-fabs((z - zd) / wd));
+    // if (photon.events == 0)
+    //   /* ballistic light */
+    //   if (std::abs(1 - mu) < 1e-11)
+    //     deposit = weight * exp(-fabs((z - zd) / wd));
+    //   else
+    //     deposit = 0;
+    // else
+    //   deposit = weight * F / csca * exp(-fabs((z - zd) / wd));
 
-    double t = photon.launch_time + (photon.opticalpath / photon.velocity);
-    double td = t + fabs((z - zd) / wd);
+    // double t = photon.launch_time + (photon.opticalpath / photon.velocity);
+    // double td = t + fabs((z - zd) / wd);
 
-    std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
-    std::complex<double> Ex = (Ed1 * Q(0, 0) + Ed2 * Q(1, 0)) * phase * -1.0;
-    std::complex<double> Ey = (Ed1 * Q(0, 1) + Ed2 * Q(1, 1)) * phase;
+    // std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
+    // std::complex<double> Ex = (Ed1 * Q(0, 0) + Ed2 * Q(1, 0)) * phase * -1.0;
+    // std::complex<double> Ey = (Ed1 * Q(0, 1) + Ed2 * Q(1, 1)) * phase;
 
-    const double S0_contribution = std::norm(Ex) + std::norm(Ey);
-    const double S1_contribution = std::norm(Ex) - std::norm(Ey);
-    const double S2_contribution = 2.0 * std::real(Ex * std::conj(Ey));
-    const double S3_contribution = 2.0 * std::imag(Ex * std::conj(Ey));
+    // const double S0_contribution = std::norm(Ex) + std::norm(Ey);
+    // const double S1_contribution = std::norm(Ex) - std::norm(Ey);
+    // const double S2_contribution = 2.0 * std::real(Ex * std::conj(Ey));
+    // const double S3_contribution = 2.0 * std::imag(Ex * std::conj(Ey));
 
-    int t_idx;
-    if (dt == 0)
-    {
-      t_idx = 0;
-    }
-    else    {
-      double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity) + fabs((z - zd) / wd);
-      if (arrival_time < 0 || arrival_time >= len_t)
-        return;
-      t_idx = static_cast<int>(arrival_time / dt);
-    }
+    // int t_idx;
+    // if (dt == 0)
+    // {
+    //   t_idx = 0;
+    // }
+    // else    {
+    //   double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity) + fabs((z - zd) / wd);
+    //   if (arrival_time < 0 || arrival_time >= len_t)
+    //     return;
+    //   t_idx = static_cast<int>(arrival_time / dt);
+    // }
 
-    S0_t[t_idx](x_idx, y_idx) += S0_contribution * deposit;
-    S1_t[t_idx](x_idx, y_idx) += S1_contribution * deposit;
-    S2_t[t_idx](x_idx, y_idx) += S2_contribution * deposit;
-    S3_t[t_idx](x_idx, y_idx) += S3_contribution * deposit;
+    // S0_t[t_idx](x_idx, y_idx) += S0_contribution * deposit;
+    // S1_t[t_idx](x_idx, y_idx) += S1_contribution * deposit;
+    // S2_t[t_idx](x_idx, y_idx) += S2_contribution * deposit;
+    // S3_t[t_idx](x_idx, y_idx) += S3_contribution * deposit;
 
-    hits += 1;
+    // hits += 1;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -950,6 +962,7 @@ namespace luminis::core
     }
   }
 
+  // TODO: Implement
   void PlanarCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
     const double x = info.intersection_point.x;
@@ -994,6 +1007,7 @@ namespace luminis::core
     hits += 1;
   }
 
+  // TODO: Implement
   void PlanarCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     // Not implemented for CBS sensor since it relies on interference between forward and reverse paths, which cannot be captured by estimation.
@@ -1085,136 +1099,32 @@ namespace luminis::core
     hits += 1;
   }
 
-  void FarFieldFluenceSensor::process_estimation(const Photon &photon, const Sample &medium)
-  {
-    const double EPSILON = 1e-10;
-    Vec3 r_scat = photon.pos;
-    double z = r_scat.z;
-    double zd = origin.z;
-
-    Matrix Pold = photon.P_local;
-    Matrix Q = Matrix(3, 3);
-    Matrix A = Matrix(3, 3);
-
-    std::complex<double> E1old = photon.polarization.m;
-    std::complex<double> E2old = photon.polarization.n;
-    std::complex<double> Ed1;
-    std::complex<double> Ed2;
-
-    double F;
-
-    for (int i = 0; i < N_theta; ++i)
-    {
-      for (int j = 0; j < N_phi; ++j)
-      {
-        // double theta = (i + 0.5) * dtheta;
-        // double phi = (j + 0.5) * dphi;
-
-        // Vec3 S_detector = {std::sin(theta) * std::cos(phi), std::sin(theta) * std::sin(phi), -std::cos(theta)};
-
-        // // Distancia proyectada hacia Z=0
-        // double dist_to_boundary = z - zd;
-        // double attenuation = std::exp(-medium.mu_attenuation * dist_to_boundary);
-        // if (attenuation < 1e-12)
-        //   continue;
-
-        // // 4. Geometría de Scattering (Igual que en el espacial, pero con s_out fijo por el loop)
-        // // mu_scat = cos(angulo entre direccion actual y salida)
-        // double mu_scat = dot(Vec3{photon.P_local(2, 0), photon.P_local(2, 1), photon.P_local(2, 2)}, S_detector);
-        // if (mu_scat > 1.0)
-        //   mu_scat = 1.0;
-        // if (mu_scat < -1.0)
-        //   mu_scat = -1.0;
-        // double nu_scat = sqrt(1 - mu_scat * mu_scat);
-
-        // // Vector perpendicular al plano de scattering
-        // Vec3 p = cross(Vec3{photon.P_local(2, 0), photon.P_local(2, 1), photon.P_local(2, 2)}, S_detector);
-
-        // // Proyecciones (cosphi, sinphi) del campo incidente sobre el plano
-        // double sinphi = -(Pold(0, 0) * p.x + Pold(0, 1) * p.y + Pold(0, 2) * p.z); // m dot p
-        // double cosphi = Pold(1, 0) * p.x + Pold(1, 1) * p.y + Pold(1, 2) * p.z;    // n dot p
-
-        // A(0, 0) = mu_scat * cosphi;
-        // A(0, 1) = mu_scat * sinphi;
-        // A(0, 2) = -nu_scat;
-        // A(1, 0) = -sinphi;
-        // A(1, 1) = cosphi;
-        // A(1, 2) = 0;
-        // A(2, 0) = nu_scat * cosphi;
-        // A(2, 1) = nu_scat * sinphi;
-        // A(2, 2) = mu_scat;
-
-        // matmul(A, Pold, Q);
-
-        // CMatrix Smatrix = medium.scattering_matrix(theta, 0, photon.k);
-        // double s2 = std::norm(Smatrix(0, 0));
-        // double s1 = std::norm(Smatrix(1, 1));
-
-        // double s2sq = std::norm(Smatrix(0, 0));
-        // double s1sq = std::norm(Smatrix(1, 1));
-
-        // double e1sq = std::norm(E1old);
-        // double e2sq = std::norm(E2old);
-        // double e12 = (E1old * conj(E2old)).real();
-
-        // F = (s2sq * e1sq + s1sq * e2sq) * cosphi * cosphi + (s1sq * e1sq + s2sq * e2sq) * sinphi * sinphi + 2 * (s2sq - s1sq) * e12 * cosphi * sinphi;
-        // Ed1 = (cosphi * E1old + sinphi * E2old) * s2 / sqrt(F);
-        // Ed2 = (-sinphi * E1old + cosphi * E2old) * s1 / sqrt(F);
-
-        // double deposit = 0.0;
-        // double z = photon.pos.z;
-        // double zd = origin.z;
-        // double weight = photon.weight;
-        // double csca = 1.0;
-
-        // if (photon.events == 0)
-        //   if (std::abs(1 - mu_scat) < 1e-11)
-        //     deposit = weight * exp(-fabs((z - zd)));
-        //   else
-        //     deposit = 0;
-        // else
-        //   deposit = weight * F / csca * exp(-fabs((z - zd)));
-
-        // double t = photon.launch_time + (photon.opticalpath / photon.velocity);
-        // double td = t + fabs((z - zd));
-
-        // std::complex<double> phase = std::exp(std::complex<double>(0, photon.k * td));
-        // std::complex<double> Ex = (Ed1 * Q(0, 0) + Ed2 * Q(1, 0)) * phase;
-        // std::complex<double> Ey = (Ed1 * Q(0, 1) + Ed2 * Q(1, 1)) * phase;
-
-        // const double S0_contribution = std::norm(Ex) + std::norm(Ey);
-        // const double S1_contribution = std::norm(Ex) - std::norm(Ey);
-        // const double S2_contribution = 2.0 * std::real(Ex * std::conj(Ey));
-        // const double S3_contribution = 2.0 * std::imag(Ex * std::conj(Ey));
-
-        // S0(i, j) += S0_contribution * deposit;
-        // S1(i, j) += S1_contribution * deposit;
-        // S2(i, j) += S2_contribution * deposit;
-        // S3(i, j) += S3_contribution * deposit;
-      }
-    }
-
-    hits++;
-  }
-
   // ═══════════════════════════════════════════════════════════════════════════
   // FarFieldCBSSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
-  FarFieldCBSSensor::FarFieldCBSSensor(double theta_max, double phi_max, double t_max, int n_theta, int n_phi, int n_t, bool estimator) : Sensor(0.0, true, estimator)
+  FarFieldCBSSensor::FarFieldCBSSensor(double theta_max, double phi_max, double len_t, double d_theta, double d_phi, double d_t, bool estimator) : Sensor(0.0, true, estimator)
   {
     this->theta_max = theta_max;
     this->phi_max = phi_max;
-    this->t_max = t_max;
-    this->N_theta = n_theta;
-    this->N_phi = n_phi;
-    this->N_t = n_t;
-    dtheta = theta_max / N_theta;
-    dphi = phi_max / N_phi;
+    this->t_max = len_t;
 
-    if (N_t == 1)
-      dt = 0;
+    dtheta = d_theta;
+    dphi = d_phi;
+    dt = d_t;
+
+    if (dt == 0)
+    {
+      N_t = 1;
+    }
     else
-      dt = t_max / N_t;
+    {
+      // Bin 0 is reserved for time-integrated accumulation.
+      // Time windows occupy bins [1, N_t-1].
+      N_t = static_cast<int>(std::ceil(t_max / dt)) + 1;
+    }
+
+    N_theta = static_cast<int>(std::ceil(theta_max / dtheta));
+    N_phi = static_cast<int>(std::ceil(phi_max / dphi));
     
     S0_coh.resize(N_t, Matrix(N_theta, N_phi));
     S1_coh.resize(N_t, Matrix(N_theta, N_phi));
@@ -1251,7 +1161,7 @@ namespace luminis::core
 
   std::unique_ptr<Sensor> FarFieldCBSSensor::clone() const
   {
-    auto det = std::make_unique<FarFieldCBSSensor>(theta_max, phi_max, t_max, N_theta, N_phi, N_t, estimator_enabled);
+    auto det = std::make_unique<FarFieldCBSSensor>(theta_max, phi_max, t_max, dtheta, dphi, dt, estimator_enabled);
     det->filter_theta_enabled = filter_theta_enabled;
     det->filter_theta_min = filter_theta_min;
     det->filter_theta_max = filter_theta_max;
@@ -1279,17 +1189,15 @@ namespace luminis::core
 
     // --- Time-resolved binning ---
     // If dt==0, all photons go into a single time bin (steady-state mode).
-    int t_idx;
-    if (dt == 0)
-    {
-      t_idx = 0;
-    }
-    else
+    int t_idx = -1;
+    if (dt > 0)
     {
       double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
       if (arrival_time < 0 || arrival_time >= t_max)
         return;
-      t_idx = static_cast<int>(arrival_time / dt);
+      t_idx = static_cast<int>(arrival_time / dt) + 1;
+      if (t_idx >= N_t)
+        return;
     }
 
     // Compute the reverse-path electric field via the 3-stage algorithm.
@@ -1356,10 +1264,20 @@ namespace luminis::core
     const double S2c = 2.0 * std::real(Etx * std::conj(Ety));
     const double S3c = 2.0 * std::imag(Etx * std::conj(Ety));
 
-    S0_coh[t_idx](theta_idx, phi_idx) += S0c;
-    S1_coh[t_idx](theta_idx, phi_idx) += S1c;
-    S2_coh[t_idx](theta_idx, phi_idx) += S2c;
-    S3_coh[t_idx](theta_idx, phi_idx) += S3c;
+    // If time windows are enabled, accumulate into the corresponding temporal bin.
+    if (dt > 0)
+    {
+      S0_coh[t_idx](theta_idx, phi_idx) += S0c;
+      S1_coh[t_idx](theta_idx, phi_idx) += S1c;
+      S2_coh[t_idx](theta_idx, phi_idx) += S2c;
+      S3_coh[t_idx](theta_idx, phi_idx) += S3c;
+    }
+
+    // Always accumulate in bin 0 for time-integrated fluence.
+    S0_coh[0](theta_idx, phi_idx) += S0c;
+    S1_coh[0](theta_idx, phi_idx) += S1c;
+    S2_coh[0](theta_idx, phi_idx) += S2c;
+    S3_coh[0](theta_idx, phi_idx) += S3c;
 
     // --- Incoherent Stokes: |E_forward|^2 + |E_reverse|^2 ---
     // No interference; serves as the baseline background intensity.
@@ -1368,10 +1286,20 @@ namespace luminis::core
     const double S2i = 2.0 * (std::real(Efx * std::conj(Efy)) + std::real(Erx * std::conj(Ery)));
     const double S3i = 2.0 * (std::imag(Efx * std::conj(Efy)) + std::imag(Erx * std::conj(Ery)));
 
-    S0_incoh[t_idx](theta_idx, phi_idx) += S0i;
-    S1_incoh[t_idx](theta_idx, phi_idx) += S1i;
-    S2_incoh[t_idx](theta_idx, phi_idx) += S2i;
-    S3_incoh[t_idx](theta_idx, phi_idx) += S3i;
+    // If time windows are enabled, accumulate into the corresponding temporal bin.
+    if (dt > 0)
+    {
+      S0_incoh[t_idx](theta_idx, phi_idx) += S0i;
+      S1_incoh[t_idx](theta_idx, phi_idx) += S1i;
+      S2_incoh[t_idx](theta_idx, phi_idx) += S2i;
+      S3_incoh[t_idx](theta_idx, phi_idx) += S3i;
+    }
+
+    // Always accumulate in bin 0 for time-integrated fluence.
+    S0_incoh[0](theta_idx, phi_idx) += S0i;
+    S1_incoh[0](theta_idx, phi_idx) += S1i;
+    S2_incoh[0](theta_idx, phi_idx) += S2i;
+    S3_incoh[0](theta_idx, phi_idx) += S3i;
 
     hits += 1;
   }

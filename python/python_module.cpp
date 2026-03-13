@@ -383,8 +383,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S3", &FarFieldFluenceSensor::S3);
 
   py::class_<FarFieldCBSSensor, Sensor>(m, "FarFieldCBSSensor")
-      .def(py::init<double, double, double, int, int, int, bool>(),
-           py::arg("theta_max"), py::arg("phi_max"), py::arg("t_max"), py::arg("n_theta"), py::arg("n_phi"), py::arg("n_t"), py::arg("estimator") = false,
+      .def(py::init<double, double, double, double, double, double, bool>(),
+           py::arg("theta_max"), py::arg("phi_max"), py::arg("len_t"), py::arg("d_theta"), py::arg("d_phi"), py::arg("d_t"), py::arg("estimator") = false,
            "Initialize a Sensor at a given z position")
       .def_readonly("N_theta", &FarFieldCBSSensor::N_theta)
       .def_readonly("N_phi", &FarFieldCBSSensor::N_phi)
