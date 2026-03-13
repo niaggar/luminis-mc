@@ -13,7 +13,7 @@ from luminis_mc import (
 set_log_level(LogLevel.info)
 
 exp_name = "absortion_layered"
-base_dir = "/Users/niaggar/Documents/Thesis/Progress/09Mar26"
+base_dir = "/home/niaggar/Developer/results"
 
 
 # Medium parameters in micrometers
@@ -38,7 +38,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 1000
 
 # Simulation parameters
-n_photons = 100_000
+n_photons = 10_000_000
 n_layers_sweep = [2, 5, 10, 20, 30]
 
 
@@ -89,7 +89,7 @@ def run_absortion_layered(exp, n_depth_layer):
     monitor.setup(total=n_photons, callback=on_progress, interval_pct=5)
 
     config = SimConfig(n_photons=n_photons, sample=sample, detector=sens, laser=laser, absorption=absorption, track_reverse_paths=False)
-    config.n_threads = 7
+    config.n_threads = 10
     config.progress = monitor
 
     # 3) params
@@ -134,7 +134,7 @@ def run_absortion_layered(exp, n_depth_layer):
     exp.save_sensor(stats, "statistics")
 
 
-sweep_A = SweepManager(exp_name, base_dir, timestamped=False)
+sweep_A = SweepManager(exp_name, base_dir, timestamped=True)
 sweep_A.snapshot_master_script(__main__.__file__)
 sweep_A.log_readme(
     f"Sweep of CBS simulations with different number of layers, using circularly polarized light (m={laser_m_polarization_state}, n={laser_n_polarization_state})"
