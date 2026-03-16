@@ -62,7 +62,6 @@ from ._core import (
     SimConfig,
     run_simulation_parallel,
     # Logger
-    ProgressMonitor,
     LogLevel,
     set_log_level,
     # Mean free path / MCMC
@@ -72,7 +71,7 @@ from ._core import (
     HardSpheres,
 )
 
-from .manager import Experiment, ResultsLoader, on_progress
+from .manager import Experiment, ResultsLoader
 from .sweepmanager import SweepManager
 
 __all__ = [
@@ -80,7 +79,6 @@ __all__ = [
     "Experiment",
     "ResultsLoader",
     "SweepManager",
-    "on_progress",
     # RNG
     "Rng",
     # Math
@@ -144,7 +142,6 @@ __all__ = [
     "SimConfig",
     "run_simulation_parallel",
     # Logger
-    "ProgressMonitor",
     "LogLevel",
     "set_log_level",
     # Mean free path / MCMC

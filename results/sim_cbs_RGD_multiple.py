@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime
 
 from luminis_mc import (
-    SweepManager, ProgressMonitor, on_progress,
+    SweepManager,
     Laser, RGDMedium, Sample, FarFieldCBSSensor, StatisticsSensor, SensorsGroup, SimConfig, RayleighDebyeEMCPhaseFunction,
     run_simulation_parallel, postprocess_farfield_cbs,
     set_log_level, LogLevel, LaserSource
@@ -13,8 +13,8 @@ from luminis_mc import (
 
 set_log_level(LogLevel.info)
 
-exp_name = "sim_cbs_RGD_multiple-volumefraction_radius-1000M"
-base_dir = "/home/niaggar/Developer/results"
+exp_name = "test"
+base_dir = "/Users/niaggar/Documents/Thesis/Progress/16Mar26"
 
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
@@ -56,8 +56,8 @@ wavelength = 0.514
 # Laser parameters
 laser_m_polarization_state = 1/np.sqrt(2)
 laser_n_polarization_state = -1j/np.sqrt(2)
-laser_radius = 0.0
-laser_type = LaserSource.Point
+laser_radius = 4.0
+laser_type = LaserSource.Gaussian
 
 # Phase function parameters
 phasef_theta_min = 0.0
@@ -65,7 +65,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 1_000_000_000
+n_photons = 1_000_000
 
 # Events study
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
@@ -129,15 +129,12 @@ def run_single_simulation(exp, radius, volume_fraction):
         order: None for order in scattering_order_bins
     }
 
-    for order in scattering_order_bins:
-        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False))
-        det_order.set_theta_limit(0, theta_max_far_field)
-        det_order.set_events_limit(order, order)
-        scattering_order_detectors[order] = det_order
+    # for order in scattering_order_bins:
+    #     det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False))
+    #     det_order.set_theta_limit(0, theta_max_far_field)
+    #     det_order.set_events_limit(order, order)
+    #     scattering_order_detectors[order] = det_order
 
-
-    monitor = ProgressMonitor()
-    monitor.setup(total=n_photons, callback=on_progress, interval_pct=5)
 
     config = SimConfig()
     config.n_photons = n_photons
@@ -146,8 +143,8 @@ def run_single_simulation(exp, radius, volume_fraction):
     config.laser = laser
     config.track_reverse_paths = True
     config.pin_threads_to_cores = True
-    config.n_threads = 14
-    config.progress = monitor
+    config.n_threads = 6
+    config.show_progress = True
 
     anysotropy = phase.get_anisotropy_factor()
     print(f"Anisotropy factor for radius {radius:.3f}: {anysotropy[0]:.4f}")
@@ -201,6 +198,9 @@ def run_single_simulation(exp, radius, volume_fraction):
     # 6) guarda READY-TO-PLOT (recomendado)
     cbs_total = postprocess_farfield_cbs(det, n_photons)
 
+    print("Saving derived data...")
+    print(det.hits)
+
 
     timed_N = len(cbs_total.coherent)
     for t in range(timed_N):
@@ -228,27 +228,30 @@ def run_single_simulation(exp, radius, volume_fraction):
     exp.save_derived("axes/theta_mrad", theta)
     exp.save_derived("axes/phi_rad", phi)
 
+    # print("Saving scattering order data...")
 
-    for order, det_order in scattering_order_detectors.items():
-        exp.save_sensor(det_order, f"farfield_cbs_scattering_order_{order}")
+    # for order, det_order in scattering_order_detectors.items():
+    #     exp.save_sensor(det_order, f"farfield_cbs_scattering_order_{order}")
 
-        cbs_order = postprocess_farfield_cbs(det_order, n_photons)
-        s0_order_coh = np.array(cbs_order.coherent[0].S0, copy=False)
-        s1_order_coh = np.array(cbs_order.coherent[0].S1, copy=False)
-        s2_order_coh = np.array(cbs_order.coherent[0].S2, copy=False)
-        s3_order_coh = np.array(cbs_order.coherent[0].S3, copy=False)
-        s0_order_inc = np.array(cbs_order.incoherent[0].S0, copy=False)
-        s1_order_inc = np.array(cbs_order.incoherent[0].S1, copy=False)
-        s2_order_inc = np.array(cbs_order.incoherent[0].S2, copy=False)
-        s3_order_inc = np.array(cbs_order.incoherent[0].S3, copy=False)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s0", s0_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s1", s1_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s2", s2_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s3", s3_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0", s0_order_inc)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1", s1_order_inc)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2", s2_order_inc)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3", s3_order_inc)
+    #     cbs_order = postprocess_farfield_cbs(det_order, n_photons)
+    #     s0_order_coh = np.array(cbs_order.coherent[0].S0, copy=False)
+    #     s1_order_coh = np.array(cbs_order.coherent[0].S1, copy=False)
+    #     s2_order_coh = np.array(cbs_order.coherent[0].S2, copy=False)
+    #     s3_order_coh = np.array(cbs_order.coherent[0].S3, copy=False)
+    #     s0_order_inc = np.array(cbs_order.incoherent[0].S0, copy=False)
+    #     s1_order_inc = np.array(cbs_order.incoherent[0].S1, copy=False)
+    #     s2_order_inc = np.array(cbs_order.incoherent[0].S2, copy=False)
+    #     s3_order_inc = np.array(cbs_order.incoherent[0].S3, copy=False)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s0", s0_order_coh)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s1", s1_order_coh)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s2", s2_order_coh)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s3", s3_order_coh)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0", s0_order_inc)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1", s1_order_inc)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2", s2_order_inc)
+    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3", s3_order_inc)
+
+    # print("Done saving derived data.")
 
 
 

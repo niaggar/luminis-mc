@@ -13,8 +13,8 @@ from luminis_mc import (
 
 set_log_level(LogLevel.info)
 
-exp_name = "sim_absortion_RGD_multiple-volumefraction_radius-10M"
-base_dir = "/home/niaggar/Developer/results"
+exp_name = "test"
+base_dir = "/Users/niaggar/Documents/Thesis/Progress/16Mar26"
 
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
@@ -65,7 +65,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 300_000_000
+n_photons = 10_000
 
 # Statistics sensor parameters
 max_events = 1000
@@ -118,13 +118,11 @@ def run_single_simulation(exp, radius, volume_fraction):
     dt = 0.0
     
     sens = SensorsGroup()
-    planar_backscattering = sens.add_detector(PlanarFluenceSensor(0.0, dynamic_len, dynamic_len, len_t, dynamic_dx, dynamic_dx, dt, False, False))
+    planar_backscattering = sens.add_detector(PlanarFluenceSensor(0.0, dynamic_len, dynamic_len, len_t, dynamic_dx, dynamic_dx, dt, False, True))
 
     sensors_z_list = {z: { "sensor": None, "stats": None } for z in dynamic_z_detectors}
     for z in dynamic_z_detectors:
-        
-
-        planar_fluence_sensor = sens.add_detector(PlanarFluenceSensor(z, dynamic_len, dynamic_len, len_t, dynamic_dx, dynamic_dx, dt, False, False))
+        planar_fluence_sensor = sens.add_detector(PlanarFluenceSensor(z, dynamic_len, dynamic_len, 0.0, dynamic_dx, dynamic_dx, 0.0, False, True))
         planar_fluence_sensor.set_direction_limit(CrossingDirection.Forward)
 
         stats_z = sens.add_detector(StatisticsSensor(z=z, absorb=False))

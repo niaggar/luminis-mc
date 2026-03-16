@@ -601,6 +601,9 @@ PYBIND11_MODULE(_core, m)
   py::class_<SimConfig>(m, "SimConfig")
       .def(py::init<>(), "Create a default simulation configuration")
       .def_readwrite("MAX_EVENTS", &SimConfig::MAX_EVENTS)
+      .def_readwrite("batch_size", &SimConfig::batch_size)
+      .def_readwrite("show_progress", &SimConfig::show_progress)
+      .def_readwrite("progress_interval_pct", &SimConfig::progress_interval_pct)
       .def_readwrite("seed", &SimConfig::seed)
       .def_readwrite("n_threads", &SimConfig::n_threads)
       .def_readwrite("n_photons", &SimConfig::n_photons)
@@ -609,8 +612,7 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("sample", &SimConfig::sample, pybind11::return_value_policy::reference)
       .def_readwrite("laser", &SimConfig::laser, pybind11::return_value_policy::reference)
       .def_readwrite("detector", &SimConfig::detector, pybind11::return_value_policy::reference)
-      .def_readwrite("absorption", &SimConfig::absorption, pybind11::return_value_policy::reference)
-      .def_readwrite("progress", &SimConfig::progress);
+      .def_readwrite("absorption", &SimConfig::absorption, pybind11::return_value_policy::reference);
 
   m.def(
       "run_simulation_parallel",
@@ -622,33 +624,6 @@ PYBIND11_MODULE(_core, m)
       py::arg("config"),
       "Run the Monte Carlo simulation in parallel with the given configuration, medium, "
       "detector, and laser");
-
-  // ProgressMonitor bindings
-  py::class_<luminis::log::ProgressMonitor>(m, "ProgressMonitor")
-      .def(py::init<>(), "Create a new progress monitor")
-      .def("setup", [](luminis::log::ProgressMonitor &self, std::size_t total, py::object callback, std::size_t interval_pct)
-           {
-             if (callback.is_none())
-             {
-               self.setup(total, nullptr, interval_pct);
-             }
-             else
-             {
-               // Hold a shared_ptr to the Python callable so it stays alive.
-               // The C++ simulation runs with the GIL released, so we must
-               // re-acquire it before calling back into Python.
-               auto py_cb = std::make_shared<py::function>(py::cast<py::function>(callback));
-               self.setup(total, [py_cb](std::size_t done, std::size_t total)
-                          {
-                            py::gil_scoped_acquire gil;
-                            (*py_cb)(done, total);
-                          },
-                          interval_pct);
-             } }, py::arg("total"), py::arg("callback") = py::none(), py::arg("interval_pct") = 5, "Configure the monitor with total photon count, optional callback, and reporting interval (%)")
-      .def("completed", &luminis::log::ProgressMonitor::completed, "Number of photons completed so far")
-      .def("total", &luminis::log::ProgressMonitor::total, "Total photon budget")
-      .def("is_enabled", &luminis::log::ProgressMonitor::is_enabled, "Whether the monitor is active")
-      .def("disable", &luminis::log::ProgressMonitor::disable, "Disable the monitor (stops further callbacks)");
 
   // Logger bindings
   py::enum_<Level>(m, "LogLevel")
