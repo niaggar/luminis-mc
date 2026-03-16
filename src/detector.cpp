@@ -641,10 +641,10 @@ namespace luminis::core
     N_x = static_cast<int>(std::ceil(len_x / dx));
     N_y = static_cast<int>(std::ceil(len_y / dy));
 
-    S0_t.resize(N_t, Matrix(N_x, N_y));
-    S1_t.resize(N_t, Matrix(N_x, N_y));
-    S2_t.resize(N_t, Matrix(N_x, N_y));
-    S3_t.resize(N_t, Matrix(N_x, N_y));
+    S0.resize(N_t, Matrix(N_x, N_y));
+    S1.resize(N_t, Matrix(N_x, N_y));
+    S2.resize(N_t, Matrix(N_x, N_y));
+    S3.resize(N_t, Matrix(N_x, N_y));
 
     const double half_len_x = 0.5 * len_x;
     const double half_len_y = 0.5 * len_y;
@@ -680,10 +680,10 @@ namespace luminis::core
       {
         for (int j = 0; j < N_y; ++j)
         {
-          S0_t[t](i, j) += o.S0_t[t](i, j);
-          S1_t[t](i, j) += o.S1_t[t](i, j);
-          S2_t[t](i, j) += o.S2_t[t](i, j);
-          S3_t[t](i, j) += o.S3_t[t](i, j);
+          S0[t](i, j) += o.S0[t](i, j);
+          S1[t](i, j) += o.S1[t](i, j);
+          S2[t](i, j) += o.S2[t](i, j);
+          S3[t](i, j) += o.S3[t](i, j);
         }
       }
     }
@@ -737,17 +737,17 @@ namespace luminis::core
     // If time windows are enabled, accumulate into the corresponding temporal bin.
     if (dt > 0)
     {
-      S0_t[t_idx](x_idx, y_idx) += S0_contribution;
-      S1_t[t_idx](x_idx, y_idx) += S1_contribution;
-      S2_t[t_idx](x_idx, y_idx) += S2_contribution;
-      S3_t[t_idx](x_idx, y_idx) += S3_contribution;
+      S0[t_idx](x_idx, y_idx) += S0_contribution;
+      S1[t_idx](x_idx, y_idx) += S1_contribution;
+      S2[t_idx](x_idx, y_idx) += S2_contribution;
+      S3[t_idx](x_idx, y_idx) += S3_contribution;
     }
 
     // Always accumulate in bin 0 for time-integrated fluence.
-    S0_t[0](x_idx, y_idx) += S0_contribution;
-    S1_t[0](x_idx, y_idx) += S1_contribution;
-    S2_t[0](x_idx, y_idx) += S2_contribution;
-    S3_t[0](x_idx, y_idx) += S3_contribution;
+    S0[0](x_idx, y_idx) += S0_contribution;
+    S1[0](x_idx, y_idx) += S1_contribution;
+    S2[0](x_idx, y_idx) += S2_contribution;
+    S3[0](x_idx, y_idx) += S3_contribution;
 
     hits += 1;
   }

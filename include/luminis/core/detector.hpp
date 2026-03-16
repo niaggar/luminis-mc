@@ -375,7 +375,7 @@ namespace luminis::core
 
     /// @brief Time-resolved Stokes parameter grids: S_t[time_index](x_index, y_index).
     /// @details Each element is an N_x × N_y Matrix. The vector has N_t elements.
-    std::vector<Matrix> S0_t, S1_t, S2_t, S3_t;
+    std::vector<Matrix> S0, S1, S2, S3;
 
     /// @brief Construct a planar fluence sensor.
     /// @param z     Z-coordinate of the detection plane.

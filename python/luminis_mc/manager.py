@@ -594,10 +594,10 @@ class Experiment:
             for k in ["N_x", "N_y", "N_t", "dx", "dy", "dt", "len_x", "len_y", "len_t"]:
                 _write_attr(g_meta, k, getattr(sensor, k))
             # S*_t may be a list of matrices → stacked to (Nt, Nx, Ny)
-            _write_dataset(g_data, "S0_t", _as_array(sensor.S0_t))
-            _write_dataset(g_data, "S1_t", _as_array(sensor.S1_t))
-            _write_dataset(g_data, "S2_t", _as_array(sensor.S2_t))
-            _write_dataset(g_data, "S3_t", _as_array(sensor.S3_t))
+            _write_dataset(g_data, "S0", _as_array(sensor.S0))
+            _write_dataset(g_data, "S1", _as_array(sensor.S1))
+            _write_dataset(g_data, "S2", _as_array(sensor.S2))
+            _write_dataset(g_data, "S3", _as_array(sensor.S3))
 
         # ── PlanarCBSSensor ────────────────────────────────────────────────────
         elif t == "PlanarCBSSensor":
