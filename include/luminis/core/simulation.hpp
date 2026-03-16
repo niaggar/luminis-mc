@@ -70,6 +70,11 @@ namespace luminis::core
     /// Guards against infinite loops in highly scattering media.
     int MAX_EVENTS = 1000;
 
+    int batch_size = 0; ///< Number of photons per iteration in each worker thread (0 for auto-tuning).
+
+    bool show_progress = true;
+    std::size_t progress_interval_pct = 5;
+
     std::uint64_t seed = std::random_device{}(); ///< RNG seed. Defaults to a non-deterministic device seed.
     std::size_t n_threads = 1;                   ///< Number of worker threads for parallel execution.
     std::size_t n_photons;                       ///< Total number of photon packets to simulate.
@@ -82,8 +87,6 @@ namespace luminis::core
     Laser *laser{nullptr};                        ///< Photon source (position, direction, polarization). Must not be null.
     SensorsGroup *detector{nullptr};              ///< Sensor group collecting detection data. Must not be null.
     Absorption *absorption{nullptr}; ///< Optional absorption recorder; may be null.
-
-    luminis::log::ProgressMonitor *progress{nullptr}; ///< Optional progress monitor; may be null.
   };
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -39,45 +39,45 @@
 namespace luminis::core
 {
   bool pin_current_thread_to_core(std::size_t core_index, std::string &error_msg)
-    {
+  {
 #if defined(__linux__)
-      const unsigned int hw_threads = std::thread::hardware_concurrency();
-      const std::size_t target_core = (hw_threads > 0) ? (core_index % hw_threads) : 0;
+    const unsigned int hw_threads = std::thread::hardware_concurrency();
+    const std::size_t target_core = (hw_threads > 0) ? (core_index % hw_threads) : 0;
 
-      cpu_set_t cpuset;
-      CPU_ZERO(&cpuset);
-      CPU_SET(static_cast<int>(target_core), &cpuset);
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(static_cast<int>(target_core), &cpuset);
 
-      const int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-      if (rc != 0)
-      {
-        error_msg = "pthread_setaffinity_np failed with error code " + std::to_string(rc);
-        return false;
-      }
-      return true;
-#elif defined(__APPLE__)
-      // macOS does not expose strict core pinning in public APIs. The
-      // affinity tag is a scheduler hint used as a best-effort alternative.
-      const integer_t tag = static_cast<integer_t>((core_index % 65535u) + 1u);
-      thread_affinity_policy_data_t policy = {tag};
-      const thread_port_t mach_thread = pthread_mach_thread_np(pthread_self());
-      const kern_return_t kr = thread_policy_set(
-          mach_thread,
-          THREAD_AFFINITY_POLICY,
-          reinterpret_cast<thread_policy_t>(&policy),
-          THREAD_AFFINITY_POLICY_COUNT);
-      if (kr != KERN_SUCCESS)
-      {
-        error_msg = "thread_policy_set(THREAD_AFFINITY_POLICY) failed with code " + std::to_string(kr);
-        return false;
-      }
-      return true;
-#else
-      (void)core_index;
-      error_msg = "thread affinity is not supported on this platform";
+    const int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (rc != 0)
+    {
+      error_msg = "pthread_setaffinity_np failed with error code " + std::to_string(rc);
       return false;
-#endif
     }
+    return true;
+#elif defined(__APPLE__)
+    // macOS does not expose strict core pinning in public APIs. The
+    // affinity tag is a scheduler hint used as a best-effort alternative.
+    const integer_t tag = static_cast<integer_t>((core_index % 65535u) + 1u);
+    thread_affinity_policy_data_t policy = {tag};
+    const thread_port_t mach_thread = pthread_mach_thread_np(pthread_self());
+    const kern_return_t kr = thread_policy_set(
+        mach_thread,
+        THREAD_AFFINITY_POLICY,
+        reinterpret_cast<thread_policy_t>(&policy),
+        THREAD_AFFINITY_POLICY_COUNT);
+    if (kr != KERN_SUCCESS)
+    {
+      error_msg = "thread_policy_set(THREAD_AFFINITY_POLICY) failed with code " + std::to_string(kr);
+      return false;
+    }
+    return true;
+#else
+    (void)core_index;
+    error_msg = "thread affinity is not supported on this platform";
+    return false;
+#endif
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Constants
@@ -117,13 +117,8 @@ namespace luminis::core
 
     LLOG_INFO("Configuring simulation for {} threads of {} available hardware threads", n_threads, thread_count);
 
-    // --- Distribute photons across threads ---
-    // Remainder photons are assigned one-per-thread to the first `rem` threads
-    // so the total is always exactly n_photons.
-    const std::size_t base = config.n_photons / n_threads;
-    const std::size_t rem = config.n_photons % n_threads;
-
-    LLOG_INFO("Running simulation with {} threads for {} photons", n_threads, config.n_photons);
+    const std::size_t BATCH_SIZE = config.batch_size > 0 ? config.batch_size : 256;
+    std::atomic<std::size_t> next_photon{0};
 
     // --- Clone per-thread detector and absorption objects ---
     // Each thread must work on its own copy to avoid data races.
@@ -150,11 +145,13 @@ namespace luminis::core
     std::atomic<bool> any_error{false};
     std::exception_ptr thread_exception = nullptr;
 
+    luminis::log::ProgressReporter reporter;
+    if (config.show_progress)
+        reporter.setup(config.n_photons, config.progress_interval_pct);
+
     for (std::size_t t = 0; t < n_threads; ++t)
     {
-      const std::size_t my_count = base + (t < rem ? 1u : 0u);
-
-      workers.emplace_back([&, t, my_count]()
+      workers.emplace_back([&, t]()
                            {
         try
         {
@@ -172,28 +169,32 @@ namespace luminis::core
           const std::uint64_t thread_seed = mix_seed(config.seed, static_cast<std::uint64_t>(t));
           Rng rng(thread_seed);
 
-          std::ostringstream oss;
-          oss << "Thread " << t << " (id " << std::this_thread::get_id() << ") processing " << my_count << " photons with seed " << thread_seed;
-          LLOG_INFO(oss.str());
-
           SensorsGroup &det = *thread_detectors[t];
-          Absorption *abs_ptr = nullptr;
-          if (config.absorption)
-            abs_ptr = &thread_absorptions[t];
+          Absorption *abs_ptr = config.absorption ? &thread_absorptions[t] : nullptr;
 
           // Photon velocity is uniform across all layers (shared host medium).
           const double initial_velocity = config.sample->light_speed_in_medium();
 
-          for (std::size_t i = 0; i < my_count; ++i)
+          while (true)
           {
-            Photon photon = config.laser->emit_photon(rng);
-            photon.velocity = initial_velocity;
-            photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
-            run_photon(photon, *config.sample, det, rng, abs_ptr, config.track_reverse_paths, config.MAX_EVENTS);
+            const std::size_t start = next_photon.fetch_add(BATCH_SIZE, std::memory_order_relaxed);
+            if (start >= config.n_photons)
+              break;
 
-            if (config.progress)
-              config.progress->tick();
+            const std::size_t end = std::min(start + BATCH_SIZE, config.n_photons);
+            
+            for (std::size_t i = start; i < end; ++i)
+            {
+              Photon photon = config.laser->emit_photon(rng);
+              photon.velocity = initial_velocity;
+              photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
+              run_photon(photon, *config.sample, det, rng, abs_ptr, config.track_reverse_paths, config.MAX_EVENTS);
+  
+              if (config.show_progress)
+                reporter.tick();
+            }
           }
+          
         }
         catch (...)
         {
@@ -225,6 +226,9 @@ namespace luminis::core
         config.absorption->merge_from(thread_absorptions[t]);
       }
     }
+
+    if (config.show_progress)
+      reporter.finish();
 
     LLOG_INFO("Parallel simulation finished");
   }
@@ -527,7 +531,7 @@ namespace luminis::core
       photon.events++;
       double d_weight = 1.0;
       if (scatter_medium.mu_attenuation > 0)
-      { 
+      {
         const double absorption_prob = scatter_medium.mu_absorption / scatter_medium.mu_attenuation;
         const double scattering_prob = scatter_medium.mu_scattering / scatter_medium.mu_attenuation;
         d_weight = photon.weight * absorption_prob;

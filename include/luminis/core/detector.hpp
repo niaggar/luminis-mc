@@ -589,10 +589,13 @@ namespace luminis::core
   /// @see coherent_calculation() for the direct-hit version.
   CVec2 coherent_estimation_partial(
       const Photon &photon,
-      const Sample&medium,
-      const Matrix &P_last_in,  // frame de s_{n-1} (antes del scatter estimado)
-      const Matrix &P_last_out, // frame de s_n     (después del scatter estimado)
-      const CMatrix &Tmid);
+      const Sample &medium,
+      const Matrix &P_last_in,
+      const Matrix &P_last_out,
+      const CMatrix &Tmid,
+      int layer_at_n, // ← NEW: photon.current_layer at call site
+      int layer_at_1  // ← NEW: photon.first_scatter_layer
+  );
 
   /// @brief Compute the reverse-path polarization and store it in photon.polarization_reverse.
   ///
