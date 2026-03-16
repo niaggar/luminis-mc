@@ -49,7 +49,11 @@ from ._core import (
     StokesRadialProcessed,
     FarFieldCBSProcessed,
     FarFieldCBSRadialProcessed,
+    PlanarFluenceProcessed,
+    PlanarFieldProcessed,
     postprocess_farfield_cbs,
+    postprocess_planar_fluence,
+    postprocess_planar_field,
     # Medium
     ScatteringMedium,
     RGDMedium,
@@ -129,7 +133,11 @@ __all__ = [
     "StokesRadialProcessed",
     "FarFieldCBSProcessed",
     "FarFieldCBSRadialProcessed",
+    "PlanarFluenceProcessed",
+    "PlanarFieldProcessed",
     "postprocess_farfield_cbs",
+    "postprocess_planar_fluence",
+    "postprocess_planar_field",
     # Medium
     "ScatteringMedium",
     "RGDMedium",

@@ -347,10 +347,10 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("dx", &PlanarFluenceSensor::dx)
       .def_readonly("dy", &PlanarFluenceSensor::dy)
       .def_readonly("dt", &PlanarFluenceSensor::dt)
-      .def_readonly("S0_t", &PlanarFluenceSensor::S0_t)
-      .def_readonly("S1_t", &PlanarFluenceSensor::S1_t)
-      .def_readonly("S2_t", &PlanarFluenceSensor::S2_t)
-      .def_readonly("S3_t", &PlanarFluenceSensor::S3_t);
+      .def_readonly("S0", &PlanarFluenceSensor::S0)
+      .def_readonly("S1", &PlanarFluenceSensor::S1)
+      .def_readonly("S2", &PlanarFluenceSensor::S2)
+      .def_readonly("S3", &PlanarFluenceSensor::S3);
 
   py::class_<PlanarCBSSensor, Sensor>(m, "PlanarCBSSensor")
       .def(py::init<double, double, double, double, bool>(),
@@ -435,9 +435,9 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("max_depth", &StatisticsSensor::max_depth)
       .def_readonly("n_bins_depth", &StatisticsSensor::n_bins_depth)
       .def_readonly("ddepth", &StatisticsSensor::ddepth)
-     .def_readonly("N_t", &StatisticsSensor::N_t)
-     .def_readonly("dt", &StatisticsSensor::dt)
-     .def_readonly("t_max", &StatisticsSensor::t_max)
+      .def_readonly("N_t", &StatisticsSensor::N_t)
+      .def_readonly("dt", &StatisticsSensor::dt)
+      .def_readonly("t_max", &StatisticsSensor::t_max)
       .def_readonly("h_max_time", &StatisticsSensor::h_max_time)
       .def_readonly("n_bins_time", &StatisticsSensor::n_bins_time)
       .def_readonly("h_dtime", &StatisticsSensor::h_dtime)
@@ -481,6 +481,24 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("coherent", &FarFieldCBSRadialProcessed::coherent)
       .def_readonly("incoherent", &FarFieldCBSRadialProcessed::incoherent)
       .def_readonly("theta_center", &FarFieldCBSRadialProcessed::theta_center);
+
+  py::class_<PlanarFluenceProcessed>(m, "PlanarFluenceProcessed")
+      .def_readonly("S0", &PlanarFluenceProcessed::S0)
+      .def_readonly("S1", &PlanarFluenceProcessed::S1)
+      .def_readonly("S2", &PlanarFluenceProcessed::S2)
+      .def_readonly("S3", &PlanarFluenceProcessed::S3);
+
+  py::class_<PlanarFieldProcessed>(m, "PlanarFieldProcessed")
+      .def_readonly("Ex", &PlanarFieldProcessed::Ex)
+      .def_readonly("Ey", &PlanarFieldProcessed::Ey);
+
+  m.def("postprocess_planar_fluence", &postprocess_planar_fluence,
+        py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_photon") = true, py::arg("normalize_per_area") = true, py::arg("eps") = 1e-30,
+        "Calculate the Stokes parameters from a list of photon records for a planar fluence sensor");
+    
+  m.def("postprocess_planar_field", &postprocess_planar_field,
+        py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_photon") = true, py::arg("normalize_per_area") = true, py::arg("eps") = 1e-30,
+        "Calculate the electric field components from a list of photon records for a planar field sensor");
 
   m.def("postprocess_farfield_cbs", &postprocess_farfield_cbs,
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_solid_angle") = true, py::arg("normalize_per_photon") = true, py::arg("eps") = 1e-30,
