@@ -78,9 +78,7 @@ n_photons = 10_000
 max_events = 1000
 
 def run_single_simulation(exp, radius, volume_fraction, laser_radius):
-    laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius, laser_type)
     phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
-    
     medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
     sample = Sample(n_medium)
     sample.add_layer(medium, 0.0, float('inf'))
@@ -93,6 +91,8 @@ def run_single_simulation(exp, radius, volume_fraction, laser_radius):
     medium.set_mean_free_path(mean_free_path)
     medium.set_scattering_coefficient(mu_scattering)
     medium.set_absorption_coefficient(mu_absortion)
+
+    laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius * mean_free_path, laser_type)
 
     anysotropy = phase.get_anisotropy_factor()
     transport_mean_free_path = mean_free_path / (1 - anysotropy[0])

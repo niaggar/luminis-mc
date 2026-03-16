@@ -4,8 +4,9 @@ import numpy as np
 from datetime import datetime
 
 from luminis_mc import (
-    SweepManager, ProgressMonitor, on_progress,
+    SweepManager,
     Laser, RGDMedium, Sample, Absorption, PlanarFluenceSensor, StatisticsSensor, SensorsGroup, SimConfig, RayleighDebyeEMCPhaseFunction, CrossingDirection,
+    postprocess_planar_fluence,
     run_simulation_parallel,
     set_log_level, LogLevel, LaserSource
 )
@@ -30,33 +31,33 @@ params_sweep = [
         "radius": 0.070 / 2,
         "volume_fraction": 0.2,
     },
-    {
-        "radius": 0.110 / 2,
-        "volume_fraction": 0.1,
-    },
-    {
-        "radius": 0.110 / 2,
-        "volume_fraction": 0.2,
-    },
-    {
-        "radius": 0.350 / 2,
-        "volume_fraction": 0.1,
-    },
-    {
-        "radius": 0.350 / 2,
-        "volume_fraction": 0.2,
-    }
+    # {
+    #     "radius": 0.110 / 2,
+    #     "volume_fraction": 0.1,
+    # },
+    # {
+    #     "radius": 0.110 / 2,
+    #     "volume_fraction": 0.2,
+    # },
+    # {
+    #     "radius": 0.350 / 2,
+    #     "volume_fraction": 0.1,
+    # },
+    # {
+    #     "radius": 0.350 / 2,
+    #     "volume_fraction": 0.2,
+    # }
 ]
 
 n_particle = 1.59
 n_medium = 1.33
-mu_absortion = 0.0
+mu_absortion_percent = 0.001
 wavelength = 0.514 # in micrometers, green light
 
 # Laser parameters
 laser_m_polarization_state = 1/np.sqrt(2)
 laser_n_polarization_state = -1j/np.sqrt(2)
-laser_radius = 0.0
+laser_radius = 5.0
 laser_type = LaserSource.Gaussian
 
 # Phase function parameters
@@ -65,35 +66,34 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 10_000
+n_photons = 1_000_000
 
 # Statistics sensor parameters
 max_events = 1000
 
 def run_single_simulation(exp, radius, volume_fraction):
-    laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius, laser_type)
     phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
-    
     medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
     sample = Sample(n_medium)
     sample.add_layer(medium, 0.0, float('inf'))
 
     scattering_efficiency = medium.scattering_efficiency()
     mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
-    mu_scattering = 1 / mean_free_path
-    mu_absortion = 0.0
+    inv_mean_free_path = 1 / mean_free_path
+    mu_absortion = mu_absortion_percent * inv_mean_free_path
+    mu_scattering = inv_mean_free_path - mu_absortion
 
     medium.set_mean_free_path(mean_free_path)
     medium.set_scattering_coefficient(mu_scattering)
     medium.set_absorption_coefficient(mu_absortion)
 
+    laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius * mean_free_path, laser_type)
     anysotropy = phase.get_anisotropy_factor()
     transport_mean_free_path = mean_free_path / (1 - anysotropy[0])
     m_relative = n_particle / n_medium
     size_parameter = 2 * np.pi * radius * n_medium / wavelength
     condition_1 = np.abs(m_relative - 1)
     condition_2 = size_parameter * np.abs(m_relative - 1)
-
 
     print("---- Simulation parameters -----")
     print(f"scattering_efficiency {scattering_efficiency:.3f}:")
@@ -102,27 +102,23 @@ def run_single_simulation(exp, radius, volume_fraction):
     print(f"Condition 1 (|m-1|): {condition_1:.4f}")
     print(f"Condition 2 (size parameter * |m-1|): {condition_2:.4f}")
 
-    
-    dynamic_dx = 0.2 * mean_free_path
-    dynamic_len = 15.0 * transport_mean_free_path
-    dynamic_z_max = 15.0 * transport_mean_free_path
-    dynamic_z_detectors = np.linspace(0.0, dynamic_z_max, 15).tolist()
+    dynamic_dx = 0.1 * mean_free_path
+    dynamic_len = 40.0 * transport_mean_free_path
+    dynamic_z_max = 30.0 * transport_mean_free_path
+    dynamic_z_detectors = np.linspace(0.0, dynamic_z_max, 20).tolist()
 
     print("---- Dynamic Detector Sizing -----")
     print(f"l_s (Mean Free Path) = {mean_free_path:.3f} um")
     print(f"l_star (Transport MFP) = {transport_mean_free_path:.3f} um")
     print(f"Sensor dx/dr set to = {dynamic_dx:.3f} um")
     print(f"Sensor extent set to = {dynamic_len:.3f} um")
-
-    len_t = 0.0
-    dt = 0.0
     
     sens = SensorsGroup()
-    planar_backscattering = sens.add_detector(PlanarFluenceSensor(0.0, dynamic_len, dynamic_len, len_t, dynamic_dx, dynamic_dx, dt, False, True))
+    planar_backscattering = sens.add_detector(PlanarFluenceSensor(0.0, dynamic_len, dynamic_len, 0.0, dynamic_dx, dynamic_dx, 0.0, True, False))
 
     sensors_z_list = {z: { "sensor": None, "stats": None } for z in dynamic_z_detectors}
     for z in dynamic_z_detectors:
-        planar_fluence_sensor = sens.add_detector(PlanarFluenceSensor(z, dynamic_len, dynamic_len, 0.0, dynamic_dx, dynamic_dx, 0.0, False, True))
+        planar_fluence_sensor = sens.add_detector(PlanarFluenceSensor(z, dynamic_len, dynamic_len, 0.0, dynamic_dx, dynamic_dx, 0.0, False, False))
         planar_fluence_sensor.set_direction_limit(CrossingDirection.Forward)
 
         stats_z = sens.add_detector(StatisticsSensor(z=z, absorb=False))
@@ -140,9 +136,6 @@ def run_single_simulation(exp, radius, volume_fraction):
     dynamic_t_max = 15.0 * transport_mean_free_path
     absorption = Absorption(dynamic_len / 2, dynamic_z_max, dynamic_dx, dynamic_dx, dynamic_dt, dynamic_t_max)
 
-    monitor = ProgressMonitor()
-    monitor.setup(total=n_photons, callback=on_progress, interval_pct=5)
-
     config = SimConfig()
     config.n_photons = n_photons
     config.sample = sample
@@ -150,9 +143,9 @@ def run_single_simulation(exp, radius, volume_fraction):
     config.laser = laser
     config.absorption = absorption
     config.track_reverse_paths = False
-    config.pin_threads_to_cores = True
-    config.n_threads = 10
-    config.progress = monitor
+    config.pin_threads_to_cores = False
+    config.show_progress = True
+    config.n_threads = 7
 
     # 3) params
     exp.log_params(
@@ -199,12 +192,32 @@ def run_single_simulation(exp, radius, volume_fraction):
     exp.save_sensor(stats, "statistics")
     exp.save_sensor(planar_backscattering, "planar_backscattering")
     exp.save_absorption(absorption, n_photons, "absorption")
+
+    data_planar_backscattering = postprocess_planar_fluence(planar_backscattering, n_photons)
+    s0_backscattering = data_planar_backscattering.S0[0]
+    s1_backscattering = data_planar_backscattering.S1[0]
+    s2_backscattering = data_planar_backscattering.S2[0]
+    s3_backscattering = data_planar_backscattering.S3[0]
+
+    exp.save_derived("planar_backscattering/S0", s0_backscattering)
+    exp.save_derived("planar_backscattering/S1", s1_backscattering)
+    exp.save_derived("planar_backscattering/S2", s2_backscattering)
+    exp.save_derived("planar_backscattering/S3", s3_backscattering)
+
     for z in dynamic_z_detectors:
         exp.save_sensor(sensors_z_list[z]["sensor"], f"planar_fluence_z_{z}")
         exp.save_sensor(sensors_z_list[z]["stats"], f"statistics_z_{z}")
 
+        data_z = postprocess_planar_fluence(sensors_z_list[z]["sensor"], n_photons)
+        s0_z = data_z.S0[0]
+        s1_z = data_z.S1[0]
+        s2_z = data_z.S2[0]
+        s3_z = data_z.S3[0]
 
-    # 6) guarda READY-TO-PLOT (recomendado)
+        exp.save_derived(f"planar_fluence_z_{z}/S0", s0_z)
+        exp.save_derived(f"planar_fluence_z_{z}/S1", s1_z)
+        exp.save_derived(f"planar_fluence_z_{z}/S2", s2_z)
+        exp.save_derived(f"planar_fluence_z_{z}/S3", s3_z)
 
     print(f"Simulation for radius={radius:.3f} nm, volume_fraction={volume_fraction:.1f} completed in {time.time() - t0:.2f} seconds.")
     print("------------------------------")
