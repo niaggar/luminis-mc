@@ -46,7 +46,7 @@ params_sweep = [
     }
 ]
 
-theta_degrees_circular = np.linspace(0, 5, 400)
+theta_degrees_circular = np.linspace(0, 45, 400)
 theta_mrad = theta_degrees_circular * (1000 * np.pi / 180)
 
 phi_degrees_circular = np.linspace(0, 360, 1)
@@ -55,9 +55,9 @@ run_names_circular = sorted(sweep_data_circular.keys())
 N_PHOTONS_CIRCULAR = 1_000_000_000
 
 
-t_max = 500
+t_max = 0
 d_time = 10
-n_time_bins = t_max // d_time
+n_time_bins = 1
 
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 
@@ -66,14 +66,14 @@ scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 for run_name, result_loader in sweep_data_circular.items():
     print(f"---------------- Processing run: {run_name}")
 
-    wavelength = result_loader.params["wavelength_real"]
-    radius = result_loader.params["radius_real"]
+    wavelength = result_loader.params["wavelength_um"]
+    radius = result_loader.params["radius_um"]
     volume_fraction = result_loader.params["volume_fraction"]
-    mean_free_path = result_loader.params["mean_free_path_real"]
+    mean_free_path = result_loader.params["mean_free_path_ls_um"]
     scattering_efficiency = result_loader.params["scattering_efficiency"]
 
-    n_particle = result_loader.params["n_particle_real"]
-    n_medium = result_loader.params["n_medium_real"]
+    n_particle = result_loader.params["n_particle"]
+    n_medium = result_loader.params["n_medium"]
 
     anysotropy = result_loader.params["anisotropy_factor"]
     size_parameter = result_loader.params["size_parameter"]
@@ -116,22 +116,24 @@ for run_name, result_loader in sweep_data_circular.items():
             },
             "enhancement": {},
         } for t in range(n_time_bins)],
-        # "ff_order": [{
-        #     "coherent": {
-        #         "s0": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s0") / N_PHOTONS_CIRCULAR,
-        #         "s1": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s1") / N_PHOTONS_CIRCULAR,
-        #         "s2": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s2") / N_PHOTONS_CIRCULAR,
-        #         "s3": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s3") / N_PHOTONS_CIRCULAR,
-        #     },
-        #     "incoherent": {
-        #         "s0": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0") / N_PHOTONS_CIRCULAR,
-        #         "s1": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1") / N_PHOTONS_CIRCULAR,
-        #         "s2": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2") / N_PHOTONS_CIRCULAR,
-        #         "s3": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3") / N_PHOTONS_CIRCULAR,
-        #     },
-        #     "enhancement": {},
-        # } for order in scattering_order_bins]
+        "ff_order": [{
+            "coherent": {
+                "s0": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s0") / N_PHOTONS_CIRCULAR,
+                "s1": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s1") / N_PHOTONS_CIRCULAR,
+                "s2": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s2") / N_PHOTONS_CIRCULAR,
+                "s3": result_loader.derived(f"farfield_cbs_scattering_order_{order}/coherent/s3") / N_PHOTONS_CIRCULAR,
+            },
+            "incoherent": {
+                "s0": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0") / N_PHOTONS_CIRCULAR,
+                "s1": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1") / N_PHOTONS_CIRCULAR,
+                "s2": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2") / N_PHOTONS_CIRCULAR,
+                "s3": result_loader.derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3") / N_PHOTONS_CIRCULAR,
+            },
+            "enhancement": {},
+        } for order in scattering_order_bins]
     }
+
+    print(len(data_circular[run_name]["ff_timed"]))
 
     eps = 1e-30  # pure numerical guard, no physical effect
 
@@ -156,26 +158,26 @@ for run_name, result_loader in sweep_data_circular.items():
             / (data_circular[run_name]["ff_timed"][t]["incoherent"]["Itotal"] + eps)
         )
 
-    # for i_order in range(len(scattering_order_bins)):
-    #     data_circular[run_name]["ff_order"][i_order]["coherent"]["Ico"] = (data_circular[run_name]["ff_order"][i_order]["coherent"]["s0"] - data_circular[run_name]["ff_order"][i_order]["coherent"]["s3"]) / 2
-    #     data_circular[run_name]["ff_order"][i_order]["coherent"]["Icross"] = (data_circular[run_name]["ff_order"][i_order]["coherent"]["s0"] + data_circular[run_name]["ff_order"][i_order]["coherent"]["s3"]) / 2
-    #     data_circular[run_name]["ff_order"][i_order]["coherent"]["Itotal"] = data_circular[run_name]["ff_order"][i_order]["coherent"]["Ico"] + data_circular[run_name]["ff_order"][i_order]["coherent"]["Icross"]
-    #     data_circular[run_name]["ff_order"][i_order]["incoherent"]["Ico"] = (data_circular[run_name]["ff_order"][i_order]["incoherent"]["s0"] - data_circular[run_name]["ff_order"][i_order]["incoherent"]["s3"]) / 2
-    #     data_circular[run_name]["ff_order"][i_order]["incoherent"]["Icross"] = (data_circular[run_name]["ff_order"][i_order]["incoherent"]["s0"] + data_circular[run_name]["ff_order"][i_order]["incoherent"]["s3"]) / 2
-    #     data_circular[run_name]["ff_order"][i_order]["incoherent"]["Itotal"] = data_circular[run_name]["ff_order"][i_order]["incoherent"]["Ico"] + data_circular[run_name]["ff_order"][i_order]["incoherent"]["Icross"]
+    for i_order in range(len(scattering_order_bins)):
+        data_circular[run_name]["ff_order"][i_order]["coherent"]["Ico"] = (data_circular[run_name]["ff_order"][i_order]["coherent"]["s0"] - data_circular[run_name]["ff_order"][i_order]["coherent"]["s3"]) / 2
+        data_circular[run_name]["ff_order"][i_order]["coherent"]["Icross"] = (data_circular[run_name]["ff_order"][i_order]["coherent"]["s0"] + data_circular[run_name]["ff_order"][i_order]["coherent"]["s3"]) / 2
+        data_circular[run_name]["ff_order"][i_order]["coherent"]["Itotal"] = data_circular[run_name]["ff_order"][i_order]["coherent"]["Ico"] + data_circular[run_name]["ff_order"][i_order]["coherent"]["Icross"]
+        data_circular[run_name]["ff_order"][i_order]["incoherent"]["Ico"] = (data_circular[run_name]["ff_order"][i_order]["incoherent"]["s0"] - data_circular[run_name]["ff_order"][i_order]["incoherent"]["s3"]) / 2
+        data_circular[run_name]["ff_order"][i_order]["incoherent"]["Icross"] = (data_circular[run_name]["ff_order"][i_order]["incoherent"]["s0"] + data_circular[run_name]["ff_order"][i_order]["incoherent"]["s3"]) / 2
+        data_circular[run_name]["ff_order"][i_order]["incoherent"]["Itotal"] = data_circular[run_name]["ff_order"][i_order]["incoherent"]["Ico"] + data_circular[run_name]["ff_order"][i_order]["incoherent"]["Icross"]
 
-    #     data_circular[run_name]["ff_order"][i_order]["enhancement"]["Ico"] = (
-    #         (data_circular[run_name]["ff_order"][i_order]["coherent"]["Ico"] + eps)
-    #         / (data_circular[run_name]["ff_order"][i_order]["incoherent"]["Ico"] + eps)
-    #     )
-    #     data_circular[run_name]["ff_order"][i_order]["enhancement"]["Icross"] = (
-    #         (data_circular[run_name]["ff_order"][i_order]["coherent"]["Icross"] + eps)
-    #         / (data_circular[run_name]["ff_order"][i_order]["incoherent"]["Icross"] + eps)
-    #     )
-    #     data_circular[run_name]["ff_order"][i_order]["enhancement"]["total"] = (
-    #         (data_circular[run_name]["ff_order"][i_order]["coherent"]["Itotal"] + eps)
-    #         / (data_circular[run_name]["ff_order"][i_order]["incoherent"]["Itotal"] + eps)
-    #     )
+        data_circular[run_name]["ff_order"][i_order]["enhancement"]["Ico"] = (
+            (data_circular[run_name]["ff_order"][i_order]["coherent"]["Ico"] + eps)
+            / (data_circular[run_name]["ff_order"][i_order]["incoherent"]["Ico"] + eps)
+        )
+        data_circular[run_name]["ff_order"][i_order]["enhancement"]["Icross"] = (
+            (data_circular[run_name]["ff_order"][i_order]["coherent"]["Icross"] + eps)
+            / (data_circular[run_name]["ff_order"][i_order]["incoherent"]["Icross"] + eps)
+        )
+        data_circular[run_name]["ff_order"][i_order]["enhancement"]["total"] = (
+            (data_circular[run_name]["ff_order"][i_order]["coherent"]["Itotal"] + eps)
+            / (data_circular[run_name]["ff_order"][i_order]["incoherent"]["Itotal"] + eps)
+        )
 
 
 
@@ -190,61 +192,6 @@ for run_name, result_loader in sweep_data_circular.items():
 # plt.tight_layout()
 
 
-for run_name in run_names_circular:
-    transport_mean_free_path = data_circular[run_name]["transport_mean_free_path"]
-    theta_coherent_milirad = data_circular[run_name]["theta_coherent_mrad"]
-    radius = data_circular[run_name]["radius"]
-    volume_fraction = data_circular[run_name]["volume_fraction"]
-
-    label = f"$a={radius:.3f}$, $f={volume_fraction:.3f}$"
-
-    fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
-
-    ax_left.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["coherent"]["Ico"], label=label)
-    ax_left.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
-    ax_left.set_xlabel("Scattering angle (mrad)")
-    ax_left.set_ylabel("Enhancement factor")
-
-    ax_right.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["coherent"]["Icross"], label=label)
-    ax_right.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
-    ax_right.set_xlabel("Scattering angle (mrad)")
-    ax_right.legend()
-
-    plt.tight_layout()
-    plt.savefig(f"{save_path}/cbs-RGD-ff-total-enhancement-ico-icross-{run_name}.pdf")
-
-
-fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(10, 4))
-for run_name in run_names_circular:
-    transport_mean_free_path = data_circular[run_name]["transport_mean_free_path"]
-    theta_coherent_milirad = data_circular[run_name]["theta_coherent_mrad"]
-    radius = data_circular[run_name]["radius"]
-    volume_fraction = data_circular[run_name]["volume_fraction"]
-
-    label = f"$a={radius:.3f}$, $f={volume_fraction:.3f}$"
-
-    ax_left.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["enhancement"]["Ico"], label=label)
-    # ax_left.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
-    ax_left.set_xlabel("Scattering angle (mrad)")
-    ax_left.set_ylabel("Intensity (a.u.)")
-    # ax_left.set_ylabel("Enhancement factor")
-    ax_left.set_title("Co-polarized")
-    ax_left.set_xlim(0, 40)
-
-
-    ax_right.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["enhancement"]["Icross"], label=label)
-    # ax_right.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
-    ax_right.set_xlabel("Scattering angle (mrad)")
-    ax_right.set_ylabel("Intensity (a.u.)")
-    ax_right.set_title("Cross-polarized")
-    ax_right.set_xlim(0, 40)
-    ax_right.legend()
-
-plt.tight_layout()
-plt.savefig(f"{save_path}/cbs-RGD-ff-total-enhancement-ico-icross.pdf")
-
-
-
 # for run_name in run_names_circular:
 #     transport_mean_free_path = data_circular[run_name]["transport_mean_free_path"]
 #     theta_coherent_milirad = data_circular[run_name]["theta_coherent_mrad"]
@@ -255,15 +202,70 @@ plt.savefig(f"{save_path}/cbs-RGD-ff-total-enhancement-ico-icross.pdf")
 
 #     fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
 
-#     for order in scattering_order_bins:
-#         ax_left.plot(theta_mrad, data_circular[run_name]["ff_order"][scattering_order_bins.index(order)]["enhancement"]["Ico"], label=f"order {order}")
-#         ax_right.plot(theta_mrad, data_circular[run_name]["ff_order"][scattering_order_bins.index(order)]["enhancement"]["Icross"], label=f"order {order}")
-
-#     plt.tight_layout()
-#     ax_right.legend()
+#     ax_left.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["enhancement"]["Ico"], label=label)
+#     ax_left.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
 #     ax_left.set_xlabel("Scattering angle (mrad)")
 #     ax_left.set_ylabel("Enhancement factor")
-#     plt.savefig(f"{save_path}/cbs-RGD-ff-scattering-order-enhancement-ico-icross-{run_name}.pdf")
+
+#     ax_right.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["enhancement"]["Icross"], label=label)
+#     ax_right.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
+#     ax_right.set_xlabel("Scattering angle (mrad)")
+#     ax_right.legend()
+
+#     plt.tight_layout()
+#     plt.savefig(f"{save_path}/cbs-RGD-ff-total-enhancement-ico-icross-{run_name}.pdf")
+
+
+# fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(10, 4))
+# for run_name in run_names_circular:
+#     transport_mean_free_path = data_circular[run_name]["transport_mean_free_path"]
+#     theta_coherent_milirad = data_circular[run_name]["theta_coherent_mrad"]
+#     radius = data_circular[run_name]["radius"]
+#     volume_fraction = data_circular[run_name]["volume_fraction"]
+
+#     label = f"$a={radius:.3f}$, $f={volume_fraction:.3f}$"
+
+#     ax_left.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["enhancement"]["Ico"], label=label)
+#     # ax_left.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
+#     ax_left.set_xlabel("Scattering angle (mrad)")
+#     ax_left.set_ylabel("Intensity (a.u.)")
+#     # ax_left.set_ylabel("Enhancement factor")
+#     ax_left.set_title("Co-polarized")
+#     ax_left.set_xlim(0, 40)
+
+
+#     ax_right.plot(theta_mrad, data_circular[run_name]["ff_timed"][0]["enhancement"]["Icross"], label=label)
+#     # ax_right.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7)
+#     ax_right.set_xlabel("Scattering angle (mrad)")
+#     ax_right.set_ylabel("Intensity (a.u.)")
+#     ax_right.set_title("Cross-polarized")
+#     ax_right.set_xlim(0, 40)
+#     ax_right.legend()
+
+# plt.tight_layout()
+# plt.savefig(f"{save_path}/cbs-RGD-ff-total-enhancement-ico-icross.pdf")
+
+
+
+for run_name in run_names_circular:
+    transport_mean_free_path = data_circular[run_name]["transport_mean_free_path"]
+    theta_coherent_milirad = data_circular[run_name]["theta_coherent_mrad"]
+    radius = data_circular[run_name]["radius"]
+    volume_fraction = data_circular[run_name]["volume_fraction"]
+
+    label = f"$a={radius:.3f}$, $f={volume_fraction:.3f}$"
+
+    fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
+
+    for order in scattering_order_bins:
+        ax_left.plot(theta_mrad, data_circular[run_name]["ff_order"][scattering_order_bins.index(order)]["coherent"]["Ico"], label=f"order {order}")
+        ax_right.plot(theta_mrad, data_circular[run_name]["ff_order"][scattering_order_bins.index(order)]["coherent"]["Icross"], label=f"order {order}")
+
+    plt.tight_layout()
+    ax_right.legend()
+    ax_left.set_xlabel("Scattering angle (mrad)")
+    ax_left.set_ylabel("Enhancement factor")
+    plt.savefig(f"{save_path}/cbs-RGD-ff-scattering-order-enhancement-ico-icross-{run_name}.pdf")
 
 
 

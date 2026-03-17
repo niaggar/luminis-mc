@@ -372,6 +372,11 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
+    det->filter_direction_enabled = filter_direction_enabled;
+    det->filter_direction = filter_direction;
+    det->filter_events_enabled = filter_events_enabled;
+    det->filter_events_min = filter_events_min;
+    det->filter_events_max = filter_events_max;
     return det;
   }
 
@@ -443,6 +448,11 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
+    det->filter_direction_enabled = filter_direction_enabled;
+    det->filter_direction = filter_direction;
+    det->filter_events_enabled = filter_events_enabled;
+    det->filter_events_min = filter_events_min;
+    det->filter_events_max = filter_events_max;
     return det;
   }
 
@@ -667,6 +677,11 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
+    det->filter_direction_enabled = filter_direction_enabled;
+    det->filter_direction = filter_direction;
+    det->filter_events_enabled = filter_events_enabled;
+    det->filter_events_min = filter_events_min;
+    det->filter_events_max = filter_events_max;
     return det;
   }
 
@@ -943,6 +958,11 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
+    det->filter_direction_enabled = filter_direction_enabled;
+    det->filter_direction = filter_direction;
+    det->filter_events_enabled = filter_events_enabled;
+    det->filter_events_min = filter_events_min;
+    det->filter_events_max = filter_events_max;
     return det;
   }
 
@@ -1175,6 +1195,11 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
+    det->filter_direction_enabled = filter_direction_enabled;
+    det->filter_direction = filter_direction;
+    det->filter_events_enabled = filter_events_enabled;
+    det->filter_events_min = filter_events_min;
+    det->filter_events_max = filter_events_max;
     det->theta_pp_max = theta_pp_max;
     det->theta_stride = theta_stride;
     det->phi_stride = phi_stride;
@@ -1890,6 +1915,11 @@ namespace luminis::core
     det->filter_x_max = filter_x_max;
     det->filter_y_min = filter_y_min;
     det->filter_y_max = filter_y_max;
+    det->filter_direction_enabled = filter_direction_enabled;
+    det->filter_direction = filter_direction;
+    det->filter_events_enabled = filter_events_enabled;
+    det->filter_events_min = filter_events_min;
+    det->filter_events_max = filter_events_max;
 
     det->events_histogram_bins_set = events_histogram_bins_set;
     det->max_events = max_events;
