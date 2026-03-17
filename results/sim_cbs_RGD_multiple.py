@@ -50,7 +50,7 @@ params_sweep = [
 
 n_particle = 1.59
 n_medium = 1.33
-mu_absortion = 0.0
+mu_absortion_percent = 0.0
 wavelength = 0.514
 
 # Laser parameters
@@ -65,7 +65,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 1_000_000
+n_photons = 50_000_000
 
 # Events study
 scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
@@ -74,16 +74,14 @@ scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
 # Sensor parameters
 theta_max_far_field = np.deg2rad(5)
 phi_max_far_field = 2 * np.pi
-n_theta_far_field = 400
-n_phi_far_field = 1
+n_theta_far_field = 600
+n_phi_far_field = 80
 d_theta = theta_max_far_field / n_theta_far_field
 d_phi = phi_max_far_field / n_phi_far_field
 
 # Light speed is always 1 nm/s
-t_max = 500
-d_time = 10
-
-
+t_max = 50.0
+d_time = 5.0
 
 # Statistics sensor parameters
 stats_t_max = t_max
@@ -94,24 +92,35 @@ n_depth = 10
 
 
 def run_single_simulation(exp, radius, volume_fraction):
-    laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius, laser_type)
     phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
     medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
     sample = Sample(n_medium)
     sample.add_layer(medium, 0.0, float('inf'))
 
-
     scattering_efficiency = medium.scattering_efficiency()
     mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
-    mu_scattering = 1 / mean_free_path
-    mu_absortion = 0.0
-
-    print(f"scattering_efficiency {scattering_efficiency:.3f} nm:")
-    print(f"Calculated mean free path: {mean_free_path:.2f} nm, scattering coefficient: {mu_scattering:.4f} 1/nm")
+    inv_mean_free_path = 1 / mean_free_path
+    mu_absortion = mu_absortion_percent * inv_mean_free_path
+    mu_scattering = inv_mean_free_path - mu_absortion
 
     medium.set_mean_free_path(mean_free_path)
     medium.set_scattering_coefficient(mu_scattering)
     medium.set_absorption_coefficient(mu_absortion)
+
+    laser = Laser(laser_m_polarization_state, laser_n_polarization_state, wavelength, laser_radius * mean_free_path, laser_type)
+    anysotropy = phase.get_anisotropy_factor()
+    transport_mean_free_path = mean_free_path / (1 - anysotropy[0])
+    m_relative = n_particle / n_medium
+    size_parameter = 2 * np.pi * radius * n_medium / wavelength
+    condition_1 = np.abs(m_relative - 1)
+    condition_2 = size_parameter * np.abs(m_relative - 1)
+
+    print("---- Simulation parameters -----")
+    print(f"scattering_efficiency {scattering_efficiency:.3f}:")
+    print(f"Calculated mean free path: {mean_free_path:.2f} micrometers, scattering coefficient: {mu_scattering:.4f} 1/micrometers")
+    print(f"Anisotropy factor for radius {radius:.3f}: {anysotropy[0]:.4f}")
+    print(f"Condition 1 (|m-1|): {condition_1:.4f}")
+    print(f"Condition 2 (size parameter * |m-1|): {condition_2:.4f}")
 
     sens = SensorsGroup()
     det = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False))
@@ -128,12 +137,12 @@ def run_single_simulation(exp, radius, volume_fraction):
     scattering_order_detectors = {
         order: None for order in scattering_order_bins
     }
-
-    # for order in scattering_order_bins:
-    #     det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False))
-    #     det_order.set_theta_limit(0, theta_max_far_field)
-    #     det_order.set_events_limit(order, order)
-    #     scattering_order_detectors[order] = det_order
+    for order in scattering_order_bins:
+        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, 0.0, d_theta, d_phi, 0.0, False))
+        det_order.set_theta_limit(0, theta_max_far_field)
+        det_order.set_events_limit(order, order)
+        
+        scattering_order_detectors[order] = det_order
 
 
     config = SimConfig()
@@ -142,48 +151,45 @@ def run_single_simulation(exp, radius, volume_fraction):
     config.detector = sens
     config.laser = laser
     config.track_reverse_paths = True
-    config.pin_threads_to_cores = True
+    config.pin_threads_to_cores = False
     config.n_threads = 6
     config.show_progress = True
 
-    anysotropy = phase.get_anisotropy_factor()
-    print(f"Anisotropy factor for radius {radius:.3f}: {anysotropy[0]:.4f}")
-
-    m_relative = n_particle / n_medium
-    condition_1 = np.abs(m_relative - 1)
-    size_parameter = 2 * np.pi * radius / wavelength
-    condition_2 = size_parameter * np.abs(m_relative - 1)
-    print(f"Condition 1 (|m-1|): {condition_1:.4f}")
-    print(f"Condition 2 (size parameter * |m-1|): {condition_2:.4f}")
 
     # 3) params
     exp.log_params(
-        # Medium parameters
-        mean_free_path_real=mean_free_path,
-        scattering_efficiency=scattering_efficiency,
+        # --- 1. System & Physical Properties ---
+        radius_um=radius,
         volume_fraction=volume_fraction,
-        radius_real=radius,
-        n_particle_real=n_particle,
-        n_medium_real=n_medium,
-        mu_absortion_sim=mu_absortion,
-        mu_scattering_sim=mu_scattering,
-        # Laser parameters
-        wavelength_real=wavelength,
-        laser_m_polarization_state=laser_m_polarization_state,
-        laser_n_polarization_state=laser_n_polarization_state,
-        laser_radius=laser_radius,
-        laser_type=laser_type,
-        # Phase function parameters
-        phasef_theta_min=phasef_theta_min,
-        phasef_theta_max=phasef_theta_max,
-        phasef_ndiv=phasef_ndiv,
-        # Simulation parameters
-        n_photons=n_photons,
-        # Calculated parameters
+        n_particle=n_particle,
+        n_medium=n_medium,
+        m_relative=m_relative,
+        
+        # --- 2. Calculated Optical Properties ---
+        scattering_efficiency=scattering_efficiency,
+        mu_scattering_um_inv=mu_scattering,
+        mu_absortion_um_inv=mu_absortion,
         anisotropy_factor=anysotropy[0],
         size_parameter=size_parameter,
         condition_1=condition_1,
-        condition_2=condition_2
+        condition_2=condition_2,
+        
+        # --- 3. The "Yardsticks" (CRITICAL FOR POST-PROCESSING) ---
+        mean_free_path_ls_um=mean_free_path,
+        transport_mean_free_path_lstar_um=transport_mean_free_path,
+        
+        # --- 4. Dynamic Grid Parameters (CRITICAL FOR PLOTTING) ---
+        # sensor_dx_um=dynamic_dx,
+        # sensor_len_um=dynamic_len,
+        # sensor_z_max_um=dynamic_z_max,
+        # sensor_dt_pathlength_um=dynamic_dt,
+        # sensor_t_max_pathlength_um=dynamic_t_max,
+        
+        # --- 5. Laser & Simulation Config ---
+        wavelength_um=wavelength,
+        laser_m_polarization_state=str(laser_m_polarization_state), # Cast complex to string to avoid JSON errors
+        laser_n_polarization_state=str(laser_n_polarization_state),
+        n_photons=n_photons,
     )
 
     # 4) run
@@ -201,6 +207,11 @@ def run_single_simulation(exp, radius, volume_fraction):
     print("Saving derived data...")
     print(det.hits)
 
+
+    theta  = np.linspace(0, det.theta_max, det.N_theta)
+    phi   = np.linspace(0, det.phi_max, det.N_phi)
+    exp.save_derived("axes/theta_mrad", theta)
+    exp.save_derived("axes/phi_rad", phi)
 
     timed_N = len(cbs_total.coherent)
     for t in range(timed_N):
@@ -222,36 +233,26 @@ def run_single_simulation(exp, radius, volume_fraction):
         exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s2", s2_total_inc)
         exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s3", s3_total_inc)
 
-    theta  = np.linspace(0, det.theta_max, det.N_theta)
-    phi   = np.linspace(0, det.phi_max, det.N_phi)
+    for order, det_order in scattering_order_detectors.items():
+        exp.save_sensor(det_order, f"farfield_cbs_scattering_order_{order}")
 
-    exp.save_derived("axes/theta_mrad", theta)
-    exp.save_derived("axes/phi_rad", phi)
-
-    # print("Saving scattering order data...")
-
-    # for order, det_order in scattering_order_detectors.items():
-    #     exp.save_sensor(det_order, f"farfield_cbs_scattering_order_{order}")
-
-    #     cbs_order = postprocess_farfield_cbs(det_order, n_photons)
-    #     s0_order_coh = np.array(cbs_order.coherent[0].S0, copy=False)
-    #     s1_order_coh = np.array(cbs_order.coherent[0].S1, copy=False)
-    #     s2_order_coh = np.array(cbs_order.coherent[0].S2, copy=False)
-    #     s3_order_coh = np.array(cbs_order.coherent[0].S3, copy=False)
-    #     s0_order_inc = np.array(cbs_order.incoherent[0].S0, copy=False)
-    #     s1_order_inc = np.array(cbs_order.incoherent[0].S1, copy=False)
-    #     s2_order_inc = np.array(cbs_order.incoherent[0].S2, copy=False)
-    #     s3_order_inc = np.array(cbs_order.incoherent[0].S3, copy=False)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s0", s0_order_coh)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s1", s1_order_coh)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s2", s2_order_coh)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s3", s3_order_coh)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0", s0_order_inc)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1", s1_order_inc)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2", s2_order_inc)
-    #     exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3", s3_order_inc)
-
-    # print("Done saving derived data.")
+        cbs_order = postprocess_farfield_cbs(det_order, n_photons)
+        s0_order_coh = np.array(cbs_order.coherent[0].S0, copy=False)
+        s1_order_coh = np.array(cbs_order.coherent[0].S1, copy=False)
+        s2_order_coh = np.array(cbs_order.coherent[0].S2, copy=False)
+        s3_order_coh = np.array(cbs_order.coherent[0].S3, copy=False)
+        s0_order_inc = np.array(cbs_order.incoherent[0].S0, copy=False)
+        s1_order_inc = np.array(cbs_order.incoherent[0].S1, copy=False)
+        s2_order_inc = np.array(cbs_order.incoherent[0].S2, copy=False)
+        s3_order_inc = np.array(cbs_order.incoherent[0].S3, copy=False)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s0", s0_order_coh)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s1", s1_order_coh)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s2", s2_order_coh)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s3", s3_order_coh)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0", s0_order_inc)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1", s1_order_inc)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2", s2_order_inc)
+        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3", s3_order_inc)
 
 
 
