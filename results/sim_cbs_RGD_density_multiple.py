@@ -12,40 +12,16 @@ from luminis_mc import (
 
 set_log_level(LogLevel.info)
 
-exp_name = "test"
+exp_name = "cbs_RGD_sweep_poly_densities-1000M_photons"
 base_dir = "/Users/niaggar/Documents/Thesis/Progress/16Mar26"
 
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
-sweep.log_readme("CBS Rayleigh-Gans-Debye simulation test - sweep over particle radius")
+sweep.log_readme("CBS Rayleigh-Gans-Debye Polyester particle, fixed radius, sweep over volume fraction -> mean free path")
 
-params_sweep = [
-    {
-        "radius": 0.070 / 2,
-        "volume_fraction": 0.1,
-    },
-    {
-        "radius": 0.070 / 2,
-        "volume_fraction": 0.2,
-    },
-    {
-        "radius": 0.110 / 2,
-        "volume_fraction": 0.1,
-    },
-    {
-        "radius": 0.110 / 2,
-        "volume_fraction": 0.2,
-    },
-    {
-        "radius": 0.350 / 2,
-        "volume_fraction": 0.1,
-    },
-    {
-        "radius": 0.350 / 2,
-        "volume_fraction": 0.2,
-    }
-]
+radius = 0.100
+volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
 
 n_particle = 1.59
 n_medium = 1.33
@@ -64,11 +40,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 50_000_000
-
-# Events study
-scattering_order_bins = [2, 3, 4, 5, 7, 10, 15, 20, 50]
-
+n_photons = 10_000_000
 
 # Sensor parameters
 theta_max_far_field = np.deg2rad(5)
@@ -135,17 +107,6 @@ def run_single_simulation(exp, radius, volume_fraction):
     stats.set_phi_histogram_bins(0, 2*np.pi, 360)
     stats.set_depth_histogram_bins(max_depth, n_depth)
 
-    scattering_order_detectors = {
-        order: None for order in scattering_order_bins
-    }
-    for order in scattering_order_bins:
-        det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, 0.0, d_theta, d_phi, 0.0, False))
-        det_order.set_theta_limit(0, theta_max_far_field)
-        det_order.set_events_limit(order, order)
-
-        scattering_order_detectors[order] = det_order
-
-
     config = SimConfig()
     config.n_photons = n_photons
     config.sample = sample
@@ -178,13 +139,6 @@ def run_single_simulation(exp, radius, volume_fraction):
         # --- 3. The "Yardsticks" (CRITICAL FOR POST-PROCESSING) ---
         mean_free_path_ls_um=mean_free_path,
         transport_mean_free_path_lstar_um=transport_mean_free_path,
-
-        # --- 4. Dynamic Grid Parameters (CRITICAL FOR PLOTTING) ---
-        # sensor_dx_um=dynamic_dx,
-        # sensor_len_um=dynamic_len,
-        # sensor_z_max_um=dynamic_z_max,
-        # sensor_dt_pathlength_um=dynamic_dt,
-        # sensor_t_max_pathlength_um=dynamic_t_max,
 
         # --- 5. Laser & Simulation Config ---
         wavelength_um=wavelength,
@@ -234,35 +188,10 @@ def run_single_simulation(exp, radius, volume_fraction):
         exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s2", s2_total_inc)
         exp.save_derived(f"farfield_cbs_timed_{t}/incoherent/s3", s3_total_inc)
 
-    for order, det_order in scattering_order_detectors.items():
-        exp.save_sensor(det_order, f"farfield_cbs_scattering_order_{order}")
-
-        cbs_order = postprocess_farfield_cbs(det_order, n_photons)
-        s0_order_coh = np.array(cbs_order.coherent[0].S0, copy=False)
-        s1_order_coh = np.array(cbs_order.coherent[0].S1, copy=False)
-        s2_order_coh = np.array(cbs_order.coherent[0].S2, copy=False)
-        s3_order_coh = np.array(cbs_order.coherent[0].S3, copy=False)
-        s0_order_inc = np.array(cbs_order.incoherent[0].S0, copy=False)
-        s1_order_inc = np.array(cbs_order.incoherent[0].S1, copy=False)
-        s2_order_inc = np.array(cbs_order.incoherent[0].S2, copy=False)
-        s3_order_inc = np.array(cbs_order.incoherent[0].S3, copy=False)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s0", s0_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s1", s1_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s2", s2_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/coherent/s3", s3_order_coh)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s0", s0_order_inc)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s1", s1_order_inc)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s2", s2_order_inc)
-        exp.save_derived(f"farfield_cbs_scattering_order_{order}/incoherent/s3", s3_order_inc)
 
 
-
-for i, data in enumerate(params_sweep):
-    radius = data["radius"]
-    volume_fraction = data["volume_fraction"]
-
-    run_name = f"radius_{radius:.3f}_volumefraction_{volume_fraction:.3f}"
-    fun = lambda exp, r=radius, v=volume_fraction: run_single_simulation(exp, r, v)
-
-    print(f"Running simulation for radius={radius:.3f}, volume_fraction={volume_fraction:.1f}")
+for i, volume in enumerate(volume_fraction_s):
+    print(f"Running simulation for volume fraction {volume:.2f} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    run_name = f"volume_fraction_{volume:.2f}"
+    fun = lambda exp, r=radius, v=volume: run_single_simulation(exp, r, v)
     sweep.run(i, run_name, fun)
