@@ -102,7 +102,7 @@ def run_single_simulation(exp, radius, volume_fraction):
     print(f"Condition 1 (|m-1|): {condition_1:.4f}")
     print(f"Condition 2 (size parameter * |m-1|): {condition_2:.4f}")
 
-    dynamic_dx = 0.1 * mean_free_path
+    dynamic_dx = 0.01 * transport_mean_free_path
     dynamic_len = 40.0 * transport_mean_free_path
     dynamic_z_max = 30.0 * transport_mean_free_path
     dynamic_z_detectors = np.linspace(0.0, dynamic_z_max, 20).tolist()
@@ -112,7 +112,7 @@ def run_single_simulation(exp, radius, volume_fraction):
     print(f"l_star (Transport MFP) = {transport_mean_free_path:.3f} um")
     print(f"Sensor dx/dr set to = {dynamic_dx:.3f} um")
     print(f"Sensor extent set to = {dynamic_len:.3f} um")
-    
+
     sens = SensorsGroup()
     planar_backscattering = sens.add_detector(PlanarFluenceSensor(0.0, dynamic_len, dynamic_len, 0.0, dynamic_dx, dynamic_dx, 0.0, True, False))
 
@@ -132,8 +132,9 @@ def run_single_simulation(exp, radius, volume_fraction):
     stats.set_events_histogram_bins(max_events)
     stats.set_depth_histogram_bins(dynamic_z_max, int(dynamic_z_max / dynamic_dx))
 
-    dynamic_dt = 0.2 * mean_free_path
+    dynamic_dt = 0.2 * transport_mean_free_path
     dynamic_t_max = 15.0 * transport_mean_free_path
+
     absorption = Absorption(dynamic_len / 2, dynamic_z_max, dynamic_dx, dynamic_dx, dynamic_dt, dynamic_t_max)
 
     config = SimConfig()
@@ -155,7 +156,7 @@ def run_single_simulation(exp, radius, volume_fraction):
         n_particle=n_particle,
         n_medium=n_medium,
         m_relative=m_relative,
-        
+
         # --- 2. Calculated Optical Properties ---
         scattering_efficiency=scattering_efficiency,
         mu_scattering_um_inv=mu_scattering,
@@ -164,18 +165,18 @@ def run_single_simulation(exp, radius, volume_fraction):
         size_parameter=size_parameter,
         condition_1=condition_1,
         condition_2=condition_2,
-        
+
         # --- 3. The "Yardsticks" (CRITICAL FOR POST-PROCESSING) ---
         mean_free_path_ls_um=mean_free_path,
         transport_mean_free_path_lstar_um=transport_mean_free_path,
-        
+
         # --- 4. Dynamic Grid Parameters (CRITICAL FOR PLOTTING) ---
         sensor_dx_um=dynamic_dx,
         sensor_len_um=dynamic_len,
         sensor_z_max_um=dynamic_z_max,
         sensor_dt_pathlength_um=dynamic_dt,
         sensor_t_max_pathlength_um=dynamic_t_max,
-        
+
         # --- 5. Laser & Simulation Config ---
         wavelength_um=wavelength,
         laser_m_polarization_state=str(laser_m_polarization_state), # Cast complex to string to avoid JSON errors
@@ -233,6 +234,3 @@ for i, data in enumerate(params_sweep):
 
     print(f"Running simulation for radius={radius:.3f}, volume_fraction={volume_fraction:.1f}")
     sweep.run(i, run_name, fun)
-
-
-

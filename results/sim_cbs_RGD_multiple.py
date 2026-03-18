@@ -1,7 +1,6 @@
 import __main__
 import time
 import numpy as np
-from datetime import datetime
 
 from luminis_mc import (
     SweepManager,
@@ -141,7 +140,7 @@ def run_single_simulation(exp, radius, volume_fraction):
         det_order = sens.add_detector(FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, 0.0, d_theta, d_phi, 0.0, False))
         det_order.set_theta_limit(0, theta_max_far_field)
         det_order.set_events_limit(order, order)
-        
+
         scattering_order_detectors[order] = det_order
 
 
@@ -164,7 +163,7 @@ def run_single_simulation(exp, radius, volume_fraction):
         n_particle=n_particle,
         n_medium=n_medium,
         m_relative=m_relative,
-        
+
         # --- 2. Calculated Optical Properties ---
         scattering_efficiency=scattering_efficiency,
         mu_scattering_um_inv=mu_scattering,
@@ -173,18 +172,18 @@ def run_single_simulation(exp, radius, volume_fraction):
         size_parameter=size_parameter,
         condition_1=condition_1,
         condition_2=condition_2,
-        
+
         # --- 3. The "Yardsticks" (CRITICAL FOR POST-PROCESSING) ---
         mean_free_path_ls_um=mean_free_path,
         transport_mean_free_path_lstar_um=transport_mean_free_path,
-        
+
         # --- 4. Dynamic Grid Parameters (CRITICAL FOR PLOTTING) ---
         # sensor_dx_um=dynamic_dx,
         # sensor_len_um=dynamic_len,
         # sensor_z_max_um=dynamic_z_max,
         # sensor_dt_pathlength_um=dynamic_dt,
         # sensor_t_max_pathlength_um=dynamic_t_max,
-        
+
         # --- 5. Laser & Simulation Config ---
         wavelength_um=wavelength,
         laser_m_polarization_state=str(laser_m_polarization_state), # Cast complex to string to avoid JSON errors
@@ -265,6 +264,3 @@ for i, data in enumerate(params_sweep):
 
     print(f"Running simulation for radius={radius:.3f}, volume_fraction={volume_fraction:.1f}")
     sweep.run(i, run_name, fun)
-
-
-
