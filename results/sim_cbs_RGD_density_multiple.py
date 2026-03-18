@@ -21,7 +21,7 @@ sweep.snapshot_master_script(__main__.__file__)
 sweep.log_readme("CBS Rayleigh-Gans-Debye Polyester particle, fixed radius, sweep over volume fraction -> mean free path")
 
 radius = 0.100
-volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
+volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
 
 n_particle = 1.59
 n_medium = 1.33

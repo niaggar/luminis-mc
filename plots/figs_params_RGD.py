@@ -346,9 +346,14 @@ def print_info_particle(radius, volume_fraction, n_particle):
 
 # Test with a specific particle size and volume fraction
 test_radius = 0.100
-test_volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
+# test_volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
+test_volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
 test_n_particle = n_particle_poly
 for test_volume_fraction in test_volume_fraction_s:
     print_info_particle(test_radius, test_volume_fraction, test_n_particle)
+
+
+# print_info_particle(0.350 / 2, 0.2, n_particle_poly)
+
 
 # plt.show()
