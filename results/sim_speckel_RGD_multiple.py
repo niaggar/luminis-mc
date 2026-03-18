@@ -1,7 +1,6 @@
 import __main__
 import time
 import numpy as np
-from datetime import datetime
 
 from luminis_mc import (
     SweepManager,
@@ -107,8 +106,8 @@ def run_single_simulation(exp, radius, volume_fraction, laser_radius):
     print(f"Anisotropy factor for radius {radius:.3f}: {anysotropy[0]:.4f}")
     print(f"Condition 1 (|m-1|): {condition_1:.4f}")
     print(f"Condition 2 (size parameter * |m-1|): {condition_2:.4f}")
-    
-    dynamic_dx = 0.2 * mean_free_path
+
+    dynamic_dx = 0.2 * transport_mean_free_path
     dynamic_len = 40.0 * transport_mean_free_path
     dynamic_z_max = 15.0 * transport_mean_free_path
 
@@ -121,7 +120,7 @@ def run_single_simulation(exp, radius, volume_fraction, laser_radius):
     len_t = 0.0
     dt = 0.0
     sensor_z = 0.0
-    
+
     sens = SensorsGroup()
     pfield   = sens.add_detector(PlanarFieldSensor(sensor_z, dynamic_len, dynamic_len, dynamic_dx, dynamic_dx, True, False))
     pfluence = sens.add_detector(PlanarFluenceSensor(sensor_z, dynamic_len, dynamic_len, len_t, dynamic_dx, dynamic_dx, dt, True, False))
@@ -148,7 +147,7 @@ def run_single_simulation(exp, radius, volume_fraction, laser_radius):
         n_particle=n_particle,
         n_medium=n_medium,
         m_relative=m_relative,
-        
+
         # --- 2. Calculated Optical Properties ---
         scattering_efficiency=scattering_efficiency,
         mu_scattering_um_inv=mu_scattering,
@@ -157,16 +156,16 @@ def run_single_simulation(exp, radius, volume_fraction, laser_radius):
         size_parameter=size_parameter,
         condition_1=condition_1,
         condition_2=condition_2,
-        
+
         # --- 3. The "Yardsticks" (CRITICAL FOR POST-PROCESSING) ---
         mean_free_path_ls_um=mean_free_path,
         transport_mean_free_path_lstar_um=transport_mean_free_path,
-        
+
         # --- 4. Dynamic Grid Parameters (CRITICAL FOR PLOTTING) ---
         sensor_dx_um=dynamic_dx,
         sensor_len_um=dynamic_len,
         sensor_z_max_um=dynamic_z_max,
-        
+
         # --- 5. Laser & Simulation Config ---
         wavelength_um=wavelength,
         laser_m_polarization_state=str(laser_m_polarization_state), # Cast complex to string to avoid JSON errors
@@ -217,4 +216,3 @@ for i, data in enumerate(params_sweep):
 
     print(f"Running simulation for radius={radius:.3f}, volume_fraction={volume_fraction:.1f}")
     sweep.run(i, run_name, fun)
-
