@@ -171,7 +171,7 @@ def plot_anisotropy_factor_vs_radius(r_min, r_max, n_particle, path):
         linestyle=":",
         linewidth=1.5,
     )
-    
+
 
     ax.plot(radius_sweep, anisotropy_factors_mie, color=COLOR_GRAY, linewidth=2, linestyle="--", marker="s", markersize=3.5, markevery=5, zorder=4, label="Mie")
     ax.plot(radius_sweep, anisotropy_factors, color=COLOR_LINE, linewidth=2, marker="o", markersize=3.5, markevery=5, zorder=4, label="RGD")
@@ -344,13 +344,26 @@ def print_info_particle(radius, volume_fraction, n_particle):
     print("-" * 30)
 
 
-# Test with a specific particle size and volume fraction
+# # Test with a specific particle size and volume fraction
+# test_radius = 0.070
+# # test_volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
+# test_volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
+# test_n_particle = n_particle_poly
+# for test_volume_fraction in test_volume_fraction_s:
+#     print_info_particle(test_radius, test_volume_fraction, test_n_particle)
+
+
 test_radius = 0.100
-# test_volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
-test_volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
+density_1 = 0.07
+density_2 = 0.10
 test_n_particle = n_particle_poly
-for test_volume_fraction in test_volume_fraction_s:
-    print_info_particle(test_radius, test_volume_fraction, test_n_particle)
+print_info_particle(test_radius, density_1, test_n_particle)
+print_info_particle(test_radius, density_2, test_n_particle)
+
+# 2.0 nm -> Reference
+min_depth = 2.0
+max_depth = 100.0
+depths_first_layers = np.linspace(min_depth, max_depth, 15)
 
 
 # print_info_particle(0.350 / 2, 0.2, n_particle_poly)

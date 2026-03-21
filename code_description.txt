@@ -88,8 +88,9 @@ luminis-mc/
 │   ├── cbs/                     ← Simulaciones CBS (multi-capa, lineal, circular)
 │   ├── medium/                  ← Tests de funciones de fase y matrices de scattering
 │   ├── ring/                    ← Simulaciones de anillos
-│   ├── speckel/                 ← Simulaciones de speckle
 │   └── metropolis_hastings.py   ← Test del sampler MCMC
+├── results/                     ← Scripts finales de campañas (CBS/absorción/polarización/speckle)
+├── plots/                       ← Scripts de figuras y utilidades de visualización
 │
 └── apps/                        ← Aplicaciones standalone C++
     └── main.cpp                 ← Ejemplo de ejecución directa en C++
@@ -138,32 +139,38 @@ con polarización vectorial (matrices de Jones / parámetros de Stokes).
 ─────────────────────────────
 SimConfig agrupa todos los componentes necesarios:
   - MAX_EVENTS:          límite de eventos de scattering por fotón (default 1000)
+  - batch_size:          tamaño de lote por worker para scheduler dinámico
+                         (0 => auto; actualmente usa 256 internamente)
+  - show_progress:       habilita/deshabilita barra de progreso en terminal
+  - progress_interval_pct: frecuencia de refresco de barra (en %)
   - n_photons:           número total de fotones a simular
   - n_threads:           número de hilos para ejecución paralela
                          (si n_threads = 0, usa hardware_concurrency)
   - seed:                semilla del RNG (por defecto, std::random_device{})
-  - pin_threads_to_cores:flag reservado para afinidad de hilos (actualmente no aplicado)
+  - pin_threads_to_cores: afinidad best-effort por hilo (Linux/macOS)
   - sample:              puntero al Sample (muestra por capas compartiendo n_medio)
   - laser:               puntero a la fuente láser
   - detector:            puntero al grupo de sensores
   - absorption:          (opcional) registro de absorción cilíndrico (r,z) con
                          resolución temporal opcional
   - track_reverse_paths: si true, calcula el path reverso para CBS
-  - progress:            (opcional) ProgressMonitor para reportar avance
 
 4.2 Ejecución paralela (run_simulation_parallel)
 ─────────────────────────────────────────────────
 1. Se calcula el número efectivo de hilos:
   - si n_threads = 0, se usa hardware_concurrency
   - nunca se lanzan más hilos que fotones
-2. Se distribuyen los n_photons entre esos hilos.
+2. Se usa un scheduler dinámico por lotes:
+  - contador atómico next_photon
+  - cada hilo toma chunks de tamaño batch_size
+  - mejora balanceo cuando el costo por fotón no es uniforme
 3. Cada hilo recibe:
    - Un clon del SensorsGroup (thread-local, sin locks)
   - Un clon del Absorption (thread-local, si absorption != nullptr)
    - Un RNG con semilla derivada (mix_seed(base_seed, thread_id))
 4. Cada hilo ejecuta run_photon() para cada uno de sus fotones.
-5. Si hay un ProgressMonitor, cada hilo llama tick() tras cada fotón
-   (operación atómica lock-free).
+5. Si show_progress=true, cada hilo llama tick() del ProgressReporter
+  (operación atómica lock-free).
 6. Al finalizar todos los hilos, se hace merge de los detectores locales
    al detector principal (merge_from), y lo mismo con Absorption.
 7. Si un hilo lanza una excepción, se propaga al hilo principal tras el join.
@@ -325,12 +332,16 @@ Archivo: include/luminis/core/medium.hpp   |   src/medium.cpp
 Métodos virtuales puros:
   - sample_free_path(rng)      → longitud del paso libre [mm]
   - scattering_matrix(θ, φ, k) → CMatrix 2×2 de Jones [[S2, 0], [0, S1]]
+  - scattering_efficiency()    → eficiencia de scattering Q_sca
+  - scattering_cross_section() → sección eficaz sigma_sca
 
 Métodos con implementación por defecto (delegan a PhaseFunction):
   - sample_scattering_angle(rng) → θ (via CDF inversa de la fase)
   - sample_azimuthal_angle(rng)  → φ uniforme en [0, 2π)
   - sample_conditional_azimuthal_angle(rng, S, E, k, θ) → φ condicionado
     a la polarización actual (muestreo que respeta la distribución de Mie)
+  - set_scattering_coefficient(mu_s) y set_absorption_coefficient(mu_a)
+    para recalcular μ_t y cerrar consistencia óptica en tiempo de ejecución
 
 Propiedades:
   - mu_absorption   (μ_a [1/mm])  — coeficiente de absorción
@@ -351,6 +362,10 @@ suaves: parámetro de tamaño x = 2πr/λ ≪ 1, |m − 1| ≪ 1 y |m − 1| x �
     m = n_particle/n_medium el índice relativo.
   - Parámetros propios: radius, n_particle, n_medium (contraste para el form
     factor, NO el índice global del solvente).
+  - Q_sca: se obtiene por integración numérica de la respuesta angular
+    (regla de Simpson en la implementación actual).
+  - σ_sca: se calcula como Q_sca · π · r².
+  - Setter adicional expuesto a Python: set_mean_free_path(mfp).
 
 6.3 MieMedium (Mie completo)
 ────────────────────────────
@@ -363,6 +378,9 @@ Hereda de ScatteringMedium. Sin restricción de tamaño de partícula.
     interpolación. Esto evita llamar a MIEV0 en cada evento de scattering.
   - Parámetros propios: radius, n_particle, n_medium, wavelength,
     m = n_particle/n_medium (complejo en general).
+  - Q_sca: se consulta al solver de Mie (mievinfo).
+  - σ_sca: se calcula como Q_sca · π · r².
+  - Setter adicional expuesto a Python: set_mean_free_path(mfp).
 
 6.4 Funciones de fase (PhaseFunction)
 ─────────────────────────────────────
@@ -511,9 +529,15 @@ muestreada. El algoritmo es iterativo:
     phase1 = lmc.MiePhaseFunction(radius=0.5e-3, n_p=1.59, n_m=1.33, wl=0.633e-3)
     phase2 = lmc.HenyeyGreensteinPhaseFunction(g=0.9)
 
-    # Medios dispersivos (solo propiedades de partículas)
-    medium1 = lmc.MieMedium(mu_a=0.01, mu_s=10.0, phase=phase1, ...)
-    medium2 = lmc.RGDMedium(mu_a=0.0,  mu_s=5.0,  phase=phase2, ...)
+    # Medios dispersivos (API vigente)
+    medium1 = lmc.MieMedium(phase1, 0.5e-3, 1.59, 1.33, 0.633e-3)
+    medium2 = lmc.RGDMedium(phase2, 0.2e-3, 1.50, 1.33, 0.633e-3)
+
+    # Coeficientes ópticos se fijan por setters
+    medium1.set_scattering_coefficient(10.0)
+    medium1.set_absorption_coefficient(0.01)
+    medium2.set_scattering_coefficient(5.0)
+    medium2.set_absorption_coefficient(0.0)
 
     # Muestra: agua como solvente, dos capas
     sample = lmc.Sample(n_medium=1.33)
@@ -958,6 +982,24 @@ Desde Python, se usa para calcular el enhancement factor:
   # Acceder al primer bin temporal (o único si time-integrated):
   enhancement = np.array(result.coherent[0].S0) / np.array(result.incoherent[0].S0)
 
+9.5 Post-procesamiento planar (estado actual)
+──────────────────────────────────────────────
+Además del caso far-field CBS, el módulo `results.hpp` expone:
+
+  - postprocess_planar_fluence(det, n_photons,
+                               normalize_per_photon=true,
+                               normalize_per_area=true,
+                               eps=1e-30)
+    Normaliza S0-S3 del PlanarFluenceSensor por número de fotones y área de
+    píxel (dx·dy), preservando la interpretación física de densidad de energía.
+
+  - postprocess_planar_field(det, n_photons,
+                             normalize_per_photon=true,
+                             normalize_per_area=true,
+                             eps=1e-30)
+    Normaliza Ex/Ey del PlanarFieldSensor para análisis coherente en plano.
+    La escala por área permite comparar campañas con discretizaciones distintas.
+
 
 10. REGISTRO DE ABSORCIÓN (Absorption)
 ================================================================================
@@ -1036,53 +1078,41 @@ acumula estas contribuciones en bins cilíndricos.
   plt.imshow(np.array(image), aspect='auto')
 
 
-11. MONITOR DE PROGRESO (ProgressMonitor)
+11. MONITOR DE PROGRESO (ProgressReporter)
 ================================================================================
 
 Archivo: include/luminis/log/progress.hpp
 
-ProgressMonitor es un monitor lock-free que reporta el avance de la
-simulación mediante un callback configurable. Diseñado para ejecución
-multi-hilo sin contención.
+ProgressReporter es un monitor lock-free que reporta el avance de la
+simulación directamente en terminal (sin callback Python), diseñado para
+ejecución multi-hilo sin contención.
 
 11.1 Mecanismo
 ──────────────
-  - Se configura con setup(total, callback, interval_pct).
+  - Se configura con setup(total, interval_pct).
   - Cada hilo de simulación llama tick() tras completar cada fotón.
   - tick() usa fetch_add atómico (sin lock) para incrementar el contador.
   - Cuando el contador cruza el siguiente umbral de reporte (calculado como
-    total × interval_pct / 100), se dispara el callback exactamente una vez.
-  - Un compare_exchange_weak loop garantiza que solo un hilo dispara cada
-    umbral, evitando invocaciones concurrentes del callback.
+    total × interval_pct / 100), se imprime una actualización en la misma línea.
+  - Un compare_exchange_weak loop garantiza que solo un hilo publica cada
+    umbral, evitando colisiones de salida.
+  - finish() imprime la línea final y un salto de línea.
 
 11.2 Parámetros
 ──────────────
   - total:        número total de fotones a simular
-  - callback:     función (photons_completed, total_photons) → void
   - interval_pct: intervalo de reporte como porcentaje (1–100, defecto 5%).
-                  Con 5% y 1M fotones: ~20 invocaciones del callback.
+                  Con 5% y 1M fotones: ~20 actualizaciones de barra.
 
 11.3 Interfaz Python
 ───────────────────
-El callback Python se envuelve con GIL acquisition ya que la simulación
-corre con el GIL liberado:
+La configuración se realiza desde SimConfig:
 
-  monitor = lmc.ProgressMonitor()
-  monitor.setup(total=n_photons, callback=lmc.on_progress, interval_pct=5)
-  config.progress = monitor
+  config.show_progress = True
+  config.progress_interval_pct = 5
 
-  # on_progress es un helper incluido en luminis_mc:
-  def on_progress(done, total):
-      pct = done * 100 // total
-      print(f"\rSimulation progress: {pct}%", end="", flush=True)
-      if done == total:
-          print()
-
-Métodos adicionales:
-  - completed() → número de fotones completados hasta ahora
-  - total()     → presupuesto total de fotones
-  - is_enabled() → si el monitor está activo
-  - disable()   → detiene futuros callbacks
+Salida típica:
+  Photons [##########----------]  500 000 / 1 000 000  50.0% | 2.1M ph/s | ETA 0:09
 
 
 12. LOGGER
@@ -1337,9 +1367,10 @@ Ejemplo:
 
     for i, mfp in enumerate([0.5, 1.0, 2.0, 4.0]):
         def run_fn(exp, mfp=mfp):
-            medium = lmc.MieMedium(mu_a=0, mu_s=1/mfp, phase=phase,
-                                    mfp=mfp, radius=r, n_particle=np,
-                                    n_medium=nm, wavelength=wl)
+        medium = lmc.MieMedium(phase, r, np, nm, wl)
+        medium.set_mean_free_path(mfp)
+        medium.set_scattering_coefficient(1.0/mfp)
+        medium.set_absorption_coefficient(0.0)
             sample = lmc.Sample(n_medium=nm)
             sample.add_layer(medium, 0.0, float('inf'))
             config = lmc.SimConfig(n_photons=1_000_000, sample=sample,
@@ -1361,7 +1392,7 @@ El binding pybind11 (python_module.cpp) expone:
   - Matrices como buffer protocol (acceso zero-copy desde NumPy)
   - Enums (LaserSource, TemporalProfile, CrossingDirection, LogLevel)
   - Funciones de simulación con GIL release para paralelismo real
-  - ProgressMonitor con callback Python envuelto con GIL acquisition
+  - Configuración de progreso vía SimConfig (show_progress, progress_interval_pct)
 
 Patrón de uso del SensorsGroup:
   sensors = SensorsGroup()
@@ -1372,7 +1403,7 @@ Patrón de uso del SensorsGroup:
   y luego leer los resultados tras la simulación (det.S0_coh, etc.).
 
 Las capas Python (manager.py, sweepmanager.py) se importan directamente:
-  from luminis_mc import Experiment, ResultsLoader, SweepManager, on_progress
+  from luminis_mc import Experiment, ResultsLoader, SweepManager
 
 
 16. RESUMEN DE FLUJO CBS COMPLETO
@@ -1380,7 +1411,7 @@ Las capas Python (manager.py, sweepmanager.py) se importan directamente:
 
 1. Configurar:
    MiePhaseFunction → MieMedium → Sample(n_medium) → Laser →
-   FarFieldCBSSensor(θmax, φmax, tmax, Nθ, Nφ, Nt)
+  FarFieldCBSSensor(θmax, φmax, len_t, dθ, dφ, d_t)
 
 2. Opcionalmente configurar perfil temporal del láser:
    laser.set_temporal_profile(lmc.TemporalProfile.Gaussian,
@@ -1390,13 +1421,13 @@ Las capas Python (manager.py, sweepmanager.py) se importan directamente:
    absorption = lmc.Absorption(radius, depth, d_r, d_z, d_t, t_max)
 
 4. Opcionalmente configurar progreso:
-   monitor = lmc.ProgressMonitor()
-   monitor.setup(total=n_photons, callback=lmc.on_progress)
+  config.show_progress = True
+  config.progress_interval_pct = 5
 
 5. SimConfig(sample=sample, laser=laser, detector=sensors,
              absorption=absorption, track_reverse_paths=True)
    config.n_threads = 8
-   config.progress = monitor
+  config.batch_size = 256
 
 6. run_simulation_parallel():
    a. Cada fotón se emite con launch_time muestreado del perfil temporal.
@@ -1406,7 +1437,7 @@ Las capas Python (manager.py, sweepmanager.py) se importan directamente:
       - coherent_calculation() calcula E_reverse usando reciprocidad
       - FarFieldCBSSensor acumula |E_fwd + E_rev|² (coherente)
         y |E_fwd|² + |E_rev|² (incoherente) en bins (θ, φ, t)
-   e. ProgressMonitor reporta avance periódicamente.
+  e. ProgressReporter reporta avance periódicamente en terminal.
 
 7. postprocess_farfield_cbs() normaliza por ángulo sólido y n_photons
    (por cada bin temporal).
