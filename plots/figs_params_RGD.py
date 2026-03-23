@@ -272,6 +272,78 @@ def plot_mean_free_path_vs_radius(r_min, r_max, n_particle, volume_fractions, pa
 # plot_mean_free_path_vs_radius(r_min_poly, r_max_poly, n_particle_poly, volume_fraction_sweep, f"{save_path}/mean_free_path_vs_radius_poly.pdf")
 
 
+# --------- Density vs Mean free path
+
+def plot_mean_free_path_vs_density(radius, n_particle, volume_fractions, path, scale=0):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    mean_free_paths = []
+    mean_free_paths_scaled = []
+
+    volume_fractions_scaled = [f * scale for f in volume_fractions]
+
+    for volume_fraction in volume_fractions:
+        phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
+        medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
+
+        scattering_efficiency = medium.scattering_efficiency()
+        mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
+        mean_free_paths.append(mean_free_path / scale)
+
+    for volume_fraction in volume_fractions_scaled:
+        phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
+        medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
+
+        scattering_efficiency = medium.scattering_efficiency()
+        mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
+        mean_free_paths_scaled.append(mean_free_path)
+
+    ax.plot(volume_fractions_scaled, mean_free_paths, color=COLOR_LINE, linewidth=2, marker="o", markersize=3.5, markevery=1)
+    ax.plot(volume_fractions_scaled, mean_free_paths_scaled, color="red", linewidth=2, marker="s", markersize=3.5, markevery=1)
+    # ax.set_yscale("log")
+    ax.set_xlabel("Volume fraction")
+    ax.set_ylabel("Mean free path (µm)")
+    ax.legend(["RGD", f"Scaled by {scale}"])
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    plt.tight_layout()
+    plt.savefig(path)
+
+# volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
+# scale = 10
+# plot_mean_free_path_vs_density(0.100, n_particle_poly, volume_fraction_s, f"{save_path}/mean_free_path_vs_density_poly.pdf", scale=scale)
+
+# --------- Density vs Theta max for CBS
+
+def plot_theta_max_cbs_vs_density(radius, n_particle, volume_fractions, path, scale=0):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    theta_max_cbs_values = []
+
+    theta_max_cbs_values_scaled = []
+    volume_fraction_s_scaled = [f * scale for f in volume_fractions]
+
+    for volume_fraction in volume_fractions:
+        phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
+        medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
+
+        scattering_efficiency = medium.scattering_efficiency()
+        mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
+        anisotropy_factor = phase.get_anisotropy_factor()[0]
+        transport_mean_free_path = mean_free_path / (1 - anisotropy_factor)
+        theta_max_cbs = 1 / (k_medium * transport_mean_free_path)
+        theta_max_cbs_values.append(theta_max_cbs)
+
+
+
+    ax.plot(volume_fractions, theta_max_cbs_values, color=COLOR_LINE, linewidth=2, marker="o", markersize=3.5, markevery=1)
+    ax.set_xlabel("Volume fraction")
+    ax.set_ylabel(r"$\theta_{max}^{CBS}$ (radians)")
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%.4f"))
+    plt.tight_layout()
+    plt.savefig(path)
+
+# volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
+# scale = 50
+# plot_theta_max_cbs_vs_density(0.100, n_particle_poly, volume_fraction_s, f"{save_path}/theta_max_cbs_vs_density_poly.pdf", scale=scale)
+
 
 # --------- Phase function vs Scattering angle for different particle sizes
 
@@ -332,41 +404,43 @@ def print_info_particle(radius, volume_fraction, n_particle):
     valid_condition_2 = condition_2 < RGD_EPSILON
 
 
-    print(f"Radius: {radius:.3f} µm")
-    print(f"Size parameter: {size_parameter:.3f}")
-    print(f"Anisotropy factor: {anisotropy_factor:.3f}")
-    print(f"Scattering efficiency: {scattering_efficiency:.3f}")
+    print(f"Radius: {radius:.3f} µm, Volume fraction: {volume_fraction:.3f}")
+    # print(f"Size parameter: {size_parameter:.3f}")
+    # print(f"Anisotropy factor: {anisotropy_factor:.3f}")
+    # print(f"Scattering efficiency: {scattering_efficiency:.3f}")
     print(f"Mean free path: {mean_free_path:.3f} µm")
     print(f"Transport mean free path: {transport_mean_free_path:.3f} µm")
     print(f"Max CBS angle: {theta_max_cbs:.4f} radians ({np.degrees(theta_max_cbs):.4f} degrees)")
-    print(f"Condition 1 (|m-1|): {condition_1:.3f} - {'Valid' if valid_condition_1 else 'Invalid'}")
-    print(f"Condition 2 (size parameter * |m-1|): {condition_2:.3f} - {'Valid' if valid_condition_2 else 'Invalid'}")
+    # print(f"Condition 1 (|m-1|): {condition_1:.3f} - {'Valid' if valid_condition_1 else 'Invalid'}")
+    # print(f"Condition 2 (size parameter * |m-1|): {condition_2:.3f} - {'Valid' if valid_condition_2 else 'Invalid'}")
     print("-" * 30)
 
 
-# # Test with a specific particle size and volume fraction
-# test_radius = 0.070
-# # test_volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
-# test_volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
-# test_n_particle = n_particle_poly
-# for test_volume_fraction in test_volume_fraction_s:
-#     print_info_particle(test_radius, test_volume_fraction, test_n_particle)
-
-
+# Test with a specific particle size and volume fraction
 test_radius = 0.100
-density_1 = 0.07
-density_2 = 0.10
+# test_volume_fraction_s = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.20, 0.30]
+test_volume_fraction_s = [0.05, 0.06, 0.08, 0.10, 0.15]
+f_scale = 50
+test_volume_fraction_s = [f * f_scale for f in test_volume_fraction_s]
 test_n_particle = n_particle_poly
-print_info_particle(test_radius, density_1, test_n_particle)
-print_info_particle(test_radius, density_2, test_n_particle)
+for test_volume_fraction in test_volume_fraction_s:
+    print_info_particle(test_radius, test_volume_fraction, test_n_particle)
 
-# 2.0 nm -> Reference
-min_depth = 2.0
-max_depth = 100.0
-depths_first_layers = np.linspace(min_depth, max_depth, 15)
+
+# test_radius = 0.100
+# density_1 = 0.07
+# density_2 = 0.10
+# test_n_particle = n_particle_poly
+# print_info_particle(test_radius, density_1, test_n_particle)
+# print_info_particle(test_radius, density_2, test_n_particle)
+
+# # 2.0 nm -> Reference
+# min_depth = 2.0
+# max_depth = 100.0
+# depths_first_layers = np.linspace(min_depth, max_depth, 15)
 
 
 # print_info_particle(0.350 / 2, 0.2, n_particle_poly)
 
 
-# plt.show()
+plt.show()
