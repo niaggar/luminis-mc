@@ -1326,58 +1326,58 @@ namespace luminis::core
       S3_incoh[0](theta_idx, phi_idx) += S3i;
     }
     // Less than 2 events, ther is no time-reversed path pair for CBS, only accumulate incoherent intensity if desired.
-    else
-    {
-      int t_idx = -1;
-      if (dt > 0)
-      {
-        double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
-        if (arrival_time < 0 || arrival_time >= t_max)
-          return;
-        t_idx = static_cast<int>(arrival_time / dt) + 1;
-        if (t_idx >= N_t)
-          return;
-      }
+    // else
+    // {
+    //   int t_idx = -1;
+    //   if (dt > 0)
+    //   {
+    //     double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+    //     if (arrival_time < 0 || arrival_time >= t_max)
+    //       return;
+    //     t_idx = static_cast<int>(arrival_time / dt) + 1;
+    //     if (t_idx >= N_t)
+    //       return;
+    //   }
 
-      Matrix P = photon.P_local;
-      const Vec3 dir = {P(2, 0), P(2, 1), P(2, 2)};
-      const double theta = std::acos(-dir.z);
-      double phi = std::atan2(dir.y, dir.x);
-      if (phi < 0)
-        phi += 2.0 * M_PI;
+    //   Matrix P = photon.P_local;
+    //   const Vec3 dir = {P(2, 0), P(2, 1), P(2, 2)};
+    //   const double theta = std::acos(-dir.z);
+    //   double phi = std::atan2(dir.y, dir.x);
+    //   if (phi < 0)
+    //     phi += 2.0 * M_PI;
 
-      const int theta_idx = static_cast<int>(theta / dtheta);
-      const int phi_idx = static_cast<int>(phi / dphi);
-      if (theta_idx < 0 || theta_idx >= N_theta || phi_idx < 0 || phi_idx >= N_phi)
-        return;
+    //   const int theta_idx = static_cast<int>(theta / dtheta);
+    //   const int phi_idx = static_cast<int>(phi / dphi);
+    //   if (theta_idx < 0 || theta_idx >= N_theta || phi_idx < 0 || phi_idx >= N_phi)
+    //     return;
 
-      const double w_sqrt = std::sqrt(photon.weight);
-      const std::complex<double> Em_local_photon = photon.polarization.m * info.phase * w_sqrt;
-      const std::complex<double> En_local_photon = photon.polarization.n * info.phase * w_sqrt;
+    //   const double w_sqrt = std::sqrt(photon.weight);
+    //   const std::complex<double> Em_local_photon = photon.polarization.m * info.phase * w_sqrt;
+    //   const std::complex<double> En_local_photon = photon.polarization.n * info.phase * w_sqrt;
 
-      const std::complex<double> E_det_x = (Em_local_photon * P(0, 0) + En_local_photon * P(1, 0));
-      const std::complex<double> E_det_y = (Em_local_photon * P(0, 1) + En_local_photon * P(1, 1));
+    //   const std::complex<double> E_det_x = (Em_local_photon * P(0, 0) + En_local_photon * P(1, 0));
+    //   const std::complex<double> E_det_y = (Em_local_photon * P(0, 1) + En_local_photon * P(1, 1));
 
-      const double S0_contribution = std::norm(E_det_x) + std::norm(E_det_y);
-      const double S1_contribution = std::norm(E_det_x) - std::norm(E_det_y);
-      const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
-      const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
+    //   const double S0_contribution = std::norm(E_det_x) + std::norm(E_det_y);
+    //   const double S1_contribution = std::norm(E_det_x) - std::norm(E_det_y);
+    //   const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
+    //   const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
 
-      // If time windows are enabled, accumulate into the corresponding temporal bin.
-      if (dt > 0)
-      {
-        S0_incoh[t_idx](theta_idx, phi_idx) += S0_contribution;
-        S1_incoh[t_idx](theta_idx, phi_idx) += S1_contribution;
-        S2_incoh[t_idx](theta_idx, phi_idx) += S2_contribution;
-        S3_incoh[t_idx](theta_idx, phi_idx) += S3_contribution;
-      }
+    //   // If time windows are enabled, accumulate into the corresponding temporal bin.
+    //   if (dt > 0)
+    //   {
+    //     S0_incoh[t_idx](theta_idx, phi_idx) += S0_contribution;
+    //     S1_incoh[t_idx](theta_idx, phi_idx) += S1_contribution;
+    //     S2_incoh[t_idx](theta_idx, phi_idx) += S2_contribution;
+    //     S3_incoh[t_idx](theta_idx, phi_idx) += S3_contribution;
+    //   }
 
-      // Always accumulate in bin 0 for time-integrated fluence.
-      S0_incoh[0](theta_idx, phi_idx) += S0_contribution;
-      S1_incoh[0](theta_idx, phi_idx) += S1_contribution;
-      S2_incoh[0](theta_idx, phi_idx) += S2_contribution;
-      S3_incoh[0](theta_idx, phi_idx) += S3_contribution;
-    }
+    //   // Always accumulate in bin 0 for time-integrated fluence.
+    //   S0_incoh[0](theta_idx, phi_idx) += S0_contribution;
+    //   S1_incoh[0](theta_idx, phi_idx) += S1_contribution;
+    //   S2_incoh[0](theta_idx, phi_idx) += S2_contribution;
+    //   S3_incoh[0](theta_idx, phi_idx) += S3_contribution;
+    // }
 
     hits += 1;
   }
