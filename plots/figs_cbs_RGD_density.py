@@ -16,20 +16,20 @@ folder_base = "Data/cbs/"
 
 
 def get_sweep_name(radius, polarization):
-    name = f"cbs_RGD_sweep_poly_densities_rad-{radius:.3f}-{polarization}-1000M_photons"
+    name = f"cbs_escaled_{radius:.3f}_{polarization}"
     return name
 
 
-volume_fraction_s = [0.05, 0.07, 0.10, 0.20, 0.30]
+volume_fraction_s = [2.50, 3.50, 5.00]
 polarization = ["linear", "circular"]
-radius_list = [0.085, 0.100]
+radius_list = [0.070, 0.085, 0.100]
 
 
 data = {}
 
-theta_degrees = np.linspace(0, 5, 600)
+theta_degrees = np.linspace(0, 30, 600)
 theta_mrad = theta_degrees * (1000 * np.pi / 180)
-phi_degrees = np.linspace(0, 360, 80)
+phi_degrees = np.linspace(0, 360, 60)
 
 MAX_MRAD = 70
 N_PHOTONS = 1_000_000_000
@@ -149,11 +149,11 @@ for r in radius_list:
             )
 
         for t in range(n_time_bins):
-            data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Ico"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s0"] - data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s3"]) / 2
-            data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Icross"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s0"] + data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s3"]) / 2
+            data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Ico"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s0"] + data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s1"]) / 2
+            data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Icross"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s0"] - data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["s1"]) / 2
             data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Itotal"] = data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Ico"] + data[f"{r}"][run_name]["ff_linear_timed"][t]["coherent"]["Icross"]
-            data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Ico"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s0"] - data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s3"]) / 2
-            data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Icross"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s0"] + data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s3"]) / 2
+            data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Ico"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s0"] + data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s1"]) / 2
+            data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Icross"] = (data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s0"] - data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["s1"]) / 2
             data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Itotal"] = data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Ico"] + data[f"{r}"][run_name]["ff_linear_timed"][t]["incoherent"]["Icross"]
 
             data[f"{r}"][run_name]["ff_linear_timed"][t]["enhancement"]["Ico"] = (
@@ -174,6 +174,49 @@ for r in radius_list:
 print("Data loaded and processed successfully.")
 
 
+for r in radius_list:
+    data_radius = data[f"{r}"]
+    for run_name in data_radius.keys():
+        data_run = data_radius[run_name]
+        figures.plot_disk(
+            Icoh=(
+                data_run["ff_circular_timed"][0]["coherent"]["Itotal"],
+                data_run["ff_circular_timed"][0]["coherent"]["Ico"],
+                data_run["ff_circular_timed"][0]["coherent"]["Icross"],
+            ),
+            Iinc=(
+                data_run["ff_circular_timed"][0]["incoherent"]["Itotal"],
+                data_run["ff_circular_timed"][0]["incoherent"]["Ico"],
+                data_run["ff_circular_timed"][0]["incoherent"]["Icross"],
+            ),
+            labels=["Total", "Co-polarized", "Cross-polarized"],
+            theta_deg=theta_degrees,
+            phi_data=np.deg2rad(phi_degrees),
+            title=f"CBS Disk Plot (Circular) - Radius {data_run['radius']:.3f}, Volume fraction {data_run['volume_fraction']:.3f}",
+            save_path=f"{save_path}/cbs-rgd-disk-plot-circular-radius-{data_run['radius']:.3f}-vf-{data_run['volume_fraction']:.3f}.png",
+        )
+
+        figures.plot_disk(
+            Icoh=(
+                data_run["ff_linear_timed"][0]["coherent"]["Itotal"],
+                data_run["ff_linear_timed"][0]["coherent"]["Ico"],
+                data_run["ff_linear_timed"][0]["coherent"]["Icross"],
+            ),
+            Iinc=(
+                data_run["ff_linear_timed"][0]["incoherent"]["Itotal"],
+                data_run["ff_linear_timed"][0]["incoherent"]["Ico"],
+                data_run["ff_linear_timed"][0]["incoherent"]["Icross"],
+            ),
+            labels=["Total", "Co-polarized", "Cross-polarized"],
+            theta_deg=theta_degrees,
+            phi_data=np.deg2rad(phi_degrees),
+            title=f"CBS Disk Plot (Linear) - Radius {data_run['radius']:.3f}, Volume fraction {data_run['volume_fraction']:.3f}",
+            save_path=f"{save_path}/cbs-rgd-disk-plot-linear-radius-{data_run['radius']:.3f}-vf-{data_run['volume_fraction']:.3f}.png",
+        )
+        
+    
+
+
 
 # plot total intensityes for each type of particle. The total is on ff_timed[0], the rest of the time bins are for the temporal evolution
 fig, ax = plt.subplots(figsize=(10, 4))
@@ -187,7 +230,7 @@ for run_name in data_radius.keys():
     data = np.mean(data_radius[run_name]["ff_circular_timed"][0]["enhancement"]["Ico"], axis=1)
     ax.plot(theta_mrad, data, label=label)
 
-    ax.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7, label="Coherent angle" if run_name == list(data_radius.keys())[0] else None)
+    # ax.axvline(theta_coherent_milirad, color="red", linestyle="--", alpha=0.7, label="Coherent angle" if run_name == list(data_radius.keys())[0] else None)
 
 ax.set_xlabel("Scattering Angle")
 ax.set_ylabel("Enhancement Factor")
@@ -279,4 +322,4 @@ plt.tight_layout()
 
 
 
-plt.show()
+# plt.show()

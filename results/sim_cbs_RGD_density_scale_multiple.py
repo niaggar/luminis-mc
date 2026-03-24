@@ -22,7 +22,7 @@ sweep.log_readme("CBS Rayleigh-Gans-Debye Polyester particle, fixed radius, swee
 
 radius = 0.100
 f_scale = 50
-volume_fraction_s = [0.05, 0.06, 0.08, 0.10, 0.15]
+volume_fraction_s = [0.05]
 scaled_volume_fraction_s = [f * f_scale for f in volume_fraction_s]
 
 n_particle = 1.59
@@ -42,7 +42,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Simulation parameters
-n_photons = 1_000_000
+n_photons = 50_000_000
 
 # Sensor parameters
 theta_max_far_field = np.deg2rad(30)
