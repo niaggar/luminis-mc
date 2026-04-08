@@ -15,7 +15,10 @@ namespace luminis::core
   {
     // Compute number of time bins
     if (d_t > 0.0)
-      n_t = static_cast<int>(std::ceil(t_max / d_t));
+      // Match timed sensor convention:
+      //   bin 0 -> always time-integrated
+      //   bins [1..n_t-1] -> explicit time windows of width d_t
+      n_t = static_cast<int>(std::ceil(t_max / d_t)) + 1;
     else
       n_t = 1; // time-integrated
 
@@ -27,9 +30,6 @@ namespace luminis::core
     time_slices.reserve(n_t);
     for (int i = 0; i < n_t; ++i)
       time_slices.emplace_back(n_r, n_z);
-
-    // Allocate the total (time-integrated) grid
-    total = Matrix(n_r, n_z);
   }
 
   Absorption Absorption::clone() const
@@ -49,15 +49,6 @@ namespace luminis::core
         }
       }
     }
-
-    // Merge the total grid
-    for (std::size_t i = 0; i < total.rows; ++i)
-    {
-      for (std::size_t j = 0; j < total.cols; ++j)
-      {
-        total(i, j) += other.total(i, j);
-      }
-    }
   }
 
   void Absorption::record_absorption(const Photon &photon, double d_weight)
@@ -73,21 +64,28 @@ namespace luminis::core
     const std::size_t i_r = static_cast<std::size_t>(std::floor(r / d_r));
     const std::size_t i_z = static_cast<std::size_t>(std::floor(z / d_z));
 
-    if (i_r >= total.rows || i_z >= total.cols)
+    if (time_slices.empty())
+      return;
+
+    if (i_r >= time_slices[0].rows || i_z >= time_slices[0].cols)
     {
       LLOG_WARN("Calculated indices out of bounds: i_r={}, i_z={}", i_r, i_z);
       return;
     }
 
-    // Always accumulate into the total grid
-    total(i_r, i_z) += d_weight;
+    // Bin 0 is always the integrated accumulation.
+    if (!time_slices.empty())
+      time_slices[0](i_r, i_z) += d_weight;
 
-    // If time-resolved, also deposit into the appropriate time slice
+    // If time-resolved, also deposit into the corresponding time-window bin.
+    // Bin mapping:
+    //   k_window = floor(time / d_t)
+    //   k_slice  = k_window + 1
     if (d_t > 0.0)
     {
       const double time = photon.launch_time + (photon.opticalpath / photon.velocity);
-      int k = static_cast<int>(std::floor(time / d_t));
-      if (k >= 0 && k < n_t)
+      int k = static_cast<int>(std::floor(time / d_t)) + 1;
+      if (k >= 1 && k < n_t)
         time_slices[k](i_r, i_z) += d_weight;
     }
   }
@@ -126,27 +124,7 @@ namespace luminis::core
 
   Matrix Absorption::get_total_image(int n_photons) const
   {
-    const int n_r = total.rows;
-    const int len_r = n_r * 2;
-    const int len_z = total.cols;
-    Matrix image(len_r, len_z);
-
-    for (int i = 0; i < n_r; ++i)
-    {
-      const double r_in  = i * d_r;
-      const double r_out = (i + 1) * d_r;
-      const double ring_area = M_PI * (r_out * r_out - r_in * r_in);
-      const double voxel_vol = ring_area * d_z;
-
-      for (int j = 0; j < len_z; ++j)
-      {
-        const double per_vol = total(i, j) / (static_cast<double>(n_photons) * voxel_vol);
-        image(n_r - i, j) = per_vol;
-        if (i != 0)
-          image(n_r + i, j) = per_vol;
-      }
-    }
-    return image;
+    return get_absorption_image(n_photons, 0);
   }
 
 } // namespace luminis::core

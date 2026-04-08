@@ -6,7 +6,9 @@
 ///
 /// Time resolution follows the same convention as PlanarFluenceSensor:
 ///   - `d_t == 0` → time-integrated (single time bin)
-///   - `d_t > 0`  → time-resolved with `n_t = ceil(t_max / d_t)` bins
+///   - `d_t > 0`  → `n_t = ceil(t_max / d_t) + 1`
+///                   - bin 0: always time-integrated
+///                   - bins 1..n_t-1: explicit time windows
 ///
 /// Thread safety: Absorption is NOT thread-safe. For parallel simulations,
 /// each thread works on a cloned copy (via clone()). After all threads finish,
@@ -28,7 +30,7 @@ namespace luminis::core {
 /// Each time bin stores an `n_r × n_z` Matrix of accumulated deposited weight.
 /// When `d_t == 0`, a single time bin is used (time-integrated mode).
 /// When `d_t > 0`, photon arrival time is computed from `launch_time + opticalpath / velocity`
-/// and binned into the appropriate time slice.
+/// and deposited both in bin 0 (integrated) and in one explicit time-window bin.
 struct Absorption {
   double radius;   ///< Maximum radial extent of the recording grid.
   double depth;    ///< Maximum depth (z) extent of the recording grid.
@@ -36,13 +38,11 @@ struct Absorption {
   double d_z;      ///< Depth bin width.
   double d_t;      ///< Time bin width (0 for time-integrated).
   double t_max;    ///< Total time window (ignored when d_t == 0).
-  int n_t;         ///< Number of time bins (1 when time-integrated).
+  int n_t;         ///< Number of time bins (1 when time-integrated; else ceil(t_max/d_t)+1).
 
   /// @brief Per-time-bin absorption grids. Each element is an n_r × n_z Matrix.
+  /// @details For d_t > 0: index 0 is always integrated, 1..n_t-1 are time windows.
   std::vector<Matrix> time_slices;
-
-  /// @brief Total (time-integrated) absorption grid, always accumulated regardless of d_t.
-  Matrix total;
 
   /// @brief Construct an absorption recorder.
   /// @param r      Maximum radial extent.
@@ -71,7 +71,8 @@ struct Absorption {
   ///         mirrored along the radial axis.
   Matrix get_absorption_image(int n_photons, int time_index = 0) const;
 
-  /// @brief Produce a symmetric 2D absorption image from the total (time-integrated) grid.
+  /// @brief Produce a symmetric 2D absorption image from the integrated slice.
+  /// @details This is equivalent to get_absorption_image(n_photons, 0).
   /// @param n_photons   Total number of simulated photons (for normalization).
   /// @return An (2·n_r) × n_z Matrix normalized by voxel volume and photon count,
   ///         mirrored along the radial axis.

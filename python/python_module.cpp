@@ -591,7 +591,8 @@ PYBIND11_MODULE(_core, m)
            py::arg("d_t") = 0.0, py::arg("t_max") = 0.0,
            "Construct an absorption recorder.\n"
            "  d_t == 0  → time-integrated (single bin)\n"
-           "  d_t > 0   → time-resolved with n_t = ceil(t_max / d_t) bins")
+           "  d_t > 0   → n_t = ceil(t_max / d_t) + 1 bins\n"
+           "               bin 0 is always integrated, bins >=1 are time windows")
       .def_readonly("radius", &Absorption::radius)
       .def_readonly("depth", &Absorption::depth)
       .def_readonly("d_r", &Absorption::d_r)
@@ -600,7 +601,6 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("t_max", &Absorption::t_max)
       .def_readonly("n_t", &Absorption::n_t)
       .def_readonly("time_slices", &Absorption::time_slices)
-      .def_readonly("total", &Absorption::total)
       .def("record_absorption", &Absorption::record_absorption,
            py::arg("photon"), py::arg("d_weight"),
            "Record absorption from a photon at its current position (and time)")
@@ -609,7 +609,7 @@ PYBIND11_MODULE(_core, m)
            "Get the 2D absorption image for a given time bin (default: 0)")
       .def("get_total_image", &Absorption::get_total_image,
            py::arg("n_photons"),
-           "Get the 2D absorption image from the total (time-integrated) grid")
+           "Get the integrated absorption image (alias of time_slices[0])")
       .def("clone", &Absorption::clone,
            "Create an empty clone with identical configuration but zeroed grids")
       .def("merge_from", &Absorption::merge_from, py::arg("other"),
