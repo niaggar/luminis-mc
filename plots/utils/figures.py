@@ -13,7 +13,7 @@ def plot_disk(Icoh, Iinc, labels, theta_deg, phi_data, title="CBS Disk Plot", zo
     row_labels = ["Coherent", "Incoherent"]
     nrows = 3 if zoom_theta_deg > 0.0 else 2
 
-    fig, axes = plt.subplots(nrows, 3, figsize=(6, 1.5 * nrows), subplot_kw={'projection': 'polar'})
+    fig, axes = plt.subplots(nrows, 3, figsize=(10, 2.5 * nrows), subplot_kw={'projection': 'polar'})
     fig.suptitle(title, fontsize=16)
     
     if nrows == 3:
