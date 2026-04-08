@@ -1,1456 +1,611 @@
-================================================================================
-                       LUMINIS-MC — Descripción del Código
-================================================================================
-
-1. VISIÓN GENERAL
-================================================================================
-
-luminis-mc es una librería de simulación Monte Carlo de transporte de fotones
-en medios turbios, escrita en C++ con bindings de Python a través de pybind11.
-Está diseñada para simular fenómenos de dispersión múltiple de luz, incluyendo
-polarización, coherencia y Coherent Backscattering (CBS).
-
-El usuario interactúa desde Python: configura el medio, el láser, los detectores
-y ejecuta la simulación. Todo el cómputo pesado (propagación del fotón, scattering,
-detección) se ejecuta en C++ compilado, con soporte para paralelismo multi-hilo.
-El resultado se recoge en Python como arrays NumPy para su análisis y visualización.
-
-La capa Python proporciona además un sistema de persistencia basado en HDF5
-(Experiment + ResultsLoader) y un orquestador de barridos paramétricos
-(SweepManager) para gestionar campañas de simulación a gran escala.
-
-Tecnologías clave:
-  - C++23 como núcleo computacional
-  - Fortran 77 para el solver de Mie (MIEV0)
-  - pybind11 para los bindings Python ↔ C++
-  - scikit-build-core + CMake como sistema de compilación
-  - std::thread para paralelismo
-  - HDF5 (h5py) para persistencia de resultados
-
-
-2. ESTRUCTURA DE ARCHIVOS
-================================================================================
-
-luminis-mc/
-├── CMakeLists.txt               ← Build system (CMake + scikit-build)
-├── pyproject.toml               ← Metadata del paquete Python
-│
-├── include/luminis/             ← HEADERS C++ (interfaz pública)
-│   ├── core/
-│   │   ├── photon.hpp           ← Struct Photon y PhotonRecord
-│   │   ├── laser.hpp            ← Fuente láser (Point, Uniform, Gaussian) + perfiles temporales
-│   │   ├── medium.hpp           ← Medio dispersivo (ScatteringMedium, RGDMedium, MieMedium)
-│   │   ├── sample.hpp           ← Muestra por capas (Sample, SampleLayer)
-│   │   ├── detector.hpp         ← Sensores/Detectores (todos los tipos)
-│   │   ├── simulation.hpp       ← SimConfig y funciones de simulación
-│   │   ├── absortion.hpp        ← Registro de absorción cilíndrico (r,z) con resolución temporal
-│   │   ├── results.hpp          ← Post-procesamiento de resultados CBS (con soporte temporal)
-│   │   └── core.hpp             ← Funciones auxiliares (en desuso/comentadas)
-│   ├── math/
-│   │   ├── vec.hpp              ← Vec3, Vec2, CVec2, Matrix, CMatrix
-│   │   ├── rng.hpp              ← Generador de números aleatorios (mt19937_64)
-│   │   └── utils.hpp            ← Funciones de rotación, scattering, clamping
-│   ├── sample/
-│   │   ├── phase.hpp            ← Funciones de fase (HG, Mie, Rayleigh, Draine...)
-│   │   ├── meanfreepath.hpp     ← Metropolis-Hastings para muestreo de MFP
-│   │   └── table.hpp            ← Tablas de muestreo (CDF inversa) y DataTable
-│   ├── log/
-│   │   ├── logger.hpp           ← Logger singleton con niveles (debug/info/warn/error)
-│   │   └── progress.hpp         ← Monitor de progreso lock-free con callbacks
-│   └── mie/
-│       └── dmiev.h              ← Interfaz C++ al solver Mie en Fortran
-│
-├── src/                         ← IMPLEMENTACIONES C++
-│   ├── simulation.cpp           ← Loop principal de propagación del fotón
-│   ├── detector.cpp             ← Implementación de todos los sensores
-│   ├── photon.cpp               ← Inicialización de fotones
-│   ├── laser.cpp                ← Emisión de fotones desde el láser + muestreo temporal
-│   ├── medium.cpp               ← Muestreo de scattering, matrices de Mie
-│   ├── sample.cpp               ← Implementación de Sample y SampleLayer
-│   ├── phase.cpp                ← Funciones de fase y muestreo condicional
-│   ├── results.cpp              ← Post-procesamiento far-field CBS (time-resolved)
-│   ├── absortion.cpp            ← Registro de absorción cilíndrico (r,z,t)
-│   ├── table.cpp, vec.cpp, ...  ← Utilidades
-│   └── mie/                     ← Solver de Mie (Fortran + wrapper C++)
-│       ├── MIEV0noP.f           ← Código Fortran de Wiscombe (MIEV0)
-│       ├── ErrPack.f            ← Manejo de errores Fortran
-│       └── dmiev.cpp            ← Wrapper C++ que llama al Fortran
-│
-├── python/
-│   ├── python_module.cpp        ← Bindings pybind11 (TODAS las clases expuestas)
-│   └── luminis_mc/
-│       ├── __init__.py          ← Re-exporta todo desde _core + manager + sweepmanager
-│       ├── manager.py           ← Experiment, ResultsLoader y helper on_progress
-│       └── sweepmanager.py      ← SweepManager (orquestador de barridos paramétricos)
-│
-├── tests/                       ← Scripts de simulación en Python
-│   ├── absortion/               ← Simulaciones de absorción
-│   ├── cbs/                     ← Simulaciones CBS (multi-capa, lineal, circular)
-│   ├── medium/                  ← Tests de funciones de fase y matrices de scattering
-│   ├── ring/                    ← Simulaciones de anillos
-│   └── metropolis_hastings.py   ← Test del sampler MCMC
-├── results/                     ← Scripts finales de campañas (CBS/absorción/polarización/speckle)
-├── plots/                       ← Scripts de figuras y utilidades de visualización
-│
-└── apps/                        ← Aplicaciones standalone C++
-    └── main.cpp                 ← Ejemplo de ejecución directa en C++
-
-
-3. PIPELINE DE COMPILACIÓN Y USO
-================================================================================
-
-Compilación:
-  pip install .    (o pip install -e .)
-
-  Internamente:
-    1. scikit-build-core invoca CMake
-    2. CMake compila:
-       a) mie_fortran  → librería estática Fortran (MIEV0 solver)
-       b) _core_c      → librería estática C++ (toda la lógica de simulación)
-       c) _core        → módulo Python (.so) que enlaza _core_c + pybind11
-    3. Se instala como paquete Python: luminis_mc
-
-Uso desde Python:
-    import luminis_mc as lmc
-
-    phase = lmc.MiePhaseFunction(...)
-    medium = lmc.MieMedium(...)
-    sample = lmc.Sample(n_medium=1.33)
-    sample.add_layer(medium, 0.0, float('inf'))
-    laser = lmc.Laser(...)
-    sensors = lmc.SensorsGroup()
-    det = sensors.add_detector(lmc.FarFieldCBSSensor(...))
-
-    config = lmc.SimConfig(n_photons=1e6, sample=sample, ...)
-    config.n_threads = 8
-    lmc.run_simulation_parallel(config)
-
-    # Acceder a resultados
-    S0_coh = np.array(det.S0_coh, copy=False)
-
-
-4. ESTRUCTURA DE LA SIMULACIÓN (run_photon)
-================================================================================
-
-El motor de la simulación implementa el método Monte Carlo de transporte radiativo
-con polarización vectorial (matrices de Jones / parámetros de Stokes).
-
-4.1 Configuración (SimConfig)
-─────────────────────────────
-SimConfig agrupa todos los componentes necesarios:
-  - MAX_EVENTS:          límite de eventos de scattering por fotón (default 1000)
-  - batch_size:          tamaño de lote por worker para scheduler dinámico
-                         (0 => auto; actualmente usa 256 internamente)
-  - show_progress:       habilita/deshabilita barra de progreso en terminal
-  - progress_interval_pct: frecuencia de refresco de barra (en %)
-  - n_photons:           número total de fotones a simular
-  - n_threads:           número de hilos para ejecución paralela
-                         (si n_threads = 0, usa hardware_concurrency)
-  - seed:                semilla del RNG (por defecto, std::random_device{})
-  - pin_threads_to_cores: afinidad best-effort por hilo (Linux/macOS)
-  - sample:              puntero al Sample (muestra por capas compartiendo n_medio)
-  - laser:               puntero a la fuente láser
-  - detector:            puntero al grupo de sensores
-  - absorption:          (opcional) registro de absorción cilíndrico (r,z) con
-                         resolución temporal opcional
-  - track_reverse_paths: si true, calcula el path reverso para CBS
-
-4.2 Ejecución paralela (run_simulation_parallel)
-─────────────────────────────────────────────────
-1. Se calcula el número efectivo de hilos:
-  - si n_threads = 0, se usa hardware_concurrency
-  - nunca se lanzan más hilos que fotones
-2. Se usa un scheduler dinámico por lotes:
-  - contador atómico next_photon
-  - cada hilo toma chunks de tamaño batch_size
-  - mejora balanceo cuando el costo por fotón no es uniforme
-3. Cada hilo recibe:
-   - Un clon del SensorsGroup (thread-local, sin locks)
-  - Un clon del Absorption (thread-local, si absorption != nullptr)
-   - Un RNG con semilla derivada (mix_seed(base_seed, thread_id))
-4. Cada hilo ejecuta run_photon() para cada uno de sus fotones.
-5. Si show_progress=true, cada hilo llama tick() del ProgressReporter
-  (operación atómica lock-free).
-6. Al finalizar todos los hilos, se hace merge de los detectores locales
-   al detector principal (merge_from), y lo mismo con Absorption.
-7. Si un hilo lanza una excepción, se propaga al hilo principal tras el join.
-
-4.3 Loop de propagación del fotón (run_photon)
-───────────────────────────────────────────────
-Para cada fotón:
-
-  (a) Inicialización:
-      - El láser emite un fotón: posición, dirección, polarización (CVec2),
-        longitud de onda, número de onda k.
-      - Se muestrea el tiempo de emisión (launch_time) según el perfil
-        temporal del láser (ver sección 7).
-      - Se inicializan las matrices de base local P_local (3x3) que representan
-        el sistema de coordenadas local del fotón: filas = (m, n, s) donde
-        m y n son los ejes de polarización y s es la dirección de propagación.
-      - La velocidad del fotón se establece como v = light_speed_in_medium()
-        del Sample.
-      - El fotón se ubica en la capa inicial usando get_layer_index_at(pos.z).
-      - Para CBS: se reinician P0, P1, Pn2, Pn1, Pn, r_1, r_n,
-        polarización inicial y T = I.
-
-  (b) Step + cruce de interfaces:
-      1. Muestrea un camino libre desde el medio de la capa actual.
-      2. Si el paso cruza una interfaz entre capas (via find_next_interface):
-         - Trunca el paso en la interfaz.
-         - Calcula la distancia óptica restante: d_opt = (step_restante) × μ_t_vieja.
-         - Mueve el fotón justo tras la interfaz (nudge ε).
-         - Detecta sensores en el sub-paso (record_hit).
-         - Transita a la nueva capa, convierte d_opt a paso físico:
-             step_nuevo = d_opt / μ_t_nueva.
-         - No actualiza velocidad: todas las capas comparten el mismo n_medio.
-         - Repite si el paso restante cruza otra interfaz.
-      3. Avanza lo restante del paso en la capa final:
-           pos += P_local[2] * step
-
-  (c) Detección: SensorsGroup::record_hit() verifica si el fotón cruzó algún
-      plano detector (z_layers). Si cruza, calcula el punto de intersección,
-      la fase óptica, la dirección de cruce (Forward/Backward), y llama a
-      process_hit() del sensor correspondiente tras verificar filtros (incluyendo
-      el filtro de dirección de cruce).
-      Si absorb_photons=true, el fotón muere.
-
-  (d) Registro de absorción: Si hay un Absorption configurado, en cada paso
-      de scattering se deposita el peso absorbido:
-        d_weight = weight × (μ_a / μ_t)
-      en el bin cilíndrico (r, z) correspondiente a la posición del fotón.
-      Si la absorción es time-resolved, el bin temporal se determina por
-      launch_time + opticalpath / velocity.
-
-  (e) Verificación de frontera: Comprueba que el fotón siga dentro del Sample.
-      Si sale (z < 0 o z ≥ z_top), el fotón muere (sin reflexión de Fresnel).
-
-  (f) Estimadores: SensorsGroup::run_estimators() permite que sensores con
-      estimator_enabled calculen contribuciones parciales sin que el fotón
-      llegue físicamente al plano detector.
-
-  (g) Scattering:
-      - Muestrea ángulo polar θ (desde PhaseFunction via CDF inversa)
-      - Calcula la matriz de scattering S(θ) del medio
-      - Muestrea ángulo azimutal φ condicionado a la polarización actual
-        (muestreo condicional que respeta la distribución de Mie completa)
-      - Actualiza la base local: P_local = A(θ,φ) · P_local
-      - Actualiza polarización usando la matriz de Jones:
-          T = S · R(φ)
-          E_new = T · E_old / sqrt(F)
-        donde F es el factor de normalización que asegura consistencia
-        con el peso estadístico.
-
-  (h) Tracking CBS (si track_reverse_paths):
-      - Guarda r_1 (posición del primer scattering), r_n (último)
-      - Guarda first_scatter_layer, last_scatter_layer
-      - Guarda bases P0, P1, Pn2, Pn1, Pn
-      - Acumula la matriz de Jones intermedia T_mid:
-        Para n >= 3, T_mid = J_{n-1} · J_{n-2} · ... · J_2
-        El buffer J_prev se acumula paso a paso (pipeline de 2 etapas).
-      - También se acumula matrix_T_raw (sin el factor de normalización F)
-        para uso en estimadores.
-
-  (i) Absorción parcial y Russian roulette:
-      - El peso se reduce: w *= μ_s / μ_t (albedo)
-      - Si w < 1e-4: ruleta rusa (10% chance de sobrevivir con w/0.1)
-      - Si events > MAX_EVENTS: el fotón muere (configurable en SimConfig).
-
-
-5. EL FOTÓN (Photon)
-================================================================================
-
-Campos principales:
-  - pos, prev_pos:        posición actual y anterior
-  - detected_pos:         posición donde fue detectado por última vez
-  - P_local:              Matrix 3x3, base local (m=fila0, n=fila1, s=fila2)
-  - polarization:         CVec2 (Em, En) — campo eléctrico en base local
-  - weight:               peso estadístico del fotón
-  - k:                    número de onda 2π/λ
-  - wavelength_nm:        longitud de onda en nm
-  - opticalpath:          camino óptico acumulado
-  - events:               número de scatterings sufridos
-  - alive:                false cuando el fotón ha sido terminado
-  - penetration_depth:    profundidad máxima alcanzada en el medio
-  - launch_time:          tiempo de emisión [ns] (muestreado del perfil temporal
-                          del láser); usado para detección time-gated y registro
-                          de absorción temporal.
-  - velocity:             velocidad de fase en el medio [mm/ns] (c/n_medium);
-                          establecida a partir de Sample::light_speed_in_medium().
-  - current_layer:        índice de la capa actual del Sample en la que se
-                          encuentra el fotón. Se actualiza al cruzar interfaces.
-  - polarized:            cuando false, se ignora la polarización y se usa
-                          transporte incoherente. Por defecto true.
-
-Campos para CBS:
-  - P0, P1, Pn2, Pn1, Pn: bases locales en puntos clave de la trayectoria
-  - r_1, r_n:             posiciones del primer y último scattering
-  - first_scatter_layer:  índice de capa del primer scattering
-  - last_scatter_layer:   índice de capa del último scattering
-  - matrix_T:             matriz de Jones intermedia acumulada (J_2...J_{n-1}),
-                          normalizada por factor F en cada paso
-  - matrix_T_buffer:      buffer temporal para el pipeline de acumulación
-  - matrix_T_raw:         producto acumulado sin normalización F (para estimadores)
-  - matrix_T_raw_buffer:  buffer temporal para matrix_T_raw
-  - has_T_prev:           true una vez que al menos un evento ha sido committed
-  - initial_polarization: polarización del fotón al ser emitido
-  - polarization_reverse: campo eléctrico del path reverso (calculado por CBS)
-  - coherent_path_calculated: flag, true una vez calculado el path reverso
-
-Método get_stokes_parameters():
-  Retorna {S0, S1, S2, S3} calculados como:
-    S0 = |Em|² + |En|²
-    S1 = |Em|² − |En|²
-    S2 = 2·Re(Em·En*)
-    S3 = −2·Im(Em·En*)
-  Si polarized es false, retorna {1, 0, 0, 0}.
-
-PhotonRecord (struct separado):
-  Snapshot inmutable de un fotón al momento de detección. Almacena:
-  - events, penetration_depth, opticalpath, weight, k
-  - launch_time:  tiempo de emisión [ns]
-  - arrival_time: tiempo de llegada al detector [ns]
-                  = launch_time + opticalpath / velocity
-  - position_first_scattering, position_last_scattering, position_detector
-  - direction, m, n (base local en el momento de detección)
-  - polarization_forward, polarization_reverse (Jones vectors)
-
-
-6. EL MEDIO DISPERSIVO (ScatteringMedium)
-================================================================================
-
-ScatteringMedium es la clase base abstracta que describe las propiedades de
-scattering y absorción de las partículas en suspensión. NO almacena el índice
-de refracción del medio huésped (solvente); ese dato pertenece al Sample
-(sección 6b). Esto refleja la física: en una muestra real las distintas capas
-pueden tener diferentes partículas en suspensión, pero el solvente (y por tanto
-su índice de refracción) es el mismo en todas.
-
-Archivo: include/luminis/core/medium.hpp   |   src/medium.cpp
-
-6.1 ScatteringMedium (base abstracta)
-─────────────────────────────────────
-Métodos virtuales puros:
-  - sample_free_path(rng)      → longitud del paso libre [mm]
-  - scattering_matrix(θ, φ, k) → CMatrix 2×2 de Jones [[S2, 0], [0, S1]]
-  - scattering_efficiency()    → eficiencia de scattering Q_sca
-  - scattering_cross_section() → sección eficaz sigma_sca
-
-Métodos con implementación por defecto (delegan a PhaseFunction):
-  - sample_scattering_angle(rng) → θ (via CDF inversa de la fase)
-  - sample_azimuthal_angle(rng)  → φ uniforme en [0, 2π)
-  - sample_conditional_azimuthal_angle(rng, S, E, k, θ) → φ condicionado
-    a la polarización actual (muestreo que respeta la distribución de Mie)
-  - set_scattering_coefficient(mu_s) y set_absorption_coefficient(mu_a)
-    para recalcular μ_t y cerrar consistencia óptica en tiempo de ejecución
-
-Propiedades:
-  - mu_absorption   (μ_a [1/mm])  — coeficiente de absorción
-  - mu_scattering   (μ_s [1/mm])  — coeficiente de scattering
-  - mu_attenuation  (μ_t = μ_a + μ_s [1/mm]) — coeficiente de atenuación total
-  - phase_function  (puntero no-owning a PhaseFunction)
-
-6.2 RGDMedium (Rayleigh-Gans-Debye)
-────────────────────────────────────
-Hereda de ScatteringMedium. Válido para partículas pequeñas y ópticamente
-suaves: parámetro de tamaño x = 2πr/λ ≪ 1, |m − 1| ≪ 1 y |m − 1| x ≪ 1.
-
-  - Camino libre: exponencial, l = −l_mean · ln(U), con l_mean = 1/μ_s.
-  - Matriz de scattering: fórmula analítica RGD:
-      s2 = −i k³ (m−1) V F(θ,k,r) cos(θ) / (2π)
-      s1 = −i k³ (m−1) V F(θ,k,r)         / (2π)
-    donde V = (4π/3) r³ es el volumen de la partícula, F el form factor, y
-    m = n_particle/n_medium el índice relativo.
-  - Parámetros propios: radius, n_particle, n_medium (contraste para el form
-    factor, NO el índice global del solvente).
-  - Q_sca: se obtiene por integración numérica de la respuesta angular
-    (regla de Simpson en la implementación actual).
-  - σ_sca: se calcula como Q_sca · π · r².
-  - Setter adicional expuesto a Python: set_mean_free_path(mfp).
-
-6.3 MieMedium (Mie completo)
-────────────────────────────
-Hereda de ScatteringMedium. Sin restricción de tamaño de partícula.
-
-  - Camino libre: exponencial (igual que RGDMedium).
-  - Matriz de scattering: tablas precomputadas por el solver Fortran MIEV0.
-    Al construirse, se evalúan S1(θ) y S2(θ) en una grilla uniforme de 1000
-    ángulos en [0, π] y se almacenan en DataTable para look-up O(1) por
-    interpolación. Esto evita llamar a MIEV0 en cada evento de scattering.
-  - Parámetros propios: radius, n_particle, n_medium, wavelength,
-    m = n_particle/n_medium (complejo en general).
-  - Q_sca: se consulta al solver de Mie (mievinfo).
-  - σ_sca: se calcula como Q_sca · π · r².
-  - Setter adicional expuesto a Python: set_mean_free_path(mfp).
-
-6.4 Funciones de fase (PhaseFunction)
-─────────────────────────────────────
-Todas heredan de PhaseFunction y se muestrean por inversión de CDF numérica:
-
-  - UniformPhaseFunction:             isotrópica
-  - HenyeyGreensteinPhaseFunction:    parametrizada por g (asimetría)
-  - RayleighPhaseFunction:            scattering Rayleigh
-  - RayleighDebyePhaseFunction:       Rayleigh-Debye-Gans
-  - RayleighDebyeEMCPhaseFunction:    Rayleigh-Debye con corrección EMC
-  - DrainePhaseFunction:              Draine (parametrizada por g y α)
-  - MiePhaseFunction:                 exacta Mie (via tablas precalculadas)
-
-Todas usan SamplingTable internamente: se construye la CDF numérica de la PDF
-de scattering y se muestrea por inversión (sample_theta(u)).
-
-Método adicional en PhaseFunction:
-  - get_anisotropy_factor(n_samples): estima el factor de anisotropía g
-    mediante muestreo Monte Carlo.
-
-
-6b. LA MUESTRA POR CAPAS (Sample)
-================================================================================
-
-Archivo: include/luminis/core/sample.hpp   |   src/sample.cpp
-
-El Sample modela una muestra física formada por capas contiguas de medios
-dispersivos apiladas a lo largo del eje z, como un pastel de capas. Todas las
-capas comparten el mismo medio huésped (solvente) con índice de refracción
-n_medium; lo que cambia entre capas son las propiedades de las partículas en
-suspensión (coeficientes ópticos μ_a, μ_s, función de fase, etc.).
-
-6b.1 Modelo físico y justificación
-──────────────────────────────────
-En un experimento de scattering múltiple, la cubeta contiene un solvente
-(p. ej. agua, n ≈ 1.33) en el que se suspenden partículas. Se puede preparar
-la muestra con capas que difieren en concentración, tamaño de partícula o
-material, pero el solvente es siempre el mismo líquido.
-
-Consecuencias físicas:
-  1. El índice de refracción es uniforme en toda la muestra:
-       n(z) = n_medium  ∀ z.
-  2. La velocidad del fotón es constante:
-       v = c / n_medium = 1 / n_medium  (en unidades naturales c=1).
-  3. No hay reflexión ni refracción de Fresnel en las interfaces entre capas,
-     porque el contraste de índice es Δn = 0. El fotón cruza las interfaces
-     libremente; solo cambian las propiedades de scattering/absorción.
-  4. Al cruzar una interfaz, la dirección del fotón no cambia, pero el camino
-     libre restante debe re-escalarse porque cambia el coeficiente de
-     atenuación μ_t (ver sección 6b.3).
-
-6b.2 Estructura de datos
-────────────────────────
-
-  SampleLayer (una capa individual):
-    - medium:  const ScatteringMedium*  (puntero no-owning al medio dispersivo)
-    - z_min:   frontera inferior de la capa [mm] (inclusiva)
-    - z_max:   frontera superior de la capa [mm] (exclusiva, puede ser +∞)
-    - contains(z)  → true si z_min ≤ z < z_max
-    - thickness()  → z_max − z_min (puede ser +∞)
-
-  Sample (colección ordenada de capas):
-    - layers:           vector<SampleLayer>, ordenadas por z_min
-    - interfaces:       vector<double>, coordenadas z de las fronteras internas
-                        (excluye z=0 y z_max de la última capa)
-    - refractive_index: índice de refracción del solvente (n_medium)
-    - light_speed:      velocidad del fotón = 1 / n_medium
-
-    Constructor:
-      Sample(n_medium = 1.0)  → inicializa refractive_index y light_speed
-
-    Métodos principales:
-      - add_layer(medium, z_min, z_max)
-          Agrega una capa al tope de la muestra. Reglas:
-          · La primera capa debe empezar en z = 0.
-          · Cada capa subsiguiente debe empezar exactamente donde termina la
-            anterior (contigüidad estricta, sin huecos ni solapamientos).
-          · z_max > z_min. La última capa puede tener z_max = +∞ (semi-infinita).
-          · medium != nullptr.
-      - get_layer(index)        → referencia a la capa por índice
-      - get_layer_at(z)         → puntero a la capa que contiene z (búsqueda
-                                  binaria O(log N) sobre el vector interfaces)
-      - get_layer_index_at(z)   → índice de la capa que contiene z
-      - find_next_interface(z_current, z_target)
-          Busca la primera interfaz interna entre z_current y z_target.
-          Retorna std::optional<double> con la coordenada z de la interfaz,
-          o std::nullopt si no hay interfaz entre ambos puntos.
-          Funciona tanto para movimiento ascendente (z_target > z_current)
-          como descendente (z_target < z_current).
-      - is_inside(position)     → true si la posición 3D está dentro del Sample
-                                  (z ≥ 0 y z < z_top, sin NaN/Inf en x,y,z)
-      - z_top()                 → z_max de la última capa (puede ser +∞)
-      - light_speed_in_medium() → velocidad del fotón (= 1/n_medium)
-
-6b.3 Algoritmo de cruce de interfaces (en run_photon)
-─────────────────────────────────────────────────────
-Cuando un fotón se mueve un paso libre (step) dentro de una capa, puede
-cruzar una o varias interfaces antes de consumir toda la distancia óptica
-muestreada. El algoritmo es iterativo:
-
-  ENTRADA: step (distancia física muestreada), dirección (dir_x, dir_y, dir_z)
-
-  1. Calcular z candidato: new_z = pos.z + dir_z * step
-  2. Buscar la próxima interfaz: iface = find_next_interface(pos.z, new_z)
-  3. Mientras exista una interfaz entre pos.z y new_z:
-     a. Parametrizar la intersección: t = (z_iface − pos.z) / (dir_z · step)
-        Si |dir_z · step| < ε o t ∉ [0,1], salir del loop (guard numérico).
-     b. Distancia al borde: step_to_iface = step · t
-     c. Distancia óptica restante: d_opt = (step − step_to_iface) × μ_t_vieja
-        donde μ_t_vieja es el mu_attenuation de la capa actual.
-     d. Mover el fotón a la interfaz:
-          pos += dir · step_to_iface
-          pos.z = z_iface ± ε   (nudge para aterrizar en la capa correcta)
-     e. Verificar sensores en el sub-paso (record_hit).
-     f. Determinar la nueva capa: new_layer_idx = get_layer_index_at(pos.z)
-        Si new_layer_idx ≥ size(), el fotón salió del Sample → muere.
-     g. Actualizar current_layer del fotón.
-     h. Convertir distancia óptica a física en la nueva capa:
-          step = d_opt / μ_t_nueva
-        Esto preserva el número de caminos libres ópticos: la porción ya
-        viajada consumió τ₁ = step_to_iface × μ_t_vieja, y el total muestreado
-        era τ = step_original × μ_t_vieja. La porción restante τ₂ = τ − τ₁ se
-        traduce a distancia física en el medio nuevo como τ₂ / μ_t_nueva.
-     i. Recalcular new_z y buscar la siguiente interfaz (repite desde 3).
-
-  4. Completar el paso restante en la capa final: pos += dir · step.
-
-  Justificación del re-escaleo de distancia óptica:
-    En Monte Carlo, el camino libre se muestrea como τ = −ln(U) (variable
-    exponencial). Este τ es adimensional y representa la distancia óptica.
-    La distancia física correspondiente es l = τ / μ_t. Al cambiar de capa,
-    μ_t cambia, pero τ restante no: simplemente se convierte a la nueva
-    longitud física l' = τ_restante / μ_t_nueva. Esto es equivalente a
-    muestrear un nuevo camino libre condicionado a no haber interactuado
-    en la primera capa — la "propiedad sin memoria" de la distribución
-    exponencial.
-
-  Nota sobre velocidad: como n_medium es constante, la velocidad del fotón
-  no cambia al cruzar interfaces. No se aplican condiciones de Fresnel.
-
-6b.4 Ejemplo de uso desde Python
-────────────────────────────────
-    import luminis_mc as lmc
-
-    # Funciones de fase para cada capa
-    phase1 = lmc.MiePhaseFunction(radius=0.5e-3, n_p=1.59, n_m=1.33, wl=0.633e-3)
-    phase2 = lmc.HenyeyGreensteinPhaseFunction(g=0.9)
-
-    # Medios dispersivos (API vigente)
-    medium1 = lmc.MieMedium(phase1, 0.5e-3, 1.59, 1.33, 0.633e-3)
-    medium2 = lmc.RGDMedium(phase2, 0.2e-3, 1.50, 1.33, 0.633e-3)
-
-    # Coeficientes ópticos se fijan por setters
-    medium1.set_scattering_coefficient(10.0)
-    medium1.set_absorption_coefficient(0.01)
-    medium2.set_scattering_coefficient(5.0)
-    medium2.set_absorption_coefficient(0.0)
-
-    # Muestra: agua como solvente, dos capas
-    sample = lmc.Sample(n_medium=1.33)
-    sample.add_layer(medium1, 0.0, 5.0)           # capa 1: z ∈ [0, 5) mm
-    sample.add_layer(medium2, 5.0, float('inf'))   # capa 2: z ∈ [5, ∞) mm
-
-    # Configuración
-    config = lmc.SimConfig(
-        n_photons=1_000_000,
-        sample=sample,
-        laser=laser,
-        detector=sensors
-    )
-    lmc.run_simulation_parallel(config)
-
-
-7. EL LÁSER (Laser)
-================================================================================
-
-Archivo: include/luminis/core/laser.hpp   |   src/laser.cpp
-
-Define la fuente de fotones que inicia cada trayectoria Monte Carlo.
-
-7.1 Parámetros espaciales
-────────────────────────
-  - position:       origen de emisión (por defecto z = ε > 0, justo dentro
-                    de la muestra)
-  - direction:      dirección de propagación (por defecto +z)
-  - local_m, local_n: base de polarización del láser (por defecto x, y)
-  - polarization:   CVec2 (componentes m y n del campo eléctrico)
-  - wavelength:     longitud de onda → determina k = 2π·n_medio / λ
-  - sigma:          parámetro de dispersión espacial
-  - source_type:    distribución espacial del haz:
-      · LaserSource::Point    — fuente puntual (x=0, y=0)
-      · LaserSource::Uniform  — disco uniforme de radio sigma
-      · LaserSource::Gaussian — perfil gaussiano con desviación estándar sigma
-
-7.2 Perfil temporal (Timed Laser)
-─────────────────────────────────
-El láser puede emitir fotones con distribución temporal configurable.
-Cada fotón recibe un launch_time muestreado según el perfil elegido.
-Esto permite simulaciones time-resolved cuando se combinan con sensores
-que registran tiempo (PlanarFluenceSensor, FarFieldCBSSensor, Absorption).
-
-Perfiles temporales (enum TemporalProfile):
-
-  - Delta:        todos los fotones se emiten en t = t_offset.
-                  Pulso infinitamente corto (función δ).
-
-  - Gaussian:     distribución gaussiana centrada en t_offset con
-                  FWHM = pulse_duration.
-                  σ = pulse_duration × FWHM_TO_SIGMA, donde
-                  FWHM_TO_SIGMA = 1 / (2√(2·ln2)) ≈ 0.4247.
-                  t = Normal(t_offset, σ).
-
-  - TopHat:       distribución uniforme en
-                  [t_offset − pulse_duration/2, t_offset + pulse_duration/2].
-                  Pulso rectangular de duración pulse_duration.
-
-  - Exponential:  decaimiento exponencial con constante de tiempo pulse_duration.
-                  t = t_offset − ln(U) × pulse_duration.
-                  Modela un pulso con rise instantáneo y tail exponencial.
-
-  - PulseTrain:   tren de pulsos equivalentes, uniformemente distribuidos
-                  en una ventana temporal igual al período de repetición.
-                  t = t_offset + U × (1/repetition_rate).
-                  Parámetro: repetition_rate en Hz.
-
-  - CW:           emisión continua (continuous wave) durante una ventana
-                  temporal de duración pulse_duration.
-                  t = t_offset + U × pulse_duration.
-
-Parámetros de configuración temporal:
-  - pulse_duration:  duración del pulso [ps]. Usado por Gaussian, TopHat,
-                     Exponential, CW.
-  - repetition_rate: tasa de repetición [Hz]. Usado por PulseTrain.
-  - time_offset:     desplazamiento temporal [ps]. Se aplica a todos los perfiles
-                     como un offset constante.
-
-Conversión de unidades:
-  Internamente, pulse_duration y time_offset se convierten de ps a ns
-  (factor 1e-3) antes de asignar launch_time al fotón. Esto es consistente
-  con la convención de que el camino óptico y la velocidad del fotón están
-  en mm y mm/ns respectivamente.
-
-Método set_temporal_profile(profile, pulse_duration, repetition_rate, time_offset):
-  Configura el perfil temporal del láser. Si no se llama, el perfil por defecto
-  es Delta con offset cero.
-
-emit_photon(rng) → crea un Photon con posición (según source_type), dirección,
-base local, polarización y launch_time (según temporal_profile) configurados.
-
-
-8. LOS DETECTORES (Sensor y subclases)
-================================================================================
-
-8.1 Arquitectura general
-────────────────────────
-Todos los detectores heredan de la clase base abstracta Sensor:
-
-  Sensor (base)
-  ├── PhotonRecordSensor      — Graba cada fotón individualmente
-  ├── PlanarFieldSensor        — Campo eléctrico complejo en plano (x,y)
-  ├── PlanarFluenceSensor      — Parámetros de Stokes en plano (x,y,t)
-  ├── PlanarCBSSensor          — CBS en plano espacial (en desarrollo)
-  ├── FarFieldFluenceSensor    — Parámetros de Stokes en campo lejano (θ,φ)
-  ├── FarFieldCBSSensor        — CBS en campo lejano (θ,φ,t) ← PRINCIPAL CBS
-  └── StatisticsSensor         — Histogramas estadísticos
-
-Cada Sensor tiene:
-  - id (entero único asignado por SensorsGroup)
-  - origin (posición z del plano detector)
-  - normal (siempre ẑ)
-  - backward_normal (siempre −ẑ)
-  - m_polarization, n_polarization (base de referencia: +x, +y)
-  - hits (contador de fotones procesados)
-  - Filtros opcionales:
-    · Theta: rango de ángulo polar permitido [theta_min, theta_max]
-    · Phi: rango de ángulo azimutal permitido [phi_min, phi_max]
-    · Posición: ventana rectangular (x_min, x_max, y_min, y_max)
-    · Dirección de cruce: Forward (z+), Backward (z−), o Both
-  - absorb_photons: si true, el fotón muere al ser detectado
-  - estimator_enabled: si true, se llama process_estimation() en cada scattering
-
-Filtro de dirección de cruce (CrossingDirection):
-  Nuevo filtro que permite seleccionar fotones según la dirección en que
-  cruzan el plano detector. Valores posibles:
-    - CrossingDirection::Forward  — solo fotones viajando hacia z+
-    - CrossingDirection::Backward — solo fotones viajando hacia z−
-    - CrossingDirection::Both     — ambas direcciones (equivalente a desactivado)
-  Se configura con set_direction_limit(direction).
-  El InteractionInfo ahora incluye crossing_direction para que los sensores
-  conozcan la dirección del cruce.
-
-Métodos virtuales que cada sensor implementa:
-  - process_hit():        se llama cuando el fotón cruza el plano detector
-  - process_estimation(): se llama después de cada scattering (estimadores)
-  - clone():              crea una copia vacía (para paralelismo)
-  - merge_from():         combina resultados de otro sensor del mismo tipo
-
-SensorsGroup:
-  - Contenedor de múltiples sensores.
-  - z_layers: mapa ordenado {z → [sensores en ese z]}. Permite buscar
-    eficientemente qué sensores cruza un fotón verificando solo las capas
-    entre z_min y z_max del paso actual. Usa DoubleComparator con tolerancia
-    1e-9 para evitar duplicados por imprecisión floating-point.
-  - Método add_detector(): clona el sensor y devuelve un puntero a la copia
-    interna. Esto permite manipular el sensor devuelto directamente desde
-    Python y leer resultados tras la simulación.
-  - record_hit(): para cada capa z cruzada, calcula la intersección exacta,
-    determina la CrossingDirection, verifica filtros (check_conditions), y
-    llama process_hit().
-  - run_estimators(): llama process_estimation() en todos los estimadores.
-
-8.2 PhotonRecordSensor
-──────────────────────
-El sensor más simple. Almacena un vector de PhotonRecord.
-Cada proceso de hit crea un snapshot completo del fotón: posición, dirección,
-peso, polarización forward y reverse, camino óptico, launch_time, arrival_time,
-etc.
-
-Útil para: post-procesamiento personalizado en Python, cálculos de speckle,
-análisis detallado por fotón individual.
-
-8.3 PlanarFieldSensor
-─────────────────────
-Acumula el campo eléctrico complejo en una grilla 2D (N_x × N_y).
-Tiene dos campos: Ex y Ey (CMatrix).
-
-process_hit():
-  - Proyecta la polarización local (Em, En) a componentes de laboratorio (x, y)
-    usando la base P_local del fotón:
-      Ex += (Em·P[0,0] + En·P[1,0]) · phase · √weight
-      Ey += (Em·P[0,1] + En·P[1,1]) · phase · √weight
-  - La fase es exp(i·k·optical_path) y √weight mantiene la coherencia
-    estadística (la interferencia se produce al sumar amplitudes).
-
-process_estimation():
-  - Calcula la contribución del estimador: scatter virtual hacia el detector,
-    incluyendo rotación de base, scattering matrix, atenuación exponencial,
-    y proyección de polarización.
-
-Útil para: patrones de speckle, interferencia coherente en campo cercano.
-
-8.4 PlanarFluenceSensor (con resolución temporal)
-──────────────────────────────────────────────────
-Acumula los cuatro parámetros de Stokes (S0, S1, S2, S3) en una grilla
-espacial 2D, opcionalmente resuelta en tiempo (S0_t[t_idx](x, y)).
-
-Resolución temporal:
-  - Si dt > 0: datos almacenados como S*_t[t_idx](x_idx, y_idx) con
-    N_t = ceil(len_t / dt) bins temporales.
-  - Si dt == 0: un solo bin temporal (time-integrated).
-  El tiempo de llegada se calcula como: launch_time + opticalpath / velocity.
-
-process_hit():
-  - Calcula las componentes del campo en coordenadas del detector.
-  - Calcula los Stokes: S0 = |Ex|² + |Ey|², S1 = |Ex|² - |Ey|²,
-    S2 = 2·Re(Ex·Ey*), S3 = 2·Im(Ex·Ey*).
-  - Deposita en el bin (x_idx, y_idx, t_idx) correspondiente.
-
-process_estimation():
-  - Similar al PlanarFieldSensor pero deposita parámetros de Stokes en vez
-    de campo complejo.
-
-Útil para: distribuciones espaciales de intensidad, resolución temporal,
-imágenes de fluencia con polarimetría, propagación de pulsos.
-
-8.5 FarFieldFluenceSensor
-─────────────────────────
-Acumula los Stokes en una grilla angular (N_theta × N_phi) en campo lejano.
-
-process_hit():
-  - Calcula θ = acos(-s_z) y φ = atan2(s_y, s_x) de la dirección del fotón.
-  - Proyecta polarización a lab y deposita Stokes en el bin angular.
-
-Útil para: distribuciones angulares de intensidad difusa, sin CBS.
-
-8.6 StatisticsSensor
-────────────────────
-Histogramas configurables de propiedades del fotón al ser detectado:
-  - events_histogram:  número de scatterings [0, max_events)
-  - theta_histogram:   ángulo polar de salida [min_theta, max_theta)
-  - phi_histogram:     ángulo azimutal [min_phi, max_phi)
-  - depth_histogram:   profundidad de penetración [0, max_depth)
-  - time_histogram:    tiempo de llegada [0, max_time)
-  - weight_histogram:  peso estadístico [0, max_weight)
-
-Se configura qué histogramas activar y sus rangos/bins con métodos
-set_*_histogram_bins(). Histogramas no configurados permanecen vacíos
-y no incurren en costo de ejecución.
-
-Útil para: estadísticas de transporte, validación, distribuciones de
-número de scattering, análisis time-of-flight.
-
-
-9. DETECTORES CBS (Coherent Backscattering)
-================================================================================
-
-CBS es el fenómeno principal modelado por esta librería. La idea física es
-que en backscattering, para cada trayectoria directa (forward) a través
-del medio, existe una trayectoria inversa (reverse) que visita los mismos
-scatterers en orden inverso. Estas dos trayectorias son recíprocas e
-interfieren constructivamente en la dirección exacta de backscattering,
-produciendo un pico de intensidad (enhancement factor ≈ 2).
-
-9.1 PlanarCBSSensor (en desarrollo)
-────────────────────────────────────
-Diseñado para CBS en campo cercano (plano espacial). El código de process_hit()
-está mayoritariamente comentado. La estructura almacena Stokes S0-S3 en una
-grilla (N_x × N_y). No está funcional en la versión actual.
-
-9.2 FarFieldCBSSensor ← DETECTOR CBS PRINCIPAL (con resolución temporal)
-────────────────────────────────────────────────────────────────────────
-Este es el detector central para simulaciones de CBS. Opera en el espacio
-angular (campo lejano) con una grilla (N_theta × N_phi), opcionalmente
-resuelta en tiempo.
-
-Parámetros de construcción:
-  FarFieldCBSSensor(theta_max, phi_max, t_max, n_theta, n_phi, n_t, estimator)
-  - theta_max, phi_max: extensión angular máxima [rad]
-  - t_max: ventana temporal total (0 para time-integrated)
-  - n_theta, n_phi: número de bins angulares
-  - n_t: número de bins temporales (ignorado si t_max=0)
-  - estimator: habilitar estimador
-
-Resolución temporal:
-  - Si t_max > 0, dt = t_max / n_t. Los Stokes se almacenan como
-    vector<Matrix> con N_t elementos (uno por bin temporal).
-  - Si t_max == 0, N_t = 1, dt = 0 (time-integrated, un solo bin).
-  - El tiempo de llegada se calcula igual que en PlanarFluenceSensor.
-
-Parámetros de control del estimador (partial photon / next-event):
-  - theta_pp_max: ángulo polar máximo para el estimador de fotón parcial.
-                  Si < 0, usa theta_max. Permite limitar los bins sobre los
-                  que itera el estimador para mejorar rendimiento.
-  - theta_stride, phi_stride: subsampling para el estimador. Valores > 1
-    saltan bins al iterar, reduciendo el costo computacional a costa de
-    resolución angular en la contribución estimada.
-  - _I_norm, _I_norm_k: caché mutable para la normalización angular
-    (depende de k). Calculado una sola vez y reutilizado.
-
-Almacena DOS conjuntos de Stokes (cada uno como vector<Matrix> de N_t bins):
-  - S0_coh, S1_coh, S2_coh, S3_coh:     intensidad COHERENTE |E_f + E_r|²
-  - S0_incoh, S1_incoh, S2_incoh, S3_incoh: intensidad INCOHERENTE |E_f|² + |E_r|²
-
-El enhancement factor se obtiene como: η(θ) = I_coh(θ) / I_incoh(θ)
-En θ=0 (exact backscattering), η → 2 para medios conservadores sin absorción.
-
-process_hit(photon, info, medium):
-  Requiere events >= 2 (CBS no existe para scattering simple).
-
-  Paso 1: Cálculo del path reverso
-    Llama a coherent_calculation(photon, medium) que calcula
-    photon.polarization_reverse (ver sección 9.3).
-
-  Paso 2: Ángulos far-field
-    θ = acos(-s_out_z), φ = atan2(s_out_y, s_out_x)
-    Se determina el bin (theta_idx, phi_idx).
-
-  Paso 3: Bin temporal
+LUMINIS-MC CODEBASE AND PHYSICS GUIDE
+Updated: 2026-04-08
+
+Purpose of this file
+====================
+This document is the onboarding reference for humans and AI agents working in
+this repository. It explains:
+
+1. What the code does physically.
+2. How the C++ engine is structured.
+3. How Python bindings expose the engine.
+4. Which APIs are current (and which examples in tests are legacy/outdated).
+
+If you only read one file before editing this project, read this one.
+
+
+1) What this project simulates
+==============================
+Luminis-MC is a Monte Carlo simulator for light transport in scattering media,
+with explicit polarization (Jones vectors) and coherent backscattering (CBS)
+support.
+
+Primary goal in this repository:
+- Study coherent backscattering as interference between forward and reverse
+  multiple-scattering paths.
+
+Secondary capabilities:
+- Time-resolved detectors.
+- Layered samples.
+- Absorption deposition maps.
+- Statistics histograms.
+- HDF5 persistence for large simulation campaigns.
+
+
+2) Repository map (important folders)
+======================================
+Core implementation:
+- include/luminis/core/*.hpp: public engine interfaces.
+- include/luminis/sample/*.hpp: phase functions, lookup tables, MCMC helpers.
+- include/luminis/math/*.hpp: vectors, matrices, RNG, math helpers.
+- src/*.cpp: engine implementation.
+- src/mie/*: Mie Fortran solver wrappers and Fortran code.
+
+Python layer:
+- python/python_module.cpp: pybind11 bindings (source of truth for Python API).
+- python/luminis_mc/manager.py: Experiment and ResultsLoader (HDF5 I/O).
+- python/luminis_mc/sweepmanager.py: sweep orchestration.
+- python/luminis_mc/__init__.py: exported symbols.
+
+Usage scripts / tests:
+- tests/*: simulation scripts and checks (some are legacy and do not match the
+  current API; see Section 15).
+
+
+3) Build and module structure
+=============================
+Build system:
+- CMake + scikit-build-core.
+- C++23 core library target: _core_c
+- Fortran Mie target: mie_fortran
+- Python extension module: _core
+
+CMake target flow:
+1. Build mie_fortran from src/mie/MIEV0noP.f + ErrPack.f + dmiev.cpp.
+2. Build _core_c from src/*.cpp (engine code).
+3. Build Python module _core from python/python_module.cpp linking _core_c.
+
+Installed Python package:
+- luminis_mc
+
+
+4) Physical model and assumptions
+=================================
+This engine can be interpreted as a Monte Carlo solver of polarized transport
+in random media, with coherent pair-interference added for CBS observables.
+
+4.1 Governing transport picture
+- At the scalar level, transport follows the radiative transfer equation form:
+
+    dI(r, s_hat)/ds = -mu_t I(r, s_hat)
+                      + mu_s integral_{4pi} p(s_hat' -> s_hat) I(r, s_hat') dOmega'
+                      + S(r, s_hat)
+
+  where mu_t = mu_a + mu_s.
+
+- The Monte Carlo packet interpretation is:
+  - free path is sampled stochastically,
+  - direction is scattered using a phase-law sampler,
+  - packet weight tracks absorption loss,
+  - detector estimators accumulate observables.
+
+4.2 Free-path and optical-depth sampling
+- Free-path sampling is exponential in optical depth:
+
+    tau = -ln(U),  U ~ Uniform(0,1)
+    l   = tau / mu_t
+
+- In code, RGDMedium and MieMedium implement sample_free_path with this
+  exponential law using the configured mean_free_path (l_s = 1/mu_s).
+
+4.3 Polarization state and moving local frame
+- Each photon stores a local orthonormal frame P_local whose rows are:
+  - row 0: m (transverse axis)
+  - row 1: n (transverse axis)
+  - row 2: s (propagation direction)
+
+- Jones state is E = (E_m, E_n) in the (m,n) basis.
+- At each scattering event, the basis rotates by A(theta, phi):
+
+    P_local(new) = A(theta, phi) * P_local(old)
+
+  with A implemented in src/simulation.cpp exactly as the frame update matrix.
+
+4.4 Scattering operator and amplitude normalization
+- The per-event Jones operator in code is:
+
+    T = S(theta) * R(phi)
+
+  where S(theta) is diagonal in the local scattering basis:
+
+    S = [[S2, 0],
+         [ 0, S1]]
+
+- The photon Jones state update uses normalized amplitude transport:
+
+    E_out = T E_in / sqrt(F)
+
+- The normalization factor F used in src/simulation.cpp is:
+
+    F = |E_m|^2 (|S2|^2 cos^2(phi) + |S1|^2 sin^2(phi))
+      + |E_n|^2 (|S2|^2 sin^2(phi) + |S1|^2 cos^2(phi))
+      + 2 Re(E_m E_n*) (|S2|^2 - |S1|^2) sin(phi) cos(phi)
+
+  This keeps field amplitudes and packet-weight bookkeeping consistent.
+
+4.5 Conditional azimuth sampling (polarization-aware)
+- The azimuth phi is not always sampled uniformly.
+- In phase.cpp, conditional sampling uses rejection sampling based on:
+
+    F(phi) = a cos^2(phi) + b sin^2(phi) + c sin(phi) cos(phi)
+
+  with
+
+    a = |S2|^2 |E_m|^2 + |S1|^2 |E_n|^2
+    b = |S1|^2 |E_m|^2 + |S2|^2 |E_n|^2
+    c = 2 (|S2|^2 - |S1|^2) Re(E_m E_n*)
+
+  and acceptance probability F(phi)/Fmax.
+
+4.6 Medium models (RGD and Mie)
+- RGDMedium (Rayleigh-Gans-Debye approximation):
+
+    s2 = -i k^3 (m_rel - 1) V F_form(theta) cos(theta) / (2 pi)
+    s1 = -i k^3 (m_rel - 1) V F_form(theta)            / (2 pi)
+
+  where V = 4 pi r^3 / 3 and m_rel = n_particle / n_medium.
+
+- MieMedium:
+  - full Mie amplitudes S1(theta), S2(theta) from MIEV0,
+  - precomputed on a theta grid and interpolated at runtime,
+  - scattering efficiency Q_sca from mievinfo,
+  - scattering cross section sigma_sca = Q_sca * pi r^2.
+
+4.7 Layered sample and interface crossing physics
+- All layers share one host refractive index n_medium via Sample.
+- Therefore internal interfaces only change (mu_a, mu_s, phase model), not
+  refractive index; no internal Fresnel reflection/refraction is modeled.
+
+- The algorithm preserves remaining optical depth when crossing interfaces.
+  If a sampled step of length l crosses an interface after l1 in old layer:
+
+    tau_remaining = (l - l1) * mu_t(old)
+    l_new         = tau_remaining / mu_t(new)
+
+- Numerically, photon.z is nudged by +/-1e-12 after each crossing so layer
+  lookup is robust against floating-point boundary ambiguity.
+
+4.8 Absorption split and Russian roulette
+- Weight splitting at each scattering event:
+
+    d_weight = w * (mu_a / mu_t)
+    w_new    = w * (mu_s / mu_t)
+
+- d_weight is deposited into absorption grids (if enabled).
+- Russian roulette is applied for low-weight packets (w < 1e-4):
+  survive with p = 0.1 and renormalize w <- w/0.1, else terminate.
+
+4.9 Time-of-flight and units used by detectors
+- Arrival time used by time-resolved sensors:
+
     t_arrival = launch_time + opticalpath / velocity
-    Se determina el bin t_idx = floor(t_arrival / dt).
-    Si t_idx está fuera de rango, se descarta el fotón.
-
-  Paso 4: Fase geométrica CBS
-    La diferencia de fase entre path forward y reverse depende de la
-    separación entre primer y último scatterer:
-      q_b = k · (s_out + s_in)
-      Δr = r_n - r_1
-      path_phase = exp(i · q_b · Δr)
-    En exact backscattering (s_out = -s_in), q_b = 0 y path_phase = 1,
-    garantizando interferencia constructiva perfecta.
-
-  Paso 5: Campos forward y reverse
-    Forward:
-      E_f = (Em_f, En_f) · P_local → (Efx, Efy) en lab
-      con amplitud = phase · √weight  (info.phase = exp(i·k·optical_path))
-    Reverse:
-      E_r = (Em_r, En_r) · P_local → (Erx, Ery) en lab
-      con amplitud adicional × path_phase
-
-  Paso 6: Acumulación (en el bin temporal t_idx)
-    Coherente:  E_total = E_f + E_r
-      S0_coh[t_idx] += |Etx|² + |Ety|²
-      S1_coh[t_idx] += |Etx|² - |Ety|²
-      S2_coh[t_idx] += 2·Re(Etx·Ety*)
-      S3_coh[t_idx] += 2·Im(Etx·Ety*)
-    Incoherente: suma de intensidades individuales
-      S0_incoh[t_idx] += (|Efx|² + |Efy|²) + (|Erx|² + |Ery|²)
-      (análogamente para S1, S2, S3)
-
-process_estimation():
-  Implementa CBS con estimadores, iterando sobre bins angulares (con
-  stride configurable) y calculando la contribución coherente e incoherente
-  para cada dirección virtual. Usa coherent_estimation_partial() para
-  calcular la polarización reversa con una base de salida hipotética.
-
-9.3 Cálculo del path reverso: coherent_calculation()
-─────────────────────────────────────────────────────
-Esta función (en detector.cpp) calcula la polarización del path reverso
-(photon.polarization_reverse) para un fotón que ha completado su
-trayectoria forward.
-
-La idea:
-  Para una trayectoria con n scatterings en posiciones r_1...r_n,
-  el path reverso recorre los mismos puntos en orden inverso: r_n...r_1.
-  Se necesita construir la cadena de Jones del path reverso.
-
-Notación del código:
-  - s0: dirección incidente (del láser)
-  - s1: dirección después del primer scattering
-  - s_{n-1}: dirección antes del último scattering
-  - s_n: dirección de salida (detectada)
-  - P0, P1, Pn1, Pn: bases locales en esos puntos
-
-Estructura del cálculo (3 bloques):
-
-  Bloque A — Primer scattering reverso (en r_n):
-    El path reverso "entra" con la dirección incidente s_0 y "sale" hacia
-    -s_{n-1} (reverso del penúltimo tramo).
-    - Se calcula θ_a = acos(s_0 · (-s_{n-1}))
-    - Se obtiene S_a = scattering_matrix(θ_a)
-    - Se construyen rotaciones para alinear las bases:
-        R_n: base (m0,n0) → plano de scattering
-    - scatter_event(S_a, R_n, E_initial) aplica la Jones matrix
-    - R_n': plano de scattering → base (m_{n-1}, -n_{n-1})
-
-  Bloque B — Scatterings intermedios (Q · T^T · Q):
-    Para los scatterings 2...n-1, se usa el teorema de reciprocidad:
-      La cadena de Jones del path reverso es Q · T^T · Q
-    donde:
-      T = J_2 · J_3 · ... · J_{n-1} (acumulada durante la propagación forward
-          como photon.matrix_T)
-      T^T = transpose (NO conjugado) de T
-      Q = diag(1, -1) — refleja la componente n de polarización
-    Esto evita re-calcular cada scattering individual del path medio.
-
-  Bloque C — Último scattering reverso (en r_1):
-    El path reverso "entra" desde -s_1 y "sale" hacia s_n (la dirección
-    detectada del forward).
-    - θ_b = acos((-s_1) · s_n)
-    - S_b = scattering_matrix(θ_b)
-    - Rotaciones análogas al bloque A
-    - El resultado final se rota a la base (m_n, n_n) del punto de detección
-
-El resultado es photon.polarization_reverse: CVec2 en la base local final
-del fotón, listo para ser combinado con photon.polarization en el detector.
-
-coherent_estimation_partial():
-  Variante del cálculo reverso para estimadores. En lugar de usar la dirección
-  de salida real del fotón, acepta una base de salida hipotética
-  (last_scattering_P) para evaluar contribuciones virtuales hacia cualquier
-  bin angular. También recibe una matriz T_mid intermedia, permitiendo su uso
-  dentro de process_estimation().
-
-Funciones auxiliares usadas (definidas en utils.hpp/cpp):
-  - scatter_event(S, R, E):  E_out = S · R · E / √F  (normalizado)
-  - rot2(m_to, n_to, m_from, n_from): CMatrix 2×2 de cambio de base
-  - apply2(A, v): multiplica matriz 2×2 por vector 2×1
-  - safe_unit(v, fallback): normaliza v, o usa fallback si es degenerado
-  - clamp_pm1(x): clampea x a [-1, +1] para acos seguro
-  - row_vec3(P, r): extrae la fila r de una Matrix 3x3 como Vec3
-
-9.4 Post-procesamiento: postprocess_farfield_cbs() (con soporte temporal)
-─────────────────────────────────────────────────────────────────────────
-Función que normaliza los datos crudos del FarFieldCBSSensor.
-
-Firma:
-  postprocess_farfield_cbs(det, n_photons,
-                           normalize_per_solid_angle=true,
-                           normalize_per_photon=true,
-                           eps=1e-30)
-
-Parámetros de normalización:
-  - normalize_per_solid_angle: si true, divide por el ángulo sólido del bin.
-    Si false, dΩ se trata como 1 (útil para señal cruda).
-  - normalize_per_photon: si true, divide por n_photons.
-    Si false, deja la señal como suma acumulada.
-  - eps: umbral mínimo para dΩ (evita divisiones por cero).
-
-Para cada bin (i, j) y cada bin temporal t:
-  dΩ = solid_angle_bin(i, dθ, dφ) = sin(θ_center) · dθ · dφ
-  norm = (1/n_photons si normalize_per_photon) · (1/dΩ si normalize_per_solid_angle)
-  S_coh_normalized[t](i,j) = S_coh_raw[t](i,j) · norm
-  S_incoh_normalized[t](i,j) = S_incoh_raw[t](i,j) · norm
-
-Retorna un FarFieldCBSProcessed que contiene:
-  - dOmega: matriz (N_theta × N_phi) con el ángulo sólido de cada bin
-  - coherent: vector<StokesMatrixProcessed> de longitud N_t, cada uno con
-    matrices S0, S1, S2, S3 normalizadas
-  - incoherent: vector<StokesMatrixProcessed> de longitud N_t
-
-Structs de resultado:
-  - StokesMatrixProcessed: S0, S1, S2, S3 como Matrix (N_theta × N_phi)
-  - StokesRadialProcessed: S0, S1, S2, S3 como vector<double> (promedio radial)
-  - FarFieldCBSProcessed: dOmega + vectores de coherent/incoherent
-  - FarFieldCBSRadialProcessed: theta_center + coherent/incoherent radiales
-
-Desde Python, se usa para calcular el enhancement factor:
-  result = postprocess_farfield_cbs(det, n_photons)
-  # Acceder al primer bin temporal (o único si time-integrated):
-  enhancement = np.array(result.coherent[0].S0) / np.array(result.incoherent[0].S0)
-
-9.5 Post-procesamiento planar (estado actual)
-──────────────────────────────────────────────
-Además del caso far-field CBS, el módulo `results.hpp` expone:
-
-  - postprocess_planar_fluence(det, n_photons,
-                               normalize_per_photon=true,
-                               normalize_per_area=true,
-                               eps=1e-30)
-    Normaliza S0-S3 del PlanarFluenceSensor por número de fotones y área de
-    píxel (dx·dy), preservando la interpretación física de densidad de energía.
-
-  - postprocess_planar_field(det, n_photons,
-                             normalize_per_photon=true,
-                             normalize_per_area=true,
-                             eps=1e-30)
-    Normaliza Ex/Ey del PlanarFieldSensor para análisis coherente en plano.
-    La escala por área permite comparar campañas con discretizaciones distintas.
-
-
-10. REGISTRO DE ABSORCIÓN (Absorption)
-================================================================================
-
-Archivo: include/luminis/core/absortion.hpp   |   src/absortion.cpp
-
-El módulo de absorción registra el peso depositado por cada fotón en una
-grilla cilíndrica (r, z), opcionalmente resuelta en tiempo. Permite
-visualizar cómo se distribuye la energía absorbida dentro del medio.
-
-10.1 Modelo conceptual
-─────────────────────
-En Monte Carlo con absorción implícita (weight splitting), cada paso de
-scattering reduce el peso del fotón por el factor de albedo:
-    w_new = w_old × (μ_s / μ_t)
-La diferencia d_weight = w_old − w_new = w_old × (μ_a / μ_t) es la fracción
-de energía "depositada" (absorbida) en la posición actual. El Absorption
-acumula estas contribuciones en bins cilíndricos.
-
-10.2 Estructura de datos
-───────────────────────
-  Absorption:
-    - radius:      extensión radial máxima de la grilla [mm]
-    - depth:       extensión máxima en profundidad (z) [mm]
-    - d_r:         ancho del bin radial [mm]
-    - d_z:         ancho del bin en profundidad [mm]
-    - d_t:         ancho del bin temporal [ns] (0 para time-integrated)
-    - t_max:       ventana temporal total [ns] (ignorada cuando d_t = 0)
-    - n_t:         número de bins temporales (1 cuando time-integrated)
-    - time_slices: vector<Matrix>, cada elemento es una grilla n_r × n_z.
-                   Longitud n_t.
-
-  Resolución temporal:
-    - d_t == 0  → un solo bin temporal (modo time-integrated)
-    - d_t > 0   → n_t = ceil(t_max / d_t) bins temporales
-
-10.3 Operaciones
-───────────────
-  Constructor: Absorption(radius, depth, d_r, d_z, d_t=0, t_max=0)
-    Calcula n_r = floor(radius/d_r) + 1, n_z = floor(depth/d_z) + 1,
-    n_t según d_t, y aloja todas las grillas con ceros.
-
-  record_absorption(photon, d_weight):
-    Determina el bin temporal: k = floor(arrival_time / d_t), donde
-    arrival_time = launch_time + opticalpath / velocity.
-    Calcula r = √(x²+y²), z = pos.z.
-    Deposita d_weight en time_slices[k](i_r, i_z).
-    Descarta si cualquier índice está fuera de rango.
-
-  get_absorption_image(n_photons, time_index=0):
-    Produce una imagen 2D simétrica (2·n_r × n_z) normalizada por:
-      - volumen del vóxel cilíndrico: V = π·((r_out)² − (r_in)²) · d_z
-      - número de fotones: n_photons
-    La mitad izquierda es el espejo de la derecha, creando un mapa
-    axialmente simétrico listo para visualización.
-
-  clone() / merge_from(other):
-    Patrón estándar para paralelismo (ver SensorsGroup). Cada hilo trabaja
-    con un clon; al final se suman las grillas.
-
-10.4 Ejemplo desde Python
-─────────────────────────
-  # Time-integrated absorption
-  absorption = lmc.Absorption(radius=5.0, depth=10.0, d_r=0.05, d_z=0.05)
-
-  # Time-resolved absorption
-  absorption = lmc.Absorption(radius=5.0, depth=10.0, d_r=0.05, d_z=0.05,
-                               d_t=0.1, t_max=10.0)
-
-  config = lmc.SimConfig(n_photons=1e6, sample=sample, laser=laser,
-                          detector=sensors, absorption=absorption)
-  lmc.run_simulation_parallel(config)
-
-  # Obtener imagen de absorción
-  image = absorption.get_absorption_image(n_photons=1_000_000, time_index=0)
-  plt.imshow(np.array(image), aspect='auto')
-
-
-11. MONITOR DE PROGRESO (ProgressReporter)
-================================================================================
-
-Archivo: include/luminis/log/progress.hpp
-
-ProgressReporter es un monitor lock-free que reporta el avance de la
-simulación directamente en terminal (sin callback Python), diseñado para
-ejecución multi-hilo sin contención.
-
-11.1 Mecanismo
-──────────────
-  - Se configura con setup(total, interval_pct).
-  - Cada hilo de simulación llama tick() tras completar cada fotón.
-  - tick() usa fetch_add atómico (sin lock) para incrementar el contador.
-  - Cuando el contador cruza el siguiente umbral de reporte (calculado como
-    total × interval_pct / 100), se imprime una actualización en la misma línea.
-  - Un compare_exchange_weak loop garantiza que solo un hilo publica cada
-    umbral, evitando colisiones de salida.
-  - finish() imprime la línea final y un salto de línea.
-
-11.2 Parámetros
-──────────────
-  - total:        número total de fotones a simular
-  - interval_pct: intervalo de reporte como porcentaje (1–100, defecto 5%).
-                  Con 5% y 1M fotones: ~20 actualizaciones de barra.
-
-11.3 Interfaz Python
-───────────────────
-La configuración se realiza desde SimConfig:
-
-  config.show_progress = True
-  config.progress_interval_pct = 5
-
-Salida típica:
-  Photons [##########----------]  500 000 / 1 000 000  50.0% | 2.1M ph/s | ETA 0:09
-
-
-12. LOGGER
-================================================================================
-
-Archivo: include/luminis/log/logger.hpp
-
-Logger singleton thread-safe con niveles de severidad:
-  - debug, info, warn, error, off
-
-Formato de salida: [HH:MM:SS D/I/W/E] mensaje
-
-Usa std::format (C++23) para formateo type-safe de mensajes.
-Macros de conveniencia: LLOG_DEBUG(), LLOG_INFO(), LLOG_WARN(), LLOG_ERROR()
-
-Desde Python:
-  lmc.set_log_level(lmc.LogLevel.debug)   # mostrar todo
-  lmc.set_log_level(lmc.LogLevel.warn)    # solo advertencias y errores
-  lmc.set_log_level(lmc.LogLevel.off)     # silenciar logs
-
-
-13. MUESTREO DE CAMINO LIBRE MEDIO (Metropolis-Hastings)
-================================================================================
-
-Archivo: include/luminis/sample/meanfreepath.hpp   |   src/meanfreepath.cpp
-
-Módulo auxiliar que implementa el algoritmo Metropolis-Hastings para muestrear
-distribuciones de camino libre medio arbitrarias (no necesariamente exponenciales).
-
-13.1 TargetDistribution (base abstracta)
-────────────────────────────────────────
-  - evaluate(x) → valor de la distribución objetivo en x.
-
-Implementaciones concretas:
-  - Exponential(lambda):  f(x) = λ·exp(−λ·x)
-    Distribución exponencial estándar con tasa λ = 1/MFP.
-  - HardSpheres(radius, density):  distribución de camino libre medio
-    para un sistema de esferas duras con radio y densidad dados.
-
-13.2 metropolis_hastings (sampler MCMC)
-──────────────────────────────────────
-  Constructor: metropolis_hastings(target_dist)
-  Métodos:
-    - sample(num_samples, initial_value, proposal_stddev, positive_support)
-      Genera num_samples muestras MCMC desde la distribución objetivo.
-    - accept_reject(current, target_current, proposal_stddev, positive_support)
-      Un paso individual del algoritmo MH.
-  Resultado: MCMC_samples (vector<double> accesible desde Python).
-
-
-14. CAPA PYTHON: GESTIÓN DE EXPERIMENTOS
-================================================================================
-
-14.1 Experiment (manager.py)
-───────────────────────────
-Gestiona la persistencia completa de una simulación individual en un directorio
-timestamped, almacenando todos los datos en un único archivo HDF5.
-
-Layout HDF5:
-    results.h5
-    ├── params/           # escalares como attrs, arrays como datasets
-    ├── sensors/
-    │   └── <name>/
-    │       ├── meta/     # tipo de sensor, dims, filtros (attrs)
-    │       └── data/     # Stokes / campo / registros (datasets)
-    ├── absorption/
-    │   └── <name>/
-    │       ├── meta/     # configuración de grilla (attrs)
-    │       └── data/     # time_slice_N, time_slice_N_image (datasets)
-    └── derived/          # arrays post-procesados listos para plotting
-
-Directorio de salida:
-  <base_dir>/<YYYY-MM-DD_HH-MM-SS>_<name>/
-  ├── results.h5
-  ├── script_snapshot.py     ← copia del script que lanzó el experimento
-  └── README.md              ← notas opcionales
-
-Constructor:
-  Experiment(name, base_dir="sim_results", h5_name="results.h5", timestamped=True)
-  - timestamped=True: prefijo con fecha/hora (directorio único por run).
-  - timestamped=False: directorio fijo (sobrescribe resultados previos).
-
-Métodos principales:
-
-  log_params(units=None, **kwargs):
-    Persiste parámetros de simulación en /params.
-    - Escalares (str, int, float, bool, numpy scalars, Vec3, Vec2, CVec2,
-      enums pybind11) → HDF5 attributes.
-    - Arrays (numpy, list, matrices binding) → HDF5 datasets comprimidos (gzip).
-    - Opcionalmente anota cada parámetro con su unidad.
-
-  save_sensor(sensor, name):
-    Persiste un sensor en /sensors/<name>/.
-    - Guarda metadatos (tipo, dims, filtros) como attributes en /meta.
-    - Guarda datos (Stokes, campos, registros) como datasets en /data.
-    - Soporta TODOS los tipos de sensor:
-      · PhotonRecordSensor: arrays de events, weight, depth, times,
-        posiciones, polarizaciones.
-      · PlanarFieldSensor: Ex, Ey como matrices complejas.
-      · PlanarFluenceSensor: S0_t..S3_t como tensores (Nt × Nx × Ny).
-      · PlanarCBSSensor: S0..S3 como matrices.
-      · FarFieldFluenceSensor: S0..S3 como matrices.
-      · FarFieldCBSSensor: S0_coh..S3_coh, S0_incoh..S3_incoh como arrays.
-        También guarda parámetros de estimador (theta_pp_max, strides).
-      · StatisticsSensor: todos los histogramas configurados.
-
-  save_absorption(absorption, n_photons, name="absorption"):
-    Persiste un Absorption recorder en /absorption/<name>/.
-    - Guarda configuración de grilla en /meta.
-    - Guarda cada time_slice como dataset.
-    - Genera y guarda la imagen simétrica para cada slice.
-
-  save_derived(key, arr, attrs=None):
-    Almacena arrays post-procesados en /derived/<key>.
-    Soporta claves jerárquicas con / (p.ej., "farfield_cbs/S0_coh").
-
-  log_script(file_path):
-    Copia el script de simulación al directorio del experimento.
-    Registra la referencia en el HDF5.
-
-  log_readme(text):
-    Escribe contenido libre en README.md.
-
-  update_log_readme(status, runtime_s, finished_at, error_message=None):
-    Agrega bloque de estado al README.
-
-  close():
-    Flush + cierre del HDF5. También funciona como context manager:
-      with Experiment("my_run") as exp:
-          ...
-
-Ejemplo completo:
-    with lmc.Experiment("my_cbs_run") as exp:
-        exp.log_script(__file__)
-        exp.log_params(
-            n_photons=1_000_000, mu_s=10.0, mfp=0.1,
-            wavelength=633e-6, n_medium=1.33,
-            units={"wavelength": "mm", "mfp": "mm"}
-        )
-
-        config = lmc.SimConfig(n_photons, sample, laser, sensors)
-        lmc.run_simulation_parallel(config)
-
-        exp.save_sensor(det, "far_field_cbs")
-        exp.save_absorption(absorption, n_photons)
-
-        result = lmc.postprocess_farfield_cbs(det, n_photons)
-        exp.save_derived("enhancement/S0",
-                         np.array(result.coherent[0].S0) / np.array(result.incoherent[0].S0))
-
-
-14.2 ResultsLoader (manager.py)
-──────────────────────────────
-Accessor de solo lectura para archivos results.h5 previamente guardados.
-Pre-carga todos los parámetros escalares en un diccionario.
-
-Constructor:
-  ResultsLoader(exp_dir, h5_name="results.h5")
-
-Atributos:
-  - params: Dict[str, Any] con todos los parámetros escalares y arrays.
-
-Métodos:
-  - sensor_data(sensor_name, dataset) → np.ndarray
-    Carga /sensors/<name>/data/<dataset>.
-
-  - sensor_meta(sensor_name) → Dict[str, Any]
-    Retorna todos los attributes de /sensors/<name>/meta.
-
-  - derived(key) → np.ndarray
-    Carga /derived/<key>.
-
-  - absorption_meta(name="absorption") → Dict[str, Any]
-    Retorna attributes de /absorption/<name>/meta.
-
-  - absorption_data(name, time_index=0) → np.ndarray
-    Carga /absorption/<name>/data/time_slice_<idx>.
-
-  - absorption_image(name, time_index=0) → np.ndarray
-    Carga /absorption/<name>/data/time_slice_<idx>_image.
-
-  - __getitem__(key) → np.ndarray
-    Acceso directo por path HDF5:
-      loader["sensors/far_field_cbs/data/S0_coh"]
-
-Ejemplo:
-    with lmc.ResultsLoader("/data/results/2026-02-19_my_run") as loader:
-        S0_coh  = loader.sensor_data("far_field_cbs", "S0_coh")
-        S0_inc  = loader.sensor_data("far_field_cbs", "S0_incoh")
-        n_phot  = loader.params["n_photons"]
-        image   = loader.absorption_image()
-
-
-14.3 SweepManager (sweepmanager.py)
-──────────────────────────────────
-Orquestador de barridos paramétricos. Coordina múltiples Experiment bajo
-un directorio raíz compartido, con tracking de cada run en un manifiesto
-JSONL (newline-delimited JSON).
-
-Directory layout:
-    <base_dir>/<YYYY-MM-DD_HH-MM-SS>_<sweep_name>/
-    ├── sweep_manifest.jsonl   # un registro JSON por run (started + finished)
-    ├── script_snapshot.py     # copia del script maestro del barrido
-    ├── README.md              # notas opcionales del barrido
-    └── runs/
-        ├── 0000_<run_name>/   # directorio de Experiment individual
-        │   └── results.h5
-        ├── 0001_<run_name>/
-        ...
-
-Constructor:
-  SweepManager(sweep_name, base_dir, timestamped=True)
-  - timestamped=True: directorio único con prefijo fecha/hora.
-  - timestamped=False: directorio fijo (borra resultados previos).
-
-Métodos:
-
-  log_readme(text):
-    Escribe README.md a nivel del barrido.
-
-  snapshot_master_script(file_path):
-    Copia el script maestro del barrido al directorio raíz.
-
-  run(run_id, run_name, run_fn):
-    Ejecuta un run individual del barrido.
-    - run_id: índice entero (zero-based). Se usa para ordenar y nombrar
-      el subdirectorio (zero-padded a 4 dígitos).
-    - run_name: etiqueta legible.
-    - run_fn: callable con firma run_fn(exp: Experiment) → None.
-      Responsable de:
-        1. Construir medio, láser, sensores, SimConfig.
-        2. Ejecutar run_simulation_parallel().
-        3. Guardar resultados via exp.save_sensor(), etc.
-
-    Proceso interno:
-      1. Crea subdirectorio runs/<run_id>_<run_name>/.
-      2. Escribe registro "started" en sweep_manifest.jsonl.
-      3. Crea un Experiment(name=..., timestamped=False) dentro de runs_dir.
-      4. Llama run_fn(exp).
-      5. Cierra el Experiment.
-      6. Escribe registro "ok" o "failed" con runtime_s y finished_at.
-      7. Si el run falló, re-lanza RuntimeError para que el caller decida.
-
-Formato del manifiesto (JSONL):
-  Cada línea es un JSON con: run_id, run_name, path, started_at, status,
-  error (si hubo), runtime_s, finished_at.
-
-Ejemplo:
-    sweep = lmc.SweepManager("mfp_sweep", base_dir="/data/results")
-    sweep.snapshot_master_script(__file__)
-    sweep.log_readme("Sweep over mean free path values")
-
-    for i, mfp in enumerate([0.5, 1.0, 2.0, 4.0]):
-        def run_fn(exp, mfp=mfp):
-        medium = lmc.MieMedium(phase, r, np, nm, wl)
-        medium.set_mean_free_path(mfp)
-        medium.set_scattering_coefficient(1.0/mfp)
-        medium.set_absorption_coefficient(0.0)
-            sample = lmc.Sample(n_medium=nm)
-            sample.add_layer(medium, 0.0, float('inf'))
-            config = lmc.SimConfig(n_photons=1_000_000, sample=sample,
-                                    laser=laser, detector=sensors,
-                                    track_reverse_paths=True)
-            config.n_threads = 8
-            lmc.run_simulation_parallel(config)
-            exp.save_sensor(det, "far_field_cbs")
-            exp.log_params(mean_free_path=mfp, mu_s=1/mfp)
-
-        sweep.run(run_id=i, run_name=f"mfp_{mfp}", run_fn=run_fn)
-
-
-15. FLUJO DE DATOS: DE C++ A PYTHON
-================================================================================
-
-El binding pybind11 (python_module.cpp) expone:
-  - Todas las clases como py::class_ con herencia correcta
-  - Matrices como buffer protocol (acceso zero-copy desde NumPy)
-  - Enums (LaserSource, TemporalProfile, CrossingDirection, LogLevel)
-  - Funciones de simulación con GIL release para paralelismo real
-  - Configuración de progreso vía SimConfig (show_progress, progress_interval_pct)
-
-Patrón de uso del SensorsGroup:
-  sensors = SensorsGroup()
-  det = sensors.add_detector(FarFieldCBSSensor(θmax, φmax, tmax, Nθ, Nφ, Nt))
-
-  add_detector() clona el sensor y devuelve un puntero a la copia interna.
-  Esto permite manipular det directamente (ej: det.set_theta_limit(...))
-  y luego leer los resultados tras la simulación (det.S0_coh, etc.).
-
-Las capas Python (manager.py, sweepmanager.py) se importan directamente:
-  from luminis_mc import Experiment, ResultsLoader, SweepManager
-
-
-16. RESUMEN DE FLUJO CBS COMPLETO
-================================================================================
-
-1. Configurar:
-   MiePhaseFunction → MieMedium → Sample(n_medium) → Laser →
-  FarFieldCBSSensor(θmax, φmax, len_t, dθ, dφ, d_t)
-
-2. Opcionalmente configurar perfil temporal del láser:
-   laser.set_temporal_profile(lmc.TemporalProfile.Gaussian,
-                               pulse_duration=100.0)
-
-3. Opcionalmente configurar absorción:
-   absorption = lmc.Absorption(radius, depth, d_r, d_z, d_t, t_max)
-
-4. Opcionalmente configurar progreso:
-  config.show_progress = True
-  config.progress_interval_pct = 5
-
-5. SimConfig(sample=sample, laser=laser, detector=sensors,
-             absorption=absorption, track_reverse_paths=True)
-   config.n_threads = 8
-  config.batch_size = 256
-
-6. run_simulation_parallel():
-   a. Cada fotón se emite con launch_time muestreado del perfil temporal.
-   b. Se propaga acumulando T_mid y guardando bases P0..Pn.
-   c. En cada paso, se registra absorción en el grid (r,z,t).
-   d. Al cruzar z=0 hacia atrás (backscattering):
-      - coherent_calculation() calcula E_reverse usando reciprocidad
-      - FarFieldCBSSensor acumula |E_fwd + E_rev|² (coherente)
-        y |E_fwd|² + |E_rev|² (incoherente) en bins (θ, φ, t)
-  e. ProgressReporter reporta avance periódicamente en terminal.
-
-7. postprocess_farfield_cbs() normaliza por ángulo sólido y n_photons
-   (por cada bin temporal).
-
-8. Persistencia con Experiment:
-   exp.save_sensor(det, "far_field_cbs")
-   exp.save_absorption(absorption, n_photons)
-   exp.save_derived("enhancement", enhancement_array)
-
-9. Carga posterior con ResultsLoader:
-   loader = ResultsLoader(exp_path)
-   S0_coh = loader.sensor_data("far_field_cbs", "S0_coh")
-
-10. En Python: η(θ) = S0_coh(θ) / S0_incoh(θ) → pico CBS en θ≈0
-
-================================================================================
+
+- velocity is set from Sample::light_speed_in_medium() = 1 / n_medium
+  in code units.
+- Laser temporal parameters pulse_duration and time_offset are provided in ps
+  but converted internally to ns before assignment to launch_time.
+
+4.10 Stokes observables from Jones fields
+- Detector-side Stokes conversions from field components (Ex, Ey):
+
+    S0 = |Ex|^2 + |Ey|^2
+    S1 = |Ex|^2 - |Ey|^2
+    S2 = 2 Re(Ex Ey*)
+    S3 = 2 Im(Ex Ey*)
+
+- Photon::get_stokes_parameters uses a related convention in its local basis.
+- Planar/FarField Stokes grids are Monte Carlo sums over packet contributions.
+
+4.11 CBS-cone width relation used for interpretation
+- For diffusion-like CBS analysis, a common reduced-variable scaling is
+  q = k l* theta, with cone width inversely related to transport mean free
+  path l*.
+- A practical rule used in analysis scripts is:
+
+    Delta q_FWHM ~ 0.73
+    => theta_FWHM ~ 0.73 / (k l*)
+
+  This is a postprocessing interpretation model, not a hard constraint inside
+  the transport engine.
+
+
+5) Core C++ types and responsibilities
+======================================
+Photon (include/luminis/core/photon.hpp)
+- Live packet state during transport.
+- Stores position, local frame P_local, Jones vector, weight, optical path,
+  event count, current layer, launch time, velocity.
+- For CBS: stores first/last scattering positions, local frame snapshots,
+  accumulated transfer matrices, reverse-path output field.
+
+Sample / SampleLayer (include/luminis/core/sample.hpp)
+- Ordered contiguous z-layers with shared n_medium.
+- Provides:
+  - add_layer
+  - get_layer_at / get_layer_index_at
+  - find_next_interface
+  - is_inside
+
+ScatteringMedium hierarchy (include/luminis/core/medium.hpp)
+- Base: ScatteringMedium
+- Derived: RGDMedium, MieMedium
+- IMPORTANT: constructors do not set optical coefficients automatically.
+  You must set scattering/absorption explicitly from Python when needed.
+
+Laser (include/luminis/core/laser.hpp)
+- Source geometry (point, uniform disk, gaussian).
+- Temporal profiles (delta/gaussian/tophat/exponential/pulse-train/cw).
+- Emits Photon with launch_time sampled from selected temporal profile.
+
+SimConfig (include/luminis/core/simulation.hpp)
+- Run configuration for run_simulation_parallel.
+- Includes n_photons, n_threads, seed, batch_size, show_progress,
+  progress_interval_pct, track_reverse_paths, pin_threads_to_cores, and pointers
+  to sample/laser/detector/optional absorption.
+
+
+6) Simulation algorithm (run_photon)
+====================================
+High-level loop in src/simulation.cpp:
+
+1. Resolve current layer and medium.
+2. Sample free path.
+3. Handle interface crossings (possibly multiple in one sampled step):
+   - truncate at interface
+   - preserve remaining optical depth
+   - nudge photon by +/-1e-12 in z to land in next layer robustly
+   - detect sensor intersections on each sub-step
+4. Advance remaining step in final layer.
+5. Record detector hits (SensorsGroup::record_hit).
+6. Kill photon if outside sample.
+7. Run estimators for estimator-enabled sensors.
+8. Sample scattering angle theta and conditional azimuth phi.
+9. Update local basis and Jones vector.
+10. If track_reverse_paths enabled, update CBS path bookkeeping.
+11. Apply absorption split and roulette.
+12. Stop if killed or events exceed MAX_EVENTS.
+
+Parallel driver (run_simulation_parallel):
+- Clone-merge model:
+  - each thread gets detector clone and optional absorption clone
+  - each thread runs independent photons with per-thread RNG seed
+  - final merge into shared detector/absorption objects
+- Dynamic work scheduling by atomic next_photon and batch_size.
+
+
+7) Sensor system and data products
+==================================
+Sensor base behavior
+- Every sensor is a z-plane detector.
+- SensorsGroup::record_hit computes exact crossing point and phase.
+- Optional filters are conjunctive (all must pass):
+  - theta range
+  - phi range
+  - x/y position window
+  - crossing direction (Forward/Backward/Both)
+  - event-count range (set_events_limit)
+
+Sensor types:
+
+1. PhotonRecordSensor
+- Stores one PhotonRecord per hit.
+
+2. PlanarFieldSensor
+- Accumulates complex Ex/Ey on (x,y) grid.
+- process_estimation is currently not implemented (commented/no-op path).
+
+3. PlanarFluenceSensor
+- Accumulates Stokes S0..S3 on (x,y) grid with optional time resolution.
+- process_estimation is currently not implemented (commented/no-op path).
+
+4. PlanarCBSSensor
+- Marked WIP; not a stable production CBS path.
+
+5. FarFieldFluenceSensor
+- Accumulates Stokes on angular (theta,phi) bins.
+
+6. FarFieldCBSSensor (main CBS detector)
+- Accumulates coherent and incoherent Stokes fields, optionally time-resolved.
+- Has estimator tuning fields: theta_pp_max, theta_stride, phi_stride.
+
+7. StatisticsSensor
+- Histogram collector for events/theta/phi/depth/time/weight.
+- Supports temporal splitting with integrated bin semantics.
+
+
+8) CBS implementation details
+=============================
+CBS in this codebase is computed in detector.cpp with a forward/reverse
+pair-interference model.
+
+8.1 Physical pair picture
+- For a multiple-scattering path with at least two scattering events, a
+  time-reversed partner exists that traverses the same scatterers in reverse
+  order.
+- Near exact backscattering these path pairs have nearly matched phase and can
+  interfere constructively, producing enhancement above diffuse background.
+
+8.2 Reverse-path reconstruction used in code
+- Reverse field is computed by coherent_calculation(photon, sample).
+- It uses stored path state from run_photon:
+  - frame snapshots P0, P1, Pn2, Pn1, Pn
+  - first and last scattering positions r_1 and r_n
+  - accumulated transfer matrices (notably matrix_T_raw)
+
+- The reconstruction is split into three blocks:
+  1. first reverse scatter at r_n,
+  2. middle segment via reciprocity transform,
+  3. last reverse scatter at r_1.
+
+- Middle segment reciprocity uses parity matrix Q and transposed transfer:
+
+    E_mid_rev = Q * (T_mid)^T * Q * E_mid_fwd
+
+  where T_mid is built from forward-path Jones products for interior events.
+
+8.3 Geometric phase and interference term
+- In FarFieldCBSSensor::process_hit, geometric pair phase is
+
+    path_phase = exp(i * k * (s_out + s_in) dot (r_n - r_1))
+
+- Forward and reverse lab-frame fields are then combined:
+
+    E_tot = E_f + path_phase * E_r
+
+- Coherent channel accumulates |E_tot|^2 Stokes.
+- Incoherent channel accumulates |E_f|^2 + |E_r|^2 Stokes.
+
+8.4 What the detector stores
+- For each angular and temporal bin, FarFieldCBSSensor stores:
+  - S0_coh..S3_coh
+  - S0_incoh..S3_incoh
+
+- Common observable derived in analysis:
+
+    enhancement(theta, phi, t) = S0_coh / S0_incoh
+
+  with exact-backscatter peak approaching 2 under ideal conservative,
+  reciprocal conditions.
+
+8.5 Temporal CBS accumulation convention
+- If dt > 0, both coherent and incoherent contributions are written to:
+  - bin 0 (always integrated), and
+  - one explicit temporal bin t_idx = floor(t_arrival/dt) + 1.
+- If dt == 0, only the integrated bin exists.
+
+8.6 Validity conditions and limitations
+- CBS coherent pair accumulation requires photon.events >= 2.
+- track_reverse_paths should be true; otherwise reverse-path state is not
+  consistently prepared for coherent pairing.
+- The current implementation assumes reciprocal media and does not include
+  non-reciprocal magneto-optic effects.
+
+
+9) Time-resolved conventions (critical)
+=======================================
+There are two different time-binning patterns in the code. Do not mix them.
+
+9.1 PlanarFluenceSensor and FarFieldCBSSensor
+- dt == 0:
+  - single bin only (N_t = 1), integrated signal.
+- dt > 0:
+  - N_t = ceil(len_t / dt) + 1
+  - bin 0 is always integrated over all valid arrivals
+  - bins 1..N_t-1 are explicit time windows.
+
+9.2 StatisticsSensor temporal mode
+- set_time_resolution(len_t, dt):
+  - same integrated-bin convention as above for temporal hist arrays.
+
+9.3 Absorption
+- Different design from sensors:
+  - if d_t > 0: n_t = ceil(t_max / d_t), no extra +1 integrated bin in
+    time_slices
+  - integrated data is stored separately in Absorption.total
+
+
+10) Absorption recorder
+=======================
+Absorption (include/luminis/core/absortion.hpp, src/absortion.cpp):
+- Cylindrical accumulation grid in (r,z), optional temporal slices.
+- Stores both:
+  - time_slices[k] (time-resolved)
+  - total (always integrated)
+- Exposed helpers:
+  - get_absorption_image(n_photons, time_index)
+  - get_total_image(n_photons)
+
+Experiment.save_absorption in manager.py writes:
+- /absorption/<name>/data/time_slice_i
+- /absorption/<name>/data/time_slice_i_image
+- /absorption/<name>/data/total
+- /absorption/<name>/data/total_image
+
+
+11) Post-processing functions
+=============================
+From src/results.cpp and python bindings:
+
+- postprocess_planar_fluence
+  - optional normalization by photon count and pixel area.
+
+- postprocess_planar_field
+  - optional normalization by photon count and pixel area.
+
+- postprocess_farfield_cbs
+  - optional normalization by photon count and solid angle.
+  - returns FarFieldCBSProcessed containing dOmega and vectors of
+    StokesMatrixProcessed for coherent and incoherent channels.
+
+
+12) Python API: exact current signatures that matter
+====================================================
+Important constructors and methods (current binding behavior):
+
+Laser and temporal profile
+- Laser(m_state, n_state, wavelength, sigma, source_type)
+- TemporalProfile values in Python:
+  Delta, Gaussian, TopHat, ExponentialTime, PulseTrain, CW
+- laser.set_temporal_profile(profile, pulse_duration=0.0,
+  repetition_rate=0.0, time_offset=0.0)
+
+Phase functions
+- UniformPhaseFunction()
+- RayleighPhaseFunction(nDiv, minVal, maxVal)
+- HenyeyGreensteinPhaseFunction(g)
+- RayleighDebyePhaseFunction(wavelength, radius, nDiv, minVal, maxVal)
+- RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium,
+  nDiv, minVal, maxVal)
+- DrainePhaseFunction(g, a, nDiv, minVal, maxVal)
+- MiePhaseFunction(wavelength, radius, n_particle, n_medium,
+  nDiv, minVal, maxVal)
+
+Media
+- RGDMedium(phase_func, radius, n_particle, n_medium, wavelength)
+- MieMedium(phase_func, radius, n_particle, n_medium, wavelength)
+- Then configure transport explicitly, typically:
+  - set_mean_free_path(mfp)
+  - set_scattering_coefficient(mu_s)
+  - set_absorption_coefficient(mu_a)
+
+Sample
+- Sample(n_medium=1.0)
+- sample.add_layer(medium, z_min, z_max)
+
+Sensors
+- PlanarFieldSensor(z, len_x, len_y, dx, dy, absorb=True, estimator=False)
+- PlanarFluenceSensor(z, len_x, len_y, len_t, dx, dy, dt,
+  absorb=True, estimator=False)
+- FarFieldFluenceSensor(theta_max, phi_max, n_theta, n_phi,
+  estimator=False)
+- FarFieldCBSSensor(theta_max, phi_max, len_t, d_theta, d_phi, d_t,
+  estimator=False)
+  NOTE: d_theta/d_phi/d_t are bin widths, not bin counts.
+- StatisticsSensor(z, absorb=False)
+
+Absorption
+- Absorption(radius, depth, d_r, d_z, d_t=0.0, t_max=0.0)
+
+Simulation
+- SimConfig() only (default constructor)
+- Set fields manually:
+  - n_photons, sample, laser, detector
+  - optional: absorption, n_threads, batch_size, seed,
+    track_reverse_paths, show_progress, progress_interval_pct,
+    pin_threads_to_cores
+- run_simulation_parallel(config)
+
+Persistence utilities
+- Experiment(name, base_dir="sim_results", h5_name="results.h5",
+  timestamped=True)
+- ResultsLoader(exp_dir, h5_name="results.h5")
+- SweepManager(sweep_name, base_dir, timestamped=True)
+
+
+13) Minimal correct Python workflow (current API)
+=================================================
+Use this pattern as a reliable starting point:
+
+1. Build phase function:
+   phase = MiePhaseFunction(wavelength, radius, n_particle, n_medium,
+                            nDiv, 0.0, np.pi)
+
+2. Build medium and set optical coefficients:
+   medium = MieMedium(phase, radius, n_particle, n_medium, wavelength)
+   medium.set_mean_free_path(mfp)
+   medium.set_scattering_coefficient(1.0 / mfp)
+   medium.set_absorption_coefficient(mu_a)
+
+3. Build sample:
+   sample = Sample(n_medium)
+   sample.add_layer(medium, 0.0, float('inf'))
+
+4. Build laser:
+   laser = Laser(m_state, n_state, wavelength, sigma, LaserSource.Point)
+
+5. Build sensors:
+   sens = SensorsGroup()
+   det = sens.add_detector(FarFieldCBSSensor(theta_max, phi_max,
+                                             len_t, d_theta, d_phi, d_t,
+                                             False))
+
+6. Configure simulation:
+   cfg = SimConfig()
+   cfg.n_photons = N
+   cfg.sample = sample
+   cfg.laser = laser
+   cfg.detector = sens
+   cfg.track_reverse_paths = True
+   cfg.n_threads = 0  # use hardware concurrency
+
+7. Run:
+   run_simulation_parallel(cfg)
+
+8. Postprocess:
+   result = postprocess_farfield_cbs(det, N)
+   eta = np.array(result.coherent[0].S0) / np.array(result.incoherent[0].S0)
+
+
+14) Important implementation gotchas
+====================================
+1. FarFieldCBSSensor constructor uses bin widths, not counts.
+2. SimConfig has only default constructor in Python binding.
+3. Many legacy scripts still pass old positional constructor arguments for
+   MieMedium/RGDMedium/SimConfig.
+4. No ProgressMonitor class is currently exported from bindings.
+   Use SimConfig.show_progress and SimConfig.progress_interval_pct.
+5. For CBS, if track_reverse_paths is false, reverse-path fields are not
+   properly tracked for coherent calculations.
+6. PlanarCBSSensor is work-in-progress; FarFieldCBSSensor is the stable CBS
+   detector.
+
+
+15) Tests folder reality check
+==============================
+The tests folder contains both current and legacy scripts.
+
+Closest to current API style:
+- tests/cbs/sim_cbs_RGD_multiple.py
+
+Known legacy/outdated patterns present in several scripts:
+- old MieMedium/RGDMedium constructor argument lists
+- SimConfig(...named args...) constructor usage
+- ProgressMonitor/on_progress imports from luminis_mc
+- FarFieldCBSSensor calls using bin counts instead of bin widths
+
+Recommendation when using tests as templates:
+1. Prefer structural ideas from scripts, not direct copy-paste of constructors.
+2. Validate constructor signatures against python/python_module.cpp.
+
+
+16) Where to look before changing behavior
+==========================================
+If you need to modify behavior, inspect these first:
+
+- include/luminis/core/simulation.hpp and src/simulation.cpp
+  (transport loop and parallel scheduling)
+
+- include/luminis/core/detector.hpp and src/detector.cpp
+  (all detector logic, filters, CBS math)
+
+- include/luminis/core/medium.hpp and src/medium.cpp
+  (scattering matrices, free-path sampling)
+
+- python/python_module.cpp
+  (actual Python API and constructor signatures)
+
+- python/luminis_mc/manager.py
+  (HDF5 schema and persistence conventions)
+
+
+End of guide.

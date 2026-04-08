@@ -27,7 +27,7 @@ n_particle = 1.59
 n_medium = 1.33
 mu_absortion_percent = 0.0
 wavelength = 0.514
-
+    
 # Laser parameters
 laser_m_polarization_state = 1/np.sqrt(2)
 laser_n_polarization_state = -1j/np.sqrt(2)
