@@ -393,7 +393,7 @@ pair-interference model.
 
 9) Time-resolved conventions (critical)
 =======================================
-There are two different time-binning patterns in the code. Do not mix them.
+Timed grids now follow one shared convention across detectors and absorption.
 
 9.1 PlanarFluenceSensor and FarFieldCBSSensor
 - dt == 0:
@@ -408,28 +408,26 @@ There are two different time-binning patterns in the code. Do not mix them.
   - same integrated-bin convention as above for temporal hist arrays.
 
 9.3 Absorption
-- Different design from sensors:
-  - if d_t > 0: n_t = ceil(t_max / d_t), no extra +1 integrated bin in
-    time_slices
-  - integrated data is stored separately in Absorption.total
+- Matches the same integrated-bin convention:
+  - d_t == 0: n_t = 1 (single integrated bin)
+  - d_t > 0: n_t = ceil(t_max / d_t) + 1
+  - bin 0 is always integrated; bins 1..n_t-1 are time windows
+- There is no separate total matrix; integrated data is in time_slices[0].
 
 
 10) Absorption recorder
 =======================
 Absorption (include/luminis/core/absortion.hpp, src/absortion.cpp):
 - Cylindrical accumulation grid in (r,z), optional temporal slices.
-- Stores both:
-  - time_slices[k] (time-resolved)
-  - total (always integrated)
+- Stores only:
+  - time_slices[k] (k=0 integrated, k>=1 time windows)
 - Exposed helpers:
   - get_absorption_image(n_photons, time_index)
-  - get_total_image(n_photons)
+  - get_total_image(n_photons) [alias of time_index=0]
 
 Experiment.save_absorption in manager.py writes:
 - /absorption/<name>/data/time_slice_i
 - /absorption/<name>/data/time_slice_i_image
-- /absorption/<name>/data/total
-- /absorption/<name>/data/total_image
 
 
 11) Post-processing functions

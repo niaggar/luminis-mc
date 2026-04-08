@@ -470,16 +470,7 @@ class Experiment:
         _write_attr(g_meta, "t_max", absorption.t_max)
         _write_attr(g_meta, "n_t", absorption.n_t)
 
-        # ── Total (time-integrated) data ────────────────────────────────────────
-        total_arr = _as_array(absorption.total)
-        if total_arr is not None:
-            _write_dataset(g_data, "total", total_arr)
-            total_image = absorption.get_total_image(n_photons)
-            total_image_arr = _as_array(total_image)
-            if total_image_arr is not None:
-                _write_dataset(g_data, "total_image", total_image_arr)
-
-        # ── Time-slice data ────────────────────────────────────────────────────
+        # ── Time-slice data (slice 0 is always integrated) ───────────────────
         for i, ts in enumerate(absorption.time_slices):
             image = absorption.get_absorption_image(n_photons, i)
             arr_image = _as_array(image)
@@ -825,23 +816,47 @@ class ResultsLoader:
 
     def absorption_total_data(self, name: str = "absorption") -> np.ndarray:
         """
-        Load the total (time-integrated) absorption grid from ``/absorption/<name>/data/total``.
+        Load the total (time-integrated) absorption grid.
+
+        In current files this is ``/absorption/<name>/data/time_slice_0``.
+        For backward compatibility, legacy ``.../data/total`` is also supported.
 
         Parameters
         ----------
         name:
             Key used when the absorption was saved.
         """
-        return np.asarray(self.h5[f"absorption/{name}/data/total"])
+        base = f"absorption/{name}/data"
+        path_new = f"{base}/time_slice_0"
+        path_old = f"{base}/total"
+
+        if path_new in self.h5:
+            return np.asarray(self.h5[path_new])
+        if path_old in self.h5:
+            return np.asarray(self.h5[path_old])
+
+        raise KeyError(f"No integrated absorption dataset found at {path_new} or {path_old}")
 
     def absorption_total_image(self, name: str = "absorption") -> np.ndarray:
         """
-        Load the total (time-integrated) absorption image from ``/absorption/<name>/data/total_image``.
+        Load the total (time-integrated) absorption image.
+
+        In current files this is ``/absorption/<name>/data/time_slice_0_image``.
+        For backward compatibility, legacy ``.../data/total_image`` is also supported.
 
         Parameters
         ----------
         name:
             Key used when the absorption was saved.
         """
-        return np.asarray(self.h5[f"absorption/{name}/data/total_image"])
+        base = f"absorption/{name}/data"
+        path_new = f"{base}/time_slice_0_image"
+        path_old = f"{base}/total_image"
+
+        if path_new in self.h5:
+            return np.asarray(self.h5[path_new])
+        if path_old in self.h5:
+            return np.asarray(self.h5[path_old])
+
+        raise KeyError(f"No integrated absorption image found at {path_new} or {path_old}")
 
