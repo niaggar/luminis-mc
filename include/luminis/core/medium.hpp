@@ -149,9 +149,6 @@ struct ScatteringMedium {
    */
   virtual CMatrix scattering_matrix(const double theta, const double phi) const = 0;
 
-  virtual double scattering_efficiency() const = 0;
-
-  virtual double scattering_cross_section() const = 0;
 
   void set_scattering_coefficient(double mu_s);
 
@@ -209,9 +206,6 @@ struct RGDMedium : public ScatteringMedium {
    */
   CMatrix scattering_matrix(const double theta, const double phi) const override;
 
-  double scattering_efficiency() const override;
-
-  double scattering_cross_section() const override;
 
   void set_mean_free_path(double mfp);
 };
@@ -283,9 +277,6 @@ struct MieMedium : public ScatteringMedium {
    */
   void precompute_scattering_tables(double wavelength, double size_parameter, std::size_t n_samples = 1000);
 
-  double scattering_efficiency() const override;
-
-  double scattering_cross_section() const override;
 
   void set_mean_free_path(double mfp);
 };

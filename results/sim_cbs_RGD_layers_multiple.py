@@ -82,7 +82,7 @@ def run_single_simulation(exp, depth_first_layer):
 
     sample = Sample(n_medium)
 
-    scattering_efficiency = medium_a.scattering_efficiency()
+    scattering_efficiency = medium_a.phase_function.scattering_efficiency()
     mean_free_path_a = (4.0 * radius) / (3.0 * volume_fraction_a * scattering_efficiency)
 
     inv_mean_free_path_a = 1 / mean_free_path_a
@@ -92,7 +92,7 @@ def run_single_simulation(exp, depth_first_layer):
     medium_a.set_scattering_coefficient(mu_scattering_a)
     medium_a.set_absorption_coefficient(mu_absortion_a)
 
-    scattering_efficiency = medium_b.scattering_efficiency()
+    scattering_efficiency = medium_b.phase_function.scattering_efficiency()
     mean_free_path_b = (4.0 * radius) / (3.0 * volume_fraction_b * scattering_efficiency)
     inv_mean_free_path_b = 1 / mean_free_path_b
     mu_absortion_b = mu_absortion_percent * inv_mean_free_path_b

@@ -1,6 +1,7 @@
 #include <luminis/sample/phase.hpp>
 #include <luminis/log/logger.hpp>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 #include "luminis/mie/dmiev.h"
 
@@ -45,6 +46,14 @@ double PhaseFunction::sample_phi_conditional(double theta, CMatrix& S, CVec2& E,
       const double Fclamped = std::max(F, 0.0);
       if (rng.uniform()*Fmax <= Fclamped) return phi;
     }
+}
+double PhaseFunction::scattering_efficiency() const {
+  LLOG_ERROR("PhaseFunction::scattering_efficiency: Not implemented for this phase function.");
+  std::exit(EXIT_FAILURE);
+}
+double PhaseFunction::scattering_cross_section() const {
+  LLOG_ERROR("PhaseFunction::scattering_cross_section: Not implemented for this phase function.");
+  std::exit(EXIT_FAILURE);
 }
 std::array<double, 2> PhaseFunction::get_anisotropy_factor(std::size_t nSamples) const {
   Rng rng = Rng();
@@ -147,6 +156,7 @@ RayleighDebyeEMCPhaseFunction::RayleighDebyeEMCPhaseFunction(double wavelength, 
   this->n_particle = n_particle;
   this->n_medium = n_medium;
   this->k = 2 * M_PI * n_medium / wavelength;
+  this->scattering_cross_section_value = scattering_cross_section();
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
 double RayleighDebyeEMCPhaseFunction::sample_cos(double x) const {
@@ -155,13 +165,51 @@ double RayleighDebyeEMCPhaseFunction::sample_cos(double x) const {
 double RayleighDebyeEMCPhaseFunction::sample_theta(double x) const {
   return table.Sample(x); // Return theta
 }
-double RayleighDebyeEMCPhaseFunction::PDF(double x) {
-  const double F = form_factor(x, k, radius);
-  const double volume = (4.0 / 3.0) * M_PI * std::pow(radius, 3);
-  const double m = n_particle / n_medium;
-  const double a = std::pow(k, 4) * std::pow(m - 1.0, 2) * volume * volume / (4.0 * M_PI);
-  const double intesity = a * F * F * (1.0 + cos(x) * cos(x));
+double RayleighDebyeEMCPhaseFunction::scattering_efficiency() const
+{
+  const double x = radius * k;
+  const double V = 4 * M_PI * std::pow(radius, 3) / 3.0;
+  const double a = (std::pow(k, 6) * std::pow((n_particle / n_medium - 1.0), 2) * V * V) / (4 * std::pow(M_PI, 2));
+  const double c = a / std::pow(x, 2);
 
+  // Numerical integration of F^2(theta) * sin(theta) * (1 + cos^2(theta)) over [0, pi]
+  // using Simpson's rule with N subintervals (N must be even).
+  const int N = 100000;
+  const double h = M_PI / N;
+
+  auto integrand = [&](double theta) -> double {
+    const double F = form_factor(theta, k, radius);
+    const double cos_t = std::cos(theta);
+    return F * F * std::sin(theta) * (1.0 + cos_t * cos_t);
+  };
+
+  double sum = integrand(0.0) + integrand(M_PI);
+  for (int i = 1; i < N; i += 2)
+    sum += 4.0 * integrand(i * h);
+  for (int i = 2; i < N; i += 2)
+    sum += 2.0 * integrand(i * h);
+
+  const double integral = sum * h / 3.0;
+
+  return c * integral;
+}
+double RayleighDebyeEMCPhaseFunction::scattering_cross_section() const
+{
+  const double Q_sca = scattering_efficiency();
+  const double geometric_cross_section = M_PI * std::pow(radius, 2);
+  return Q_sca * geometric_cross_section;
+}
+double RayleighDebyeEMCPhaseFunction::rho_phase_function(double x) const {
+  const double kkkk = std::pow(k, 4);
+  const double m_1 = (n_particle / n_medium) - 1.0;
+  const double v = (4.0 / 3.0) * M_PI * std::pow(radius, 3);
+  const double F = form_factor(x, k, radius);
+  
+  const double intesity = (kkkk / (4.0 * M_PI * scattering_cross_section_value)) * m_1 * m_1 * v * v * F * F * (1.0 + cos(x) * cos(x));
+  return intesity;
+}
+double RayleighDebyeEMCPhaseFunction::PDF(double x) const {
+  const double intesity = rho_phase_function(x);
   return intesity * sin(x);
 }
 
@@ -207,6 +255,7 @@ MiePhaseFunction::MiePhaseFunction(double wavelength, double radius, double n_pa
   this->n_medium = n_medium;
   this->k = 2 * M_PI * n_medium / wavelength;
   this->m = std::complex<double>(n_particle / n_medium, 0.0);
+  this->scattering_cross_section_value = scattering_cross_section();
   this->table.initialize([this](double x) { return this->PDF(x); }, nDiv, minVal, maxVal);
 }
 
@@ -218,7 +267,25 @@ double MiePhaseFunction::sample_theta(double x) const {
   return table.Sample(x); // Return theta
 }
 
-double MiePhaseFunction::PDF(double x) {
+double MiePhaseFunction::scattering_efficiency() const
+{
+  const double x = radius * k;
+  double qext, qsca, g;
+  mievinfo(x, m, &qext, &qsca, &g);
+
+  LLOG_INFO("MiePhaseFunction::scattering_efficiency: x = {}, Q_ext = {}, Q_sca = {}, g = {}", x, qext, qsca, g);
+
+  return qsca;
+}
+
+double MiePhaseFunction::scattering_cross_section() const
+{
+  const double Q_sca = scattering_efficiency();
+  const double geometric_cross_section = M_PI * std::pow(radius, 2);
+  return Q_sca * geometric_cross_section;
+}
+
+double MiePhaseFunction::rho_phase_function(double x) const {
   std::complex<double> s1;
   std::complex<double> s2;
   double mu = std::cos(x);
@@ -228,8 +295,13 @@ double MiePhaseFunction::PDF(double x) {
   double sizep = this->k * this->radius;
 
   amiev(&sizep, &crefin, &mu, &s1, &s2);
-  double intensity = std::norm(s1) + std::norm(s2);
 
+  double intensity = (M_PI / (k*k*scattering_cross_section_value)) * (std::norm(s1) + std::norm(s2));
+  return intensity;
+}
+
+double MiePhaseFunction::PDF(double x) const {
+  double intensity = rho_phase_function(x);
   return intensity * std::sin(x);
 }
 

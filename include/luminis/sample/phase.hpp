@@ -17,6 +17,8 @@ public:
   virtual double sample_phi_conditional(double theta, CMatrix& S, CVec2& E, double k, Rng& rng) const;
   virtual double sample_cos(double x) const = 0;
   virtual double sample_theta(double x) const = 0;
+  virtual double scattering_efficiency() const;
+  virtual double scattering_cross_section() const;
   std::array<double, 2> get_anisotropy_factor(std::size_t n_samples = 200000) const;
 };
 
@@ -63,13 +65,17 @@ public:
   RayleighDebyeEMCPhaseFunction(double wavelenght, double radius, double n_particle, double n_medium, int nDiv, double minVal, double maxVal);
   double sample_cos(double x) const override;
   double sample_theta(double x) const override;
-  double PDF(double x);
+  double scattering_efficiency() const override;
+  double scattering_cross_section() const override;
+  double rho_phase_function(double x) const;
+  double PDF(double x) const;
 private:
   SamplingTable table;
   double wavelength;
   double radius;
   double k;
   double n_particle;
+  double scattering_cross_section_value;
   double n_medium;
 };
 
@@ -90,7 +96,10 @@ public:
   MiePhaseFunction(double wavelength, double radius, double n_particle, double n_medium, int nDiv, double minVal, double maxVal);
   double sample_cos(double x) const override;
   double sample_theta(double x) const override;
-  double PDF(double x);
+  double scattering_efficiency() const override;
+  double scattering_cross_section() const override;
+  double rho_phase_function(double x) const;
+  double PDF(double x) const;
 private:
   SamplingTable table;
   double wavelength;
@@ -98,6 +107,7 @@ private:
   double k;
   double n_particle;
   double n_medium;
+  double scattering_cross_section_value;
   std::complex<double> m; // Relative refractive index
 };
 
