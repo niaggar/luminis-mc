@@ -119,42 +119,6 @@ namespace luminis::core
     return res;
   }
 
-  double RGDMedium::scattering_efficiency() const
-  {
-    const double x = radius * k;
-    const double V = 4 * M_PI * std::pow(radius, 3) / 3.0;
-    const double a = (std::pow(k, 6) * std::pow((n_particle / n_medium - 1.0), 2) * V * V) / (4 * std::pow(M_PI, 2));
-    const double c = a / std::pow(x, 2);
-
-    // Numerical integration of F^2(theta) * sin(theta) * (1 + cos^2(theta)) over [0, pi]
-    // using Simpson's rule with N subintervals (N must be even).
-    const int N = 100000;
-    const double h = M_PI / N;
-
-    auto integrand = [&](double theta) -> double {
-      const double F = form_factor(theta, k, radius);
-      const double cos_t = std::cos(theta);
-      return F * F * std::sin(theta) * (1.0 + cos_t * cos_t);
-    };
-
-    double sum = integrand(0.0) + integrand(M_PI);
-    for (int i = 1; i < N; i += 2)
-      sum += 4.0 * integrand(i * h);
-    for (int i = 2; i < N; i += 2)
-      sum += 2.0 * integrand(i * h);
-
-    const double integral = sum * h / 3.0;
-
-    return c * integral;
-  }
-
-  double RGDMedium::scattering_cross_section() const
-  {
-    const double Q_sca = scattering_efficiency();
-    const double geometric_cross_section = M_PI * std::pow(radius, 2);
-    return Q_sca * geometric_cross_section;
-  }
-
   void RGDMedium::set_mean_free_path(double mfp)
   {
     mean_free_path = mfp;
@@ -200,25 +164,6 @@ namespace luminis::core
     res(1, 0) = std::complex<double>(0, 0);
     res(1, 1) = s1;
     return res;
-  }
-
-  double MieMedium::scattering_efficiency() const
-  {
-    const double x = radius * k;
-    double qext, qsca, g;
-		mievinfo(x, m, &qext, &qsca, &g);
-
-    // Log all the values
-    LLOG_INFO("MieMedium::scattering_efficiency: x = {}, Q_ext = {}, Q_sca = {}, g = {}", x, qext, qsca, g);
-
-    return qsca;
-  }
-
-  double MieMedium::scattering_cross_section() const
-  {
-    const double Q_sca = scattering_efficiency();
-    const double geometric_cross_section = M_PI * std::pow(radius, 2);
-    return Q_sca * geometric_cross_section;
   }
 
   /**

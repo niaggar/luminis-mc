@@ -225,7 +225,7 @@ def plot_mean_free_path_vs_radius(r_min, r_max, n_particle, volume_fractions, pa
         phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
         medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
 
-        scattering_efficiency = medium.scattering_efficiency()
+        scattering_efficiency = medium.phase_function.scattering_efficiency()
         for volume_fraction in volume_fractions:
             mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
             if volume_fraction not in mean_free_paths:
@@ -285,7 +285,7 @@ def plot_mean_free_path_vs_density(radius, n_particle, volume_fractions, path, s
         phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
         medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
 
-        scattering_efficiency = medium.scattering_efficiency()
+        scattering_efficiency = medium.phase_function.scattering_efficiency()
         mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
         mean_free_paths.append(mean_free_path / scale)
 
@@ -293,7 +293,7 @@ def plot_mean_free_path_vs_density(radius, n_particle, volume_fractions, path, s
         phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
         medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
 
-        scattering_efficiency = medium.scattering_efficiency()
+        scattering_efficiency = medium.phase_function.scattering_efficiency()
         mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
         mean_free_paths_scaled.append(mean_free_path)
 
@@ -324,7 +324,7 @@ def plot_theta_max_cbs_vs_density(radius, n_particle, volume_fractions, path, sc
         phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
         medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
 
-        scattering_efficiency = medium.scattering_efficiency()
+        scattering_efficiency = medium.phase_function.scattering_efficiency()
         mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
         anisotropy_factor = phase.get_anisotropy_factor()[0]
         transport_mean_free_path = mean_free_path / (1 - anisotropy_factor)
@@ -393,7 +393,7 @@ def print_info_particle(radius, volume_fraction, n_particle):
 
     size_parameter = k_medium * radius
     anisotropy_factor = phase.get_anisotropy_factor()[0]
-    scattering_efficiency = medium.scattering_efficiency()
+    scattering_efficiency = medium.phase_function.scattering_efficiency()
     mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
     transport_mean_free_path = mean_free_path / (1 - anisotropy_factor)
     theta_max_cbs = 1 / (k_medium * transport_mean_free_path)

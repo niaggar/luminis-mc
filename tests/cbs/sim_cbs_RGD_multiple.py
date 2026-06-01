@@ -101,7 +101,7 @@ def run_single_simulation(exp, radius, volume_fraction):
     sample.add_layer(medium, 0.0, float('inf'))
 
 
-    scattering_efficiency = medium.scattering_efficiency()
+    scattering_efficiency = medium.phase_function.scattering_efficiency()
     mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
     mu_scattering = 1 / mean_free_path
     mu_absortion = 0.0

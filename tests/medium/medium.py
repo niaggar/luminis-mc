@@ -64,7 +64,7 @@ for params in params_sweep:
     anysotropy = phase.get_anisotropy_factor()
     print(f"Anisotropy factor g: {anysotropy[0]}")
 
-    scattering_efficiency = medium.scattering_efficiency()
+    scattering_efficiency = medium.phase_function.scattering_efficiency()
     print(f"Scattering efficiency Q_sca: {scattering_efficiency}")
 
     l_s_nm = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)

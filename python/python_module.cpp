@@ -122,6 +122,10 @@ PYBIND11_MODULE(_core, m)
            py::arg("theta"), py::arg("S"), py::arg("E"), py::arg("k"),
            py::arg("rng"),
            "Sample the azimuthal angle phi conditioned on theta")
+      .def("scattering_efficiency", &PhaseFunction::scattering_efficiency,
+           "Calculate the scattering efficiency Q_sca for the phase function")
+      .def("scattering_cross_section", &PhaseFunction::scattering_cross_section,
+           "Calculate the scattering cross-section sigma_sca for the phase function")
       .def("get_anisotropy_factor", &PhaseFunction::get_anisotropy_factor,
            py::arg("n_samples") = 200000,
            "Estimate the anisotropy factor g using Monte Carlo sampling");
@@ -150,7 +154,8 @@ PYBIND11_MODULE(_core, m)
       .def(py::init<double, double, double, double, int, double, double>(),
            py::arg("wavelength"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("nDiv"),
            py::arg("minVal"), py::arg("maxVal"))
-      .def("pdf", &RayleighDebyeEMCPhaseFunction::PDF, py::arg("x"));
+      .def("pdf", &RayleighDebyeEMCPhaseFunction::PDF, py::arg("x"))
+      .def("rho_phase_function", &RayleighDebyeEMCPhaseFunction::rho_phase_function, py::arg("x"));
 
   py::class_<DrainePhaseFunction, PhaseFunction>(m, "DrainePhaseFunction")
       .def(py::init<double, double, int, double, double>(), py::arg("g"),
@@ -161,7 +166,8 @@ PYBIND11_MODULE(_core, m)
       .def(py::init<double, double, double, double, int, double, double>(),
            py::arg("wavelength"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("nDiv"),
            py::arg("minVal"), py::arg("maxVal"))
-      .def("pdf", &MiePhaseFunction::PDF, py::arg("x"));
+      .def("pdf", &MiePhaseFunction::PDF, py::arg("x"))
+      .def("rho_phase_function", &MiePhaseFunction::rho_phase_function, py::arg("x"));
 
   // Photon bindings
   py::class_<Photon>(m, "Photon")
@@ -495,7 +501,7 @@ PYBIND11_MODULE(_core, m)
   m.def("postprocess_planar_fluence", &postprocess_planar_fluence,
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_photon") = true, py::arg("normalize_per_area") = true, py::arg("eps") = 1e-30,
         "Calculate the Stokes parameters from a list of photon records for a planar fluence sensor");
-    
+
   m.def("postprocess_planar_field", &postprocess_planar_field,
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_photon") = true, py::arg("normalize_per_area") = true, py::arg("eps") = 1e-30,
         "Calculate the electric field components from a list of photon records for a planar field sensor");
@@ -523,10 +529,6 @@ PYBIND11_MODULE(_core, m)
       .def("sample_conditional_azimuthal_angle", &ScatteringMedium::sample_conditional_azimuthal_angle,
            py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("theta"),
            "Sample the azimuthal angle conditioned on scattering angle theta")
-      .def("scattering_efficiency", &ScatteringMedium::scattering_efficiency,
-           "Calculate the scattering efficiency Q_sca for the medium")
-      .def("scattering_cross_section", &ScatteringMedium::scattering_cross_section,
-           "Calculate the scattering cross-section sigma_sca for the medium")
       .def("scattering_matrix", &ScatteringMedium::scattering_matrix, py::arg("theta"),
            py::arg("phi"),
            "Get the scattering matrix for given angles and wavenumber")
