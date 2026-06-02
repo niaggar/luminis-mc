@@ -191,7 +191,9 @@ namespace luminis::core
     ///          The estimator approach calculates what the photon's contribution *would be*
     ///          if it were scattered directly toward the detector, applying the appropriate
     ///          phase function weight and exponential attenuation for the remaining distance.
-    // TODO: Configure estimation to take into account all the layers above the current scattering point, not just the current layer.
+    // NOTE: The attenuation toward the detector is integrated layer by layer
+    // (Σ μ_{t,i}·L_i) so stratified samples are handled correctly; see
+    // optical_depth_to_detector() in detector.cpp.
     virtual void process_estimation(const Photon &photon, const Sample &medium);
 
     /// @brief Create an empty clone of this sensor with identical configuration but zeroed data.
