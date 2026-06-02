@@ -44,6 +44,54 @@ namespace luminis::core
     return true;
   }
 
+  // Optical depth along a straight ray from `start` toward the detector plane,
+  // total distance L_total, summed layer by layer:  tau = Σ_i μ_{t,i} · L_i.
+  // In a single-layer sample this reduces to μ_t · L_total; in a stratified
+  // sample it correctly accounts for each crossed layer's extinction.
+  static double optical_depth_to_detector(const Sample &medium, const Vec3 &start,
+                                          const Vec3 &dir, double L_total)
+  {
+    double tau = 0.0, traveled = 0.0;
+    Vec3 p = start;
+    std::size_t layer = medium.get_layer_index_at(p.z);
+    if (layer >= medium.size())
+      return 0.0; // start already outside the stack
+    const double dz = dir.z;
+
+    while (traveled < L_total - 1e-15)
+    {
+      const double remaining = L_total - traveled;
+      const double mu = medium.get_layer(layer).medium->mu_attenuation;
+
+      double seg = remaining;
+      if (std::abs(dz) > 1e-15)
+      {
+        auto iface = medium.find_next_interface(p.z, p.z + dz * remaining);
+        if (iface.has_value())
+        {
+          const double s = (iface.value() - p.z) / dz; // distance to the interface
+          if (s > 1e-15 && s < remaining)
+            seg = s;
+        }
+      }
+
+      tau += mu * seg;
+      p.x += dir.x * seg;
+      p.y += dir.y * seg;
+      p.z += dir.z * seg;
+      traveled += seg;
+
+      if (seg >= remaining - 1e-15)
+        break; // reached the detector plane
+      const double nudge = (dz > 0) ? 1e-12 : -1e-12;
+      std::size_t next = medium.get_layer_index_at(p.z + nudge);
+      if (next >= medium.size())
+        break; // left the stack
+      layer = next;
+    }
+    return tau;
+  }
+
   // Normalización de fase function implícita en S_matrix:
   // I_norm = ∫_0^π (|S11|^2 + |S22|^2) sinθ dθ
   static double compute_I_norm(const ScatteringMedium &medium, double k, int n = 2048)
@@ -1339,10 +1387,13 @@ namespace luminis::core
         const Vec3 s_out = e1 * (s_th * c_ph) + e2 * (s_th * s_ph) + e3 * c_th;
 
         // Path to the detector plane and transmittance without further scatter.
+        // The straight ray may cross several layers, so the optical depth is
+        // summed layer by layer (Σ μ_{t,i}·L_i) instead of using only the
+        // current layer's μ_t.
         double L;
         if (!intersect_plane(photon.pos, s_out, origin, normal, L))
           continue;
-        const double Tr = std::exp(-med->mu_attenuation * L);
+        const double Tr = std::exp(-optical_depth_to_detector(medium, photon.pos, s_out, L));
         if (Tr < 1e-20)
           continue;
 
