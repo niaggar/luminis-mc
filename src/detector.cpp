@@ -180,6 +180,15 @@ namespace luminis::core
 
         for (Sensor *det : it->second)
         {
+          // Estimator-mode sensors are detected exclusively via run_estimators()
+          // (process_estimation at every scattering vertex). Also recording the
+          // physical crossing here would double-count and, worse, inject the
+          // high-variance analog contribution — a single photon dumping its full
+          // weight into one bin — as spikes on top of the smooth estimator curve.
+          // The photon still terminates normally via the boundary (is_inside) check.
+          if (det->estimator_enabled)
+            continue;
+
           Vec3 direction = {photon.P_local(2, 0), photon.P_local(2, 1), photon.P_local(2, 2)};
           const bool valid_photon = det->check_conditions(hit_point, direction, crossing_dir, photon.events);
           if (valid_photon)
@@ -1002,7 +1011,6 @@ namespace luminis::core
     det->theta_pp_max = theta_pp_max;
     det->theta_stride = theta_stride;
     det->phi_stride = phi_stride;
-    det->w_lf_max = w_lf_max;
     return det;
   }
 
@@ -1212,6 +1220,9 @@ namespace luminis::core
   // ─────────────────────────────────────────────────────────────────────────────
   void FarFieldCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
+    if (estimator_enabled)
+      return;
+
     if (photon.events < 2) // CBS needs ≥2 events to form a time-reversed pair.
       return;
 
@@ -1352,16 +1363,9 @@ namespace luminis::core
         if (F < 1e-300)
           continue;
         const double prob_bin = (F / (M_PI * _I_norm)) * (dOmega_theta * dphi);
-        double w_bin = w_scatter * Tr * prob_bin;
+        const double w_bin = w_scatter * Tr * prob_bin;
         if (w_bin < 1e-300)
           continue;
-
-        // Optional variance reduction: clip the heavy-tailed forward-peak spikes.
-        // Scaling both Ef and Er by sqrt(w_bin) keeps their ratio, so the
-        // enhancement is preserved while a single near-forward vertex can no
-        // longer dominate a bin. Disabled (no bias) when w_lf_max <= 0.
-        if (w_lf_max > 0.0 && w_bin > w_lf_max)
-          w_bin = w_lf_max;
 
         const std::complex<double> amp =
             std::sqrt(w_bin) * std::exp(std::complex<double>(0.0, photon.k * L));

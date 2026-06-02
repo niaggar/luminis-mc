@@ -48,7 +48,7 @@ sweep.log_readme(
 # Parametros fisicos (un solo caso, sencillo de interpretar)
 # ---------------------------------------------------------------------------
 params_sweep = [
-    {"radius": 0.110, "volume_fraction": 0.8},
+    {"radius": 0.110, "volume_fraction": 1},
 ]
 
 n_particle = 1.59
@@ -68,7 +68,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Numero de fotones (modesto: es una prueba, no una corrida de produccion)
-n_photons = 10000
+n_photons = 1000
 
 # ---------------------------------------------------------------------------
 # Sensor de campo lejano (cono CBS)
