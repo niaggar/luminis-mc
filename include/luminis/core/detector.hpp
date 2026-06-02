@@ -453,21 +453,6 @@ namespace luminis::core
     int theta_stride{1};           // subsampling para performance
     int phi_stride{1};
 
-    /// @brief Optional last-flight weight cap (variance reduction). Disabled when <= 0.
-    /// @details The last-flight (LFMCM) estimator has a heavy-tailed variance: a
-    ///          scattering vertex whose direction already points near a detector bin
-    ///          requires a near-zero forced scattering angle, hitting the forward peak
-    ///          of the phase function p(theta). The resulting per-contribution weight
-    ///          W_LF can be orders of magnitude larger than the typical one, producing
-    ///          isolated spikes at low photon counts (it is NOT a NaN/Inf; the cone
-    ///          mean and enhancement<=2 stay correct, it is pure MC noise).
-    ///          When w_lf_max > 0, W_LF is clipped to this value. Because both the
-    ///          forward and reverse Jones vectors are scaled by sqrt(W_LF), clipping
-    ///          preserves the per-contribution coherent/incoherent ratio, so the
-    ///          enhancement curve is barely biased while the absolute spikes vanish.
-    ///          Choose it a few times the median W_LF; verify convergence vs photons.
-    double w_lf_max{-1.0};
-
     // --- NEW: cache para normalización angular (depende de k y del medio) ---
     mutable double _I_norm{-1.0};
     mutable double _I_norm_k{0.0};
