@@ -4,6 +4,7 @@
 .vscode/
 .zed/
 .venv/
+.claude/
 .ropeproject/
 build/
 build-app/

@@ -395,77 +395,6 @@ namespace luminis::core
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PlanarCBSSensor — Coherent backscattering on a spatial grid (WIP)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /// @brief Sensor for coherent backscattering (CBS) analysis on a near-field spatial grid.
-  ///
-  /// @warning **Work in progress.** The process_hit() implementation is currently incomplete
-  ///          (most code is commented out). The data structures are in place but the CBS
-  ///          coherent/incoherent decomposition is not yet functional.
-  ///
-  /// Placed at z=0 (backscattering surface). Intended to accumulate Stokes parameters
-  /// with CBS enhancement in a spatial (x, y) grid representation.
-  struct PlanarCBSSensor : public Sensor
-  {
-    int N_x, N_y;          ///< Number of grid pixels in x and y.
-    double len_x, len_y;   ///< Physical dimensions of the sensor area.
-    double dx, dy;         ///< Pixel size in x and y.
-    Matrix S0, S1, S2, S3; ///< Accumulated Stokes parameter grids [N_x × N_y].
-
-    /// @brief Construct a planar CBS sensor at z=0.
-    /// @param len_x Total sensor width in x.
-    /// @param len_y Total sensor height in y.
-    /// @param dx    Pixel size in x.
-    /// @param dy    Pixel size in y.
-    /// @param estimator If true, this sensor participates in estimator-based detection.
-    /// @details Automatically sets a position filter to the sensor area bounds.
-    PlanarCBSSensor(double len_x, double len_y, double dx, double dy, bool estimator = false);
-    std::unique_ptr<Sensor> clone() const override;
-    void merge_from(const Sensor &other) override;
-    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
-    void process_estimation(const Photon &photon, const Sample &medium) override;
-  };
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // FarFieldFluenceSensor — Stokes parameters on an angular grid
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /// @brief Sensor that accumulates Stokes parameters on a far-field angular grid (theta, phi).
-  ///
-  /// Bins photons by their exit direction into an angular grid:
-  ///   - theta (polar): measured from the backward normal (-z), so theta=0 means
-  ///     exact backscattering. Range: [0, theta_max].
-  ///   - phi (azimuthal): measured as atan2(dir_y, dir_x) in [0, phi_max].
-  ///
-  /// Each photon's Stokes parameters are computed from its polarization state
-  /// projected onto the laboratory (x, y) frame and deposited into the
-  /// corresponding angular bin.
-  ///
-  /// Supports estimator-based detection (currently commented out in implementation).
-  ///
-  /// Useful for: angular distribution of diffuse light, far-field radiation patterns.
-  struct FarFieldFluenceSensor : public Sensor
-  {
-    int N_theta, N_phi;        ///< Number of angular bins in theta and phi.
-    double theta_max, phi_max; ///< Maximum angular extents [rad].
-    double dtheta, dphi;       ///< Angular bin widths: dtheta = theta_max / N_theta, dphi = phi_max / N_phi.
-    Matrix S0, S1, S2, S3;     ///< Accumulated Stokes parameter grids [N_theta × N_phi].
-
-    /// @brief Construct a far-field fluence sensor.
-    /// @param theta_max Maximum polar angle [rad].
-    /// @param phi_max   Maximum azimuthal angle [rad] (typically 2*pi).
-    /// @param n_theta   Number of polar angle bins.
-    /// @param n_phi     Number of azimuthal angle bins.
-    /// @param estimator If true, this sensor participates in estimator-based detection.
-    /// @details Automatically sets theta and phi filters to [0, theta_max] and [0, phi_max].
-    FarFieldFluenceSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator = false);
-    std::unique_ptr<Sensor> clone() const override;
-    void merge_from(const Sensor &other) override;
-    void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
-  };
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // FarFieldCBSSensor — Coherent backscattering in far-field angular space
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -524,9 +453,25 @@ namespace luminis::core
     int theta_stride{1};           // subsampling para performance
     int phi_stride{1};
 
-    // --- NEW: cache para normalización angular (depende de k) ---
+    /// @brief Optional last-flight weight cap (variance reduction). Disabled when <= 0.
+    /// @details The last-flight (LFMCM) estimator has a heavy-tailed variance: a
+    ///          scattering vertex whose direction already points near a detector bin
+    ///          requires a near-zero forced scattering angle, hitting the forward peak
+    ///          of the phase function p(theta). The resulting per-contribution weight
+    ///          W_LF can be orders of magnitude larger than the typical one, producing
+    ///          isolated spikes at low photon counts (it is NOT a NaN/Inf; the cone
+    ///          mean and enhancement<=2 stay correct, it is pure MC noise).
+    ///          When w_lf_max > 0, W_LF is clipped to this value. Because both the
+    ///          forward and reverse Jones vectors are scaled by sqrt(W_LF), clipping
+    ///          preserves the per-contribution coherent/incoherent ratio, so the
+    ///          enhancement curve is barely biased while the absolute spikes vanish.
+    ///          Choose it a few times the median W_LF; verify convergence vs photons.
+    double w_lf_max{-1.0};
+
+    // --- NEW: cache para normalización angular (depende de k y del medio) ---
     mutable double _I_norm{-1.0};
     mutable double _I_norm_k{0.0};
+    mutable const ScatteringMedium *_I_norm_medium{nullptr}; ///< Cache key: medium for which _I_norm was computed.
 
     /// @name Coherent Stokes grids
     /// @brief Accumulated |E_forward + E_reverse|^2 Stokes parameters [N_theta × N_phi].
@@ -562,78 +507,38 @@ namespace luminis::core
     ///          Ignored for photons with fewer than 2 scattering events.
     void process_hit(Photon &photon, InteractionInfo &info, const Sample &medium) override;
 
-    /// @brief Estimator-based CBS contribution (currently unimplemented).
-    /// @details The commented-out code would iterate over all (theta, phi) bins,
-    ///          computing virtual scatter contributions and their reverse-path
-    ///          counterparts for improved statistical convergence.
+    /// @brief Estimator-based (last-flight / next-event) CBS contribution.
+    /// @details Iterates over every (theta, phi) bin, computing the virtual
+    ///          forward-scatter contribution toward that bin and its reverse-path
+    ///          counterpart (via reverse_field), then accumulates the coherent and
+    ///          incoherent Stokes parameters. This is a variance-reduction
+    ///          alternative to process_hit: do NOT enable both on the same sensor
+    ///          instance or the angular distribution will be double counted.
     void process_estimation(const Photon &photon, const Sample &medium) override;
+
+  private:
+    /// @brief Map an arrival time to a temporal bin index.
+    /// @return 0 when time-resolution is disabled (only bin 0 used),
+    ///         >=1 for a valid resolved bin, or -1 when out of range (skip).
+    int time_bin(double arrival_time) const;
+
+    /// @brief Accumulate coherent (|E_f + E_r|^2) and incoherent (|E_f|^2 + |E_r|^2)
+    ///        Stokes parameters into the time-integrated bin 0 and, if t_idx >= 1,
+    ///        the resolved bin t_idx.
+    void accumulate_stokes(int it, int jp, int t_idx,
+                           std::complex<double> Efx, std::complex<double> Efy,
+                           std::complex<double> Erx, std::complex<double> Ery);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CBS helper functions
+  // CBS reverse-path algorithm
+  //
+  // The three-stage time-reversed (reciprocal) field computation
+  //   E_rev = S^(1) R(φ1') T^rev R(φn') S^(n) R(φn) E0,   T^rev = Q T^T Q
+  // (Xu 2008, Eq. 3) is implemented as a single file-local helper, reverse_field(),
+  // in detector.cpp. Both the direct detector (process_hit) and the last-flight
+  // estimator (process_estimation) call it so the rotations stay consistent.
   // ═══════════════════════════════════════════════════════════════════════════
-
-  /// @brief Compute the reverse-path polarization state for a given estimated exit direction.
-  ///
-  /// This is the estimator variant of the CBS reverse-path computation. Unlike
-  /// coherent_calculation(), which uses the photon's actual exit direction, this
-  /// function accepts an arbitrary exit basis (last_scattering_P) so it can be used
-  /// by process_estimation() to evaluate virtual contributions toward any angular bin.
-  ///
-  /// @param photon             The photon with stored scattering history (P0, P1, Pn1, matrix_T, etc.).
-  /// @param medium             The scattering medium (for scattering matrix evaluation).
-  /// @param last_scattering_P  The 3×3 local basis matrix at the hypothetical exit point.
-  /// @return The complex polarization vector (Em, En) of the reverse path, expressed
-  ///         in the basis given by last_scattering_P.
-  ///
-  /// @see coherent_calculation() for the direct-hit version.
-  CVec2 coherent_estimation_partial(
-      const Photon &photon,
-      const Sample &medium,
-      const Matrix &P_last_in,
-      const Matrix &P_last_out,
-      const CMatrix &Tmid,
-      int layer_at_n, // ← NEW: photon.current_layer at call site
-      int layer_at_1  // ← NEW: photon.first_scatter_layer
-  );
-
-  /// @brief Compute the reverse-path polarization and store it in photon.polarization_reverse.
-  ///
-  /// Uses the photon's stored scattering history to reconstruct the time-reversed
-  /// (reciprocal) path's Jones chain and compute the resulting polarization state.
-  ///
-  /// The algorithm has three stages:
-  ///
-  /// **Stage A — First reverse scatter (at position r_n):**
-  ///   The reverse path enters with the original incident direction s_0 and exits
-  ///   toward -s_{n-1} (reverse of the penultimate leg). The scattering angle is
-  ///   theta_a = acos(s_0 · (-s_{n-1})). Rotation matrices align the initial
-  ///   polarization basis (m_0, n_0) to the scattering plane, then the Jones matrix
-  ///   S(theta_a) is applied, followed by rotation into the (m_{n-1}, -n_{n-1}) basis.
-  ///
-  /// **Stage B — Intermediate scatterers (reciprocity shortcut):**
-  ///   Instead of recomputing each intermediate scatter individually, the reciprocity
-  ///   theorem is applied: the reverse-path Jones chain for scatters 2...(n-1) equals
-  ///   Q · T^T · Q, where T = J_2 · J_3 · ... · J_{n-1} is the accumulated forward
-  ///   Jones matrix (stored in photon.matrix_T), T^T is its transpose (NOT conjugate
-  ///   transpose), and Q = diag(1, -1) accounts for the n-component sign flip in
-  ///   the reversed propagation direction.
-  ///
-  /// **Stage C — Last reverse scatter (at position r_1):**
-  ///   The reverse path enters from -s_1 and exits along s_n (the forward exit
-  ///   direction). The scattering angle is theta_b = acos((-s_1) · s_n). Similar
-  ///   rotation and Jones matrix operations produce the final polarization, which
-  ///   is rotated into the photon's detection basis (m_n, n_n).
-  ///
-  /// The result is written to photon.polarization_reverse.
-  ///
-  /// @param photon The photon (modified: polarization_reverse is set).
-  /// @param medium The scattering medium (for scattering matrix evaluation at new angles).
-  ///
-  /// @pre photon.events >= 2
-  /// @pre SimConfig::track_reverse_paths was true during simulation (so that P0, P1,
-  ///      Pn1, Pn, r_1, r_n, initial_polarization, and matrix_T are populated).
-  void coherent_calculation(Photon &photon, const Sample &medium);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // StatisticsSensor — Configurable histograms of photon properties

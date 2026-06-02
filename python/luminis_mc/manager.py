@@ -25,8 +25,8 @@ HDF5 layout produced by ``Experiment``::
 
 Supported sensor types
 ----------------------
-PhotonRecordSensor, PlanarFieldSensor, PlanarFluenceSensor, PlanarCBSSensor,
-FarFieldFluenceSensor, FarFieldCBSSensor, StatisticsSensor.
+PhotonRecordSensor, PlanarFieldSensor, PlanarFluenceSensor,
+FarFieldCBSSensor, StatisticsSensor.
 To add a new sensor type extend the ``if/elif`` block in
 :py:meth:`Experiment.save_sensor`.
 """
@@ -585,24 +585,6 @@ class Experiment:
             for k in ["N_x", "N_y", "N_t", "dx", "dy", "dt", "len_x", "len_y", "len_t"]:
                 _write_attr(g_meta, k, getattr(sensor, k))
             # S*_t may be a list of matrices → stacked to (Nt, Nx, Ny)
-            _write_dataset(g_data, "S0", _as_array(sensor.S0))
-            _write_dataset(g_data, "S1", _as_array(sensor.S1))
-            _write_dataset(g_data, "S2", _as_array(sensor.S2))
-            _write_dataset(g_data, "S3", _as_array(sensor.S3))
-
-        # ── PlanarCBSSensor ────────────────────────────────────────────────────
-        elif t == "PlanarCBSSensor":
-            for k in ["N_x", "N_y", "dx", "dy", "len_x", "len_y"]:
-                _write_attr(g_meta, k, getattr(sensor, k))
-            _write_dataset(g_data, "S0", _as_array(sensor.S0))
-            _write_dataset(g_data, "S1", _as_array(sensor.S1))
-            _write_dataset(g_data, "S2", _as_array(sensor.S2))
-            _write_dataset(g_data, "S3", _as_array(sensor.S3))
-
-        # ── FarFieldFluenceSensor ──────────────────────────────────────────────
-        elif t == "FarFieldFluenceSensor":
-            for k in ["N_theta", "N_phi", "theta_max", "phi_max", "dtheta", "dphi"]:
-                _write_attr(g_meta, k, getattr(sensor, k))
             _write_dataset(g_data, "S0", _as_array(sensor.S0))
             _write_dataset(g_data, "S1", _as_array(sensor.S1))
             _write_dataset(g_data, "S2", _as_array(sensor.S2))
