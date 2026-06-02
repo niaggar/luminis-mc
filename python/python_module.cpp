@@ -358,36 +358,6 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S2", &PlanarFluenceSensor::S2)
       .def_readonly("S3", &PlanarFluenceSensor::S3);
 
-  py::class_<PlanarCBSSensor, Sensor>(m, "PlanarCBSSensor")
-      .def(py::init<double, double, double, double, bool>(),
-           py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"), py::arg("estimator") = false,
-           "Initialize a Sensor at a given z position")
-      .def_readonly("N_x", &PlanarCBSSensor::N_x)
-      .def_readonly("N_y", &PlanarCBSSensor::N_y)
-      .def_readonly("len_x", &PlanarCBSSensor::len_x)
-      .def_readonly("len_y", &PlanarCBSSensor::len_y)
-      .def_readonly("dx", &PlanarCBSSensor::dx)
-      .def_readonly("dy", &PlanarCBSSensor::dy)
-      .def_readonly("S0", &PlanarCBSSensor::S0)
-      .def_readonly("S1", &PlanarCBSSensor::S1)
-      .def_readonly("S2", &PlanarCBSSensor::S2)
-      .def_readonly("S3", &PlanarCBSSensor::S3);
-
-  py::class_<FarFieldFluenceSensor, Sensor>(m, "FarFieldFluenceSensor")
-      .def(py::init<double, double, int, int, bool>(),
-           py::arg("theta_max"), py::arg("phi_max"), py::arg("n_theta"), py::arg("n_phi"), py::arg("estimator") = false,
-           "Initialize a Sensor at a given z position")
-      .def_readonly("N_theta", &FarFieldFluenceSensor::N_theta)
-      .def_readonly("N_phi", &FarFieldFluenceSensor::N_phi)
-      .def_readonly("theta_max", &FarFieldFluenceSensor::theta_max)
-      .def_readonly("phi_max", &FarFieldFluenceSensor::phi_max)
-      .def_readonly("dtheta", &FarFieldFluenceSensor::dtheta)
-      .def_readonly("dphi", &FarFieldFluenceSensor::dphi)
-      .def_readonly("S0", &FarFieldFluenceSensor::S0)
-      .def_readonly("S1", &FarFieldFluenceSensor::S1)
-      .def_readonly("S2", &FarFieldFluenceSensor::S2)
-      .def_readonly("S3", &FarFieldFluenceSensor::S3);
-
   py::class_<FarFieldCBSSensor, Sensor>(m, "FarFieldCBSSensor")
       .def(py::init<double, double, double, double, double, double, bool>(),
            py::arg("theta_max"), py::arg("phi_max"), py::arg("len_t"), py::arg("d_theta"), py::arg("d_phi"), py::arg("d_t"), py::arg("estimator") = false,
@@ -411,7 +381,8 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S3_incoh", &FarFieldCBSSensor::S3_incoh)
       .def_readwrite("theta_pp_max", &FarFieldCBSSensor::theta_pp_max)
       .def_readwrite("theta_stride", &FarFieldCBSSensor::theta_stride)
-      .def_readwrite("phi_stride", &FarFieldCBSSensor::phi_stride);
+      .def_readwrite("phi_stride", &FarFieldCBSSensor::phi_stride)
+      .def_readwrite("w_lf_max", &FarFieldCBSSensor::w_lf_max);
 
   py::class_<StatisticsSensor, Sensor>(m, "StatisticsSensor")
       .def(py::init<double, bool>(),

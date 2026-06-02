@@ -919,207 +919,6 @@ namespace luminis::core
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PlanarCBSSensor implementation
-  // ═══════════════════════════════════════════════════════════════════════════
-  PlanarCBSSensor::PlanarCBSSensor(double len_x, double len_y, double dx, double dy, bool estimator) : Sensor(0.0, true, estimator)
-  {
-    this->len_x = len_x;
-    this->len_y = len_y;
-    this->dx = dx;
-    this->dy = dy;
-
-    N_x = static_cast<int>(std::ceil(len_x / dx));
-    N_y = static_cast<int>(std::ceil(len_y / dy));
-
-    S0 = Matrix(N_x, N_y);
-    S1 = Matrix(N_x, N_y);
-    S2 = Matrix(N_x, N_y);
-    S3 = Matrix(N_x, N_y);
-
-    const double half_len_x = 0.5 * len_x;
-    const double half_len_y = 0.5 * len_y;
-
-    set_position_limit(-half_len_x, half_len_x, -half_len_y, half_len_y);
-  }
-
-  std::unique_ptr<Sensor> PlanarCBSSensor::clone() const
-  {
-    auto det = std::make_unique<PlanarCBSSensor>(len_x, len_y, dx, dy);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    det->filter_position_enabled = filter_position_enabled;
-    det->filter_x_min = filter_x_min;
-    det->filter_x_max = filter_x_max;
-    det->filter_y_min = filter_y_min;
-    det->filter_y_max = filter_y_max;
-    det->filter_direction_enabled = filter_direction_enabled;
-    det->filter_direction = filter_direction;
-    det->filter_events_enabled = filter_events_enabled;
-    det->filter_events_min = filter_events_min;
-    det->filter_events_max = filter_events_max;
-    return det;
-  }
-
-  void PlanarCBSSensor::merge_from(const Sensor &other)
-  {
-    const auto &o = dynamic_cast<const PlanarCBSSensor &>(other);
-    hits += o.hits;
-    for (int i = 0; i < N_x; ++i)
-    {
-      for (int j = 0; j < N_y; ++j)
-      {
-        S0(i, j) += o.S0(i, j);
-        S1(i, j) += o.S1(i, j);
-        S2(i, j) += o.S2(i, j);
-        S3(i, j) += o.S3(i, j);
-      }
-    }
-  }
-
-  // TODO: Implement
-  void PlanarCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
-  {
-    const double x = info.intersection_point.x;
-    const double y = info.intersection_point.y;
-    const int x_idx = static_cast<int>((x + 0.5 * len_x) / dx);
-    const int y_idx = static_cast<int>((y + 0.5 * len_y) / dy);
-    if (x_idx < 0 || x_idx >= N_x || y_idx < 0 || y_idx >= N_y)
-      return;
-
-    const double w_sqrt = std::sqrt(photon.weight);
-
-    // Vec3 qb = (photon.dir + photon.s_0) * photon.k;
-    // Vec3 delta_r = photon.r_n - photon.r_1;
-    // std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
-
-    // Vec3 n_0 = photon.n_0;
-    // Vec3 s_0 = photon.s_0;
-    // Vec3 m_0 = cross(n_0, s_0);
-
-    // CVec2 E_fwd_local = photon.polarization;
-    // CVec2 E_rev_local = photon.polarization_reverse;
-
-    // std::complex<double> E_fwd_lab_x = (E_fwd_local.m * photon.m.x + E_fwd_local.n * photon.n.x) * info.phase * w_sqrt;
-    // std::complex<double> E_fwd_lab_y = (E_fwd_local.m * photon.m.y + E_fwd_local.n * photon.n.y) * info.phase * w_sqrt;
-
-    // std::complex<double> E_rev_lab_x = (E_rev_local.m * m_0.x + E_rev_local.n * n_0.x) * info.phase * path_phase * w_sqrt;
-    // std::complex<double> E_rev_lab_y = (E_rev_local.m * m_0.y + E_rev_local.n * n_0.y) * info.phase * path_phase * w_sqrt;
-
-    // std::complex<double> E_total_x = E_fwd_lab_x + E_rev_lab_x;
-    // std::complex<double> E_total_y = E_fwd_lab_y + E_rev_lab_y;
-
-    // const double S0_contribution = std::norm(E_total_x) + std::norm(E_total_y);
-    // const double S1_contribution = std::norm(E_total_x) - std::norm(E_total_y);
-    // const double S2_contribution = 2.0 * std::real(E_total_x * std::conj(E_total_y));
-    // const double S3_contribution = 2.0 * std::imag(E_total_x * std::conj(E_total_y));
-
-    // S0(x_idx, y_idx) += S0_contribution;
-    // S1(x_idx, y_idx) += S1_contribution;
-    // S2(x_idx, y_idx) += S2_contribution;
-    // S3(x_idx, y_idx) += S3_contribution;
-
-    hits += 1;
-  }
-
-  // TODO: Implement
-  void PlanarCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
-  {
-    // Not implemented for CBS sensor since it relies on interference between forward and reverse paths, which cannot be captured by estimation.
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // FarFieldFluenceSensor implementation
-  // ═══════════════════════════════════════════════════════════════════════════
-  FarFieldFluenceSensor::FarFieldFluenceSensor(double theta_max, double phi_max, int n_theta, int n_phi, bool estimator) : Sensor(0.0, true, estimator)
-  {
-    this->theta_max = theta_max;
-    this->phi_max = phi_max;
-    this->N_theta = n_theta;
-    this->N_phi = n_phi;
-
-    dtheta = theta_max / N_theta;
-    dphi = phi_max / N_phi;
-
-    S0 = Matrix(N_theta, N_phi);
-    S1 = Matrix(N_theta, N_phi);
-    S2 = Matrix(N_theta, N_phi);
-    S3 = Matrix(N_theta, N_phi);
-
-    set_theta_limit(0, theta_max);
-    set_phi_limit(0, phi_max);
-  }
-
-  std::unique_ptr<Sensor> FarFieldFluenceSensor::clone() const
-  {
-    auto det = std::make_unique<FarFieldFluenceSensor>(theta_max, phi_max, N_theta, N_phi, estimator_enabled);
-    det->filter_theta_enabled = filter_theta_enabled;
-    det->filter_theta_min = filter_theta_min;
-    det->filter_theta_max = filter_theta_max;
-    det->_cache_cos_theta_min = _cache_cos_theta_min;
-    det->_cache_cos_theta_max = _cache_cos_theta_max;
-    det->filter_phi_enabled = filter_phi_enabled;
-    det->filter_phi_min = filter_phi_min;
-    det->filter_phi_max = filter_phi_max;
-    return det;
-  }
-
-  void FarFieldFluenceSensor::merge_from(const Sensor &other)
-  {
-    const auto &o = dynamic_cast<const FarFieldFluenceSensor &>(other);
-    hits += o.hits;
-    for (int i = 0; i < N_theta; ++i)
-    {
-      for (int j = 0; j < N_phi; ++j)
-      {
-        S0(i, j) += o.S0(i, j);
-        S1(i, j) += o.S1(i, j);
-        S2(i, j) += o.S2(i, j);
-        S3(i, j) += o.S3(i, j);
-      }
-    }
-  }
-
-  void FarFieldFluenceSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
-  {
-    Matrix P = photon.P_local;
-    const Vec3 dir = {P(2, 0), P(2, 1), P(2, 2)};
-    const double theta = std::acos(-dir.z);
-    double phi = std::atan2(dir.y, dir.x);
-    if (phi < 0)
-      phi += 2.0 * M_PI;
-
-    const int theta_idx = static_cast<int>(theta / dtheta);
-    const int phi_idx = static_cast<int>(phi / dphi);
-    if (theta_idx < 0 || theta_idx >= N_theta || phi_idx < 0 || phi_idx >= N_phi)
-      return;
-
-    const double w_sqrt = std::sqrt(photon.weight);
-    const std::complex<double> Em_local_photon = photon.polarization.m * info.phase * w_sqrt;
-    const std::complex<double> En_local_photon = photon.polarization.n * info.phase * w_sqrt;
-
-    const std::complex<double> E_det_x = (Em_local_photon * P(0, 0) + En_local_photon * P(1, 0));
-    const std::complex<double> E_det_y = (Em_local_photon * P(0, 1) + En_local_photon * P(1, 1));
-
-    const double S0_contribution = std::norm(E_det_x) + std::norm(E_det_y);
-    const double S1_contribution = std::norm(E_det_x) - std::norm(E_det_y);
-    const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
-    const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
-
-    S0(theta_idx, phi_idx) += S0_contribution;
-    S1(theta_idx, phi_idx) += S1_contribution;
-    S2(theta_idx, phi_idx) += S2_contribution;
-    S3(theta_idx, phi_idx) += S3_contribution;
-
-    hits += 1;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // FarFieldCBSSensor implementation
   // ═══════════════════════════════════════════════════════════════════════════
   FarFieldCBSSensor::FarFieldCBSSensor(double theta_max, double phi_max, double len_t, double d_theta, double d_phi, double d_t, bool estimator) : Sensor(0.0, true, estimator)
@@ -1203,687 +1002,401 @@ namespace luminis::core
     det->theta_pp_max = theta_pp_max;
     det->theta_stride = theta_stride;
     det->phi_stride = phi_stride;
+    det->w_lf_max = w_lf_max;
     return det;
   }
 
-  void FarFieldCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
-  {
-    // CBS requires at least 2 scattering events to form a time-reversed path pair.
-    if (photon.events >= 2)
-    {
-      // --- Time-resolved binning ---
-      // If dt==0, all photons go into a single time bin (steady-state mode).
-      int t_idx = -1;
-      if (dt > 0)
-      {
-        double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
-        if (arrival_time < 0 || arrival_time >= t_max)
-          return;
-        t_idx = static_cast<int>(arrival_time / dt) + 1;
-        if (t_idx >= N_t)
-          return;
-      }
-
-      // Compute the reverse-path electric field via the 3-stage algorithm.
-      // After this call, photon.polarization_reverse holds the reverse Jones vector.
-      coherent_calculation(photon, medium);
-
-      // --- Extract exit direction and far-field angular coordinates ---
-      // Local frame at the detection point: rows of P are (m, n, s).
-      const Matrix &P = photon.P_local;
-      const Vec3 s_out{P(2, 0), P(2, 1), P(2, 2)}; // Exit direction
-
-      // Far-field angles: theta=0 corresponds to exact backscattering (-z direction).
-      const double theta = std::acos(-s_out.z);
-      double phi = std::atan2(s_out.y, s_out.x);
-      if (phi < 0)
-        phi += 2.0 * M_PI;
-
-      const int theta_idx = static_cast<int>(theta / dtheta);
-      const int phi_idx = static_cast<int>(phi / dphi);
-      if (theta_idx < 0 || theta_idx >= N_theta || phi_idx < 0 || phi_idx >= N_phi)
-        return;
-
-      // --- CBS geometric phase factor ---
-      // The phase difference between forward and reverse paths arises from
-      // the spatial separation of the first (r_1) and last (r_n) scattering events:
-      //   phase = exp(i * k * (s_out + s_in) . (r_n - r_1))
-      // At exact backscattering (s_out = -s_in), this phase vanishes and
-      // the two paths interfere constructively, producing the CBS cone.
-      const Vec3 s_in{photon.P0(2, 0), photon.P0(2, 1), photon.P0(2, 2)};
-      const Vec3 qb = (s_out + s_in) * photon.k;
-      const Vec3 delta_r = photon.r_n - photon.r_1;
-      const std::complex<double> path_phase = std::exp(std::complex<double>(0, dot(qb, delta_r)));
-
-      // --- Common amplitude factor ---
-      // Weight-corrected amplitude with propagation phase at the detector plane.
-      const double w_sqrt = std::sqrt(photon.weight);
-      const std::complex<double> amp = info.phase * w_sqrt;
-
-      // --- Forward field (already in the local frame at exit) ---
-      // The forward polarization is tracked continuously during transport.
-      const std::complex<double> Em_f = photon.polarization.m * amp;
-      const std::complex<double> En_f = photon.polarization.n * amp;
-
-      // Project local Jones vector (m,n) components to lab frame (x,y).
-      const std::complex<double> Efx = Em_f * P(0, 0) + En_f * P(1, 0);
-      const std::complex<double> Efy = Em_f * P(0, 1) + En_f * P(1, 1);
-
-      // --- Reverse field (computed by coherent_calculation) ---
-      // The reverse field includes the CBS geometric phase from the
-      // spatial separation of the first and last scattering sites.
-      const std::complex<double> Em_r = photon.polarization_reverse.m * amp * path_phase;
-      const std::complex<double> En_r = photon.polarization_reverse.n * amp * path_phase;
-
-      const std::complex<double> Erx = Em_r * P(0, 0) + En_r * P(1, 0);
-      const std::complex<double> Ery = Em_r * P(0, 1) + En_r * P(1, 1);
-
-      // --- Coherent Stokes: |E_forward + E_reverse|^2 ---
-      // This includes the interference term that produces the CBS enhancement.
-      const std::complex<double> Etx = Efx + Erx;
-      const std::complex<double> Ety = Efy + Ery;
-
-      const double S0c = std::norm(Etx) + std::norm(Ety);
-      const double S1c = std::norm(Etx) - std::norm(Ety);
-      const double S2c = 2.0 * std::real(Etx * std::conj(Ety));
-      const double S3c = 2.0 * std::imag(Etx * std::conj(Ety));
-
-      // If time windows are enabled, accumulate into the corresponding temporal bin.
-      if (dt > 0)
-      {
-        S0_coh[t_idx](theta_idx, phi_idx) += S0c;
-        S1_coh[t_idx](theta_idx, phi_idx) += S1c;
-        S2_coh[t_idx](theta_idx, phi_idx) += S2c;
-        S3_coh[t_idx](theta_idx, phi_idx) += S3c;
-      }
-
-      // Always accumulate in bin 0 for time-integrated fluence.
-      S0_coh[0](theta_idx, phi_idx) += S0c;
-      S1_coh[0](theta_idx, phi_idx) += S1c;
-      S2_coh[0](theta_idx, phi_idx) += S2c;
-      S3_coh[0](theta_idx, phi_idx) += S3c;
-
-      // --- Incoherent Stokes: |E_forward|^2 + |E_reverse|^2 ---
-      // No interference; serves as the baseline background intensity.
-      const double S0i = (std::norm(Efx) + std::norm(Efy)) + (std::norm(Erx) + std::norm(Ery));
-      const double S1i = (std::norm(Efx) - std::norm(Efy)) + (std::norm(Erx) - std::norm(Ery));
-      const double S2i = 2.0 * (std::real(Efx * std::conj(Efy)) + std::real(Erx * std::conj(Ery)));
-      const double S3i = 2.0 * (std::imag(Efx * std::conj(Efy)) + std::imag(Erx * std::conj(Ery)));
-
-      // If time windows are enabled, accumulate into the corresponding temporal bin.
-      if (dt > 0)
-      {
-        S0_incoh[t_idx](theta_idx, phi_idx) += S0i;
-        S1_incoh[t_idx](theta_idx, phi_idx) += S1i;
-        S2_incoh[t_idx](theta_idx, phi_idx) += S2i;
-        S3_incoh[t_idx](theta_idx, phi_idx) += S3i;
-      }
-
-      // Always accumulate in bin 0 for time-integrated fluence.
-      S0_incoh[0](theta_idx, phi_idx) += S0i;
-      S1_incoh[0](theta_idx, phi_idx) += S1i;
-      S2_incoh[0](theta_idx, phi_idx) += S2i;
-      S3_incoh[0](theta_idx, phi_idx) += S3i;
-    }
-    // Less than 2 events, ther is no time-reversed path pair for CBS, only accumulate incoherent intensity if desired.
-    // else
-    // {
-    //   int t_idx = -1;
-    //   if (dt > 0)
-    //   {
-    //     double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
-    //     if (arrival_time < 0 || arrival_time >= t_max)
-    //       return;
-    //     t_idx = static_cast<int>(arrival_time / dt) + 1;
-    //     if (t_idx >= N_t)
-    //       return;
-    //   }
-
-    //   Matrix P = photon.P_local;
-    //   const Vec3 dir = {P(2, 0), P(2, 1), P(2, 2)};
-    //   const double theta = std::acos(-dir.z);
-    //   double phi = std::atan2(dir.y, dir.x);
-    //   if (phi < 0)
-    //     phi += 2.0 * M_PI;
-
-    //   const int theta_idx = static_cast<int>(theta / dtheta);
-    //   const int phi_idx = static_cast<int>(phi / dphi);
-    //   if (theta_idx < 0 || theta_idx >= N_theta || phi_idx < 0 || phi_idx >= N_phi)
-    //     return;
-
-    //   const double w_sqrt = std::sqrt(photon.weight);
-    //   const std::complex<double> Em_local_photon = photon.polarization.m * info.phase * w_sqrt;
-    //   const std::complex<double> En_local_photon = photon.polarization.n * info.phase * w_sqrt;
-
-    //   const std::complex<double> E_det_x = (Em_local_photon * P(0, 0) + En_local_photon * P(1, 0));
-    //   const std::complex<double> E_det_y = (Em_local_photon * P(0, 1) + En_local_photon * P(1, 1));
-
-    //   const double S0_contribution = std::norm(E_det_x) + std::norm(E_det_y);
-    //   const double S1_contribution = std::norm(E_det_x) - std::norm(E_det_y);
-    //   const double S2_contribution = 2.0 * std::real(E_det_x * std::conj(E_det_y));
-    //   const double S3_contribution = 2.0 * std::imag(E_det_x * std::conj(E_det_y));
-
-    //   // If time windows are enabled, accumulate into the corresponding temporal bin.
-    //   if (dt > 0)
-    //   {
-    //     S0_incoh[t_idx](theta_idx, phi_idx) += S0_contribution;
-    //     S1_incoh[t_idx](theta_idx, phi_idx) += S1_contribution;
-    //     S2_incoh[t_idx](theta_idx, phi_idx) += S2_contribution;
-    //     S3_incoh[t_idx](theta_idx, phi_idx) += S3_contribution;
-    //   }
-
-    //   // Always accumulate in bin 0 for time-integrated fluence.
-    //   S0_incoh[0](theta_idx, phi_idx) += S0_contribution;
-    //   S1_incoh[0](theta_idx, phi_idx) += S1_contribution;
-    //   S2_incoh[0](theta_idx, phi_idx) += S2_contribution;
-    //   S3_incoh[0](theta_idx, phi_idx) += S3_contribution;
-    // }
-
-    hits += 1;
-  }
-
-  void FarFieldCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
-  {
-    if (photon.events < 1)
-      return;
-
-    const ScatteringMedium *current_medium = medium.get_layer(photon.current_layer).medium;
-
-    // Cache I_norm para este k
-    if (_I_norm < 0.0 || std::abs(_I_norm_k - photon.k) > 1e-12)
-    {
-      _I_norm = compute_I_norm(*current_medium, photon.k);
-      _I_norm_k = photon.k;
-      if (_I_norm < 1e-300)
-        return;
-    }
-
-    // Base angular alrededor del eje de backscattering (-s_in)
-    const Vec3 e1 = row_vec3(photon.P0, 0);
-    const Vec3 e2 = row_vec3(photon.P0, 1);
-    const Vec3 s_in = row_vec3(photon.P0, 2);
-    const Vec3 e3 = s_in * (-1.0); // theta_det=0 es backscatter exacto
-
-    // Frame actual antes del scatter estimado
-    const Matrix &Pcur = photon.P_local;
-    const Vec3 m_cur = row_vec3(Pcur, 0);
-    const Vec3 n_cur = row_vec3(Pcur, 1);
-    const Vec3 s_cur = row_vec3(Pcur, 2);
-
-    // Tmid para n = events+1  => interior = J_events ... J2
-    CMatrix Tmid = CMatrix::identity(2);
-    if (photon.events >= 2 && photon.has_T_prev)
-    {
-      matcmul(photon.matrix_T_buffer, photon.matrix_T, Tmid);
-    }
-
-    // Control de región y subsampling
-    const double th_max = (theta_pp_max > 0.0) ? std::min(theta_pp_max, theta_max) : theta_max;
-    const int i_max = std::min(N_theta, static_cast<int>(th_max / dtheta));
-
-    // Pre-factor de “sobrevive al scatter” (mu_s/mu_t)
-    const double w_scatter = photon.weight * (current_medium->mu_scattering / current_medium->mu_attenuation);
-    if (w_scatter < 1e-300)
-      return;
-
-    // Plano detector (usa tu Sensor::origin y normal)
-    const Vec3 p0 = origin;
-    const Vec3 nd = normal;
-
-    for (int i = 0; i < i_max; i += std::max(1, theta_stride))
-    {
-      // sólido del bin (exacto por bordes)
-      const double th0 = i * dtheta;
-      const double th1 = (i + 1) * dtheta;
-      const double dOmega_theta = (std::cos(th0) - std::cos(th1)); // falta *dphi
-
-      const double th_det = (i + 0.5) * dtheta;
-      const double s_th = std::sin(th_det);
-      const double c_th = std::cos(th_det);
-
-      for (int j = 0; j < N_phi; j += std::max(1, phi_stride))
-      {
-        const double ph_det = (j + 0.5) * dphi;
-        const double c_ph = std::cos(ph_det);
-        const double s_ph = std::sin(ph_det);
-
-        // Dirección del bin en lab coords:
-        // s_out = sinθ cosφ e1 + sinθ sinφ e2 + cosθ e3
-        Vec3 s_out = e1 * (s_th * c_ph) + e2 * (s_th * s_ph) + e3 * (c_th);
-
-        // 1) Intersección con el plano detector
-        double L;
-        if (!intersect_plane(photon.pos, s_out, p0, nd, L))
-          continue;
-
-        // 2) Transmitancia sin scatter adicional: exp(-mu_t L)
-        const double Tr = std::exp(-current_medium->mu_attenuation * L);
-        if (Tr < 1e-20)
-          continue;
-
-        // 3) Geometría del scatter estimado: (s_cur -> s_out)
-        const double mu = clamp_pm1(dot(s_cur, s_out));
-        const double th_scat = std::acos(mu);
-
-        // vector normal al plano de scattering
-        Vec3 p = cross(s_cur, s_out);
-        const double pn = norm(p);
-        if (pn < 1e-14)
-          continue; // plano degenerado (muy raro, pero pasa en forward/backward exacto)
-        Vec3 p_hat = p * (1.0 / pn);
-
-        // Define phi_scat relativo a la base actual (m_cur,n_cur)
-        const double sin_phi = -dot(m_cur, p_hat);
-        const double cos_phi = dot(n_cur, p_hat);
-
-        // 4) Matriz S(th_scat)
-        const CMatrix S = current_medium->scattering_matrix(th_scat, 0.0);
-        const double s22 = std::norm(S(0, 0));
-        const double s11 = std::norm(S(1, 1));
-
-        // 5) F(phi) (tu misma expresión) -> densidad angular correcta
-        const std::complex<double> Em = photon.polarization.m;
-        const std::complex<double> En = photon.polarization.n;
-
-        const double Emm = std::norm(Em);
-        const double Enn = std::norm(En);
-
-        const double c2 = cos_phi * cos_phi;
-        const double s2 = sin_phi * sin_phi;
-
-        const double F =
-            Emm * (s22 * c2 + s11 * s2) +
-            Enn * (s22 * s2 + s11 * c2) +
-            2.0 * std::real(Em * std::conj(En)) * (s22 - s11) * sin_phi * cos_phi;
-
-        if (F < 1e-300)
-          continue;
-
-        // p(Ω) = F / (π I_norm)   (densidad por sólido)
-        const double pOmega = F / (M_PI * _I_norm);
-
-        // ΔΩ_bin ~ ΔΩ_theta * dphi  (exacto en θ, uniforme en φ)
-        const double dOmega = dOmega_theta * dphi;
-        const double prob_bin = pOmega * dOmega;
-        if (prob_bin <= 0.0)
-          continue;
-
-        // 6) Peso esperado en ese bin
-        const double w_bin = w_scatter * Tr * prob_bin;
-        if (w_bin < 1e-300)
-          continue;
-
-        const std::complex<double> amp = std::sqrt(w_bin) * std::exp(std::complex<double>(0.0, photon.k * L));
-
-        // 7) Frame de salida P_exit consistente con tu convención (A_update)
-        const double cos_ths = std::cos(th_scat);
-        const double sin_ths = std::sin(th_scat);
-
-        Matrix A(3, 3);
-        A(0, 0) = cos_ths * cos_phi;
-        A(0, 1) = cos_ths * sin_phi;
-        A(0, 2) = -sin_ths;
-        A(1, 0) = -sin_phi;
-        A(1, 1) = cos_phi;
-        A(1, 2) = 0;
-        A(2, 0) = sin_ths * cos_phi;
-        A(2, 1) = sin_ths * sin_phi;
-        A(2, 2) = cos_ths;
-
-        Matrix P_exit(3, 3);
-        matmul(A, Pcur, P_exit);
-
-        // 8) Forward field local (en base P_exit) usando operador normalizado
-        const CVec2 Ef_loc = apply_scatter_normalized(S, cos_phi, sin_phi, photon.polarization);
-
-        // 9) Reverse local via reciprocity (en base P_exit)
-        const CVec2 Er_loc = coherent_estimation_partial(photon, medium, Pcur, P_exit, Tmid, photon.current_layer, photon.first_scatter_layer);
-
-        // 10) Fase CBS geométrica: exp(i k (s_out + s_in)·(r_n - r_1))
-        const Vec3 qb = (s_out + s_in) * photon.k;
-        const Vec3 delta_r = photon.pos - photon.r_1; // r_n estimado = pos actual
-        const std::complex<double> path_phase = std::exp(std::complex<double>(0.0, dot(qb, delta_r)));
-
-        // 11) Proyección a lab (x,y) con P_exit
-        const std::complex<double> Efx = amp * (Ef_loc.m * P_exit(0, 0) + Ef_loc.n * P_exit(1, 0));
-        const std::complex<double> Efy = amp * (Ef_loc.m * P_exit(0, 1) + Ef_loc.n * P_exit(1, 1));
-
-        const std::complex<double> Erx = amp * path_phase * (Er_loc.m * P_exit(0, 0) + Er_loc.n * P_exit(1, 0));
-        const std::complex<double> Ery = amp * path_phase * (Er_loc.m * P_exit(0, 1) + Er_loc.n * P_exit(1, 1));
-
-        // Coherente
-        const std::complex<double> Etx = Efx + Erx;
-        const std::complex<double> Ety = Efy + Ery;
-
-        const double S0c = std::norm(Etx) + std::norm(Ety);
-        const double S1c = std::norm(Etx) - std::norm(Ety);
-        const double S2c = 2.0 * std::real(Etx * std::conj(Ety));
-        const double S3c = 2.0 * std::imag(Etx * std::conj(Ety));
-
-        // Incoherente (baseline)
-        const double S0i = (std::norm(Efx) + std::norm(Efy)) + (std::norm(Erx) + std::norm(Ery));
-        const double S1i = (std::norm(Efx) - std::norm(Efy)) + (std::norm(Erx) - std::norm(Ery));
-        const double S2i = 2.0 * (std::real(Efx * std::conj(Efy)) + std::real(Erx * std::conj(Ery)));
-        const double S3i = 2.0 * (std::imag(Efx * std::conj(Efy)) + std::imag(Erx * std::conj(Ery)));
-
-
-        int t_idx = -1;
-        if (dt > 0)
-        {
-          double arrival_time = photon.launch_time + ((photon.opticalpath + L) / photon.velocity);
-          if (arrival_time < 0 || arrival_time >= t_max)
-            continue;
-          t_idx = static_cast<int>(arrival_time / dt) + 1;
-          if (t_idx >= N_t)
-            continue;
-        }
-
-
-        // If time windows are enabled, accumulate into the corresponding temporal bin.
-        if (dt > 0)
-        {
-          S0_incoh[t_idx](i, j) += S0i;
-          S1_incoh[t_idx](i, j) += S1i;
-          S2_incoh[t_idx](i, j) += S2i;
-          S3_incoh[t_idx](i, j) += S3i;
-        }
-
-        // Always accumulate in bin 0 for time-integrated fluence.
-        S0_incoh[0](i, j) += S0i;
-        S1_incoh[0](i, j) += S1i;
-        S2_incoh[0](i, j) += S2i;
-        S3_incoh[0](i, j) += S3i;
-
-        if (dt > 0)
-        {
-          S0_coh[t_idx](i, j) += S0c;
-          S1_coh[t_idx](i, j) += S1c;
-          S2_coh[t_idx](i, j) += S2c;
-          S3_coh[t_idx](i, j) += S3c;
-        }
-
-        // Always accumulate in bin 0 for time-integrated fluence.
-        S0_coh[0](i, j) += S0c;
-        S1_coh[0](i, j) += S1c;
-        S2_coh[0](i, j) += S2c;
-        S3_coh[0](i, j) += S3c;
-
-      }
-    }
-    
-    hits += 1;
-  }
-
   // ═══════════════════════════════════════════════════════════════════════════
-  // CBS free functions: coherent_estimation & coherent_calculation
+  // CBS shared helpers (file-local)
   //
-  // These implement the three-stage reverse-path algorithm for coherent
-  // backscattering (CBS). The reverse path visits the same scattering
-  // sites as the forward path but in reversed order. By the reciprocity
-  // theorem, the interior segment of the reverse path can be obtained
-  // from the forward transfer matrix T via Q * T^T * Q, avoiding the
-  // need to re-trace the full path.
-  //
-  // The three stages are:
-  //   A) First reverse scatter at r_n: (s_in=s0) -> (s_out=-s_{n-1})
-  //   B) Middle segment: apply Q * T^T * Q to propagate through
-  //      the bulk in reverse via the reciprocity shortcut.
-  //   C) Last reverse scatter at r_1: (s_in=-s1) -> (s_out=s_n)
-  //
-  // coherent_estimation: variant for next-event estimation (forced
-  //   detection), where the last scattering frame is given externally.
-  // coherent_calculation: variant for direct detection, where the
-  //   last scattering frame is photon.Pn (the actual exit frame).
+  // The reverse-path 3-stage rotation algorithm (Xu 2008, Eq. 3;
+  //   E_rev = S^(1) R(φ1') T^rev R(φn') S^(n) R(φn) E0,   T^rev = Q T^T Q)
+  // lives in EXACTLY ONE place: reverse_field(). Both the direct detector
+  // (process_hit) and the last-flight estimator (process_estimation) call it,
+  // differing only in WHICH frames and WHICH raw interior product they pass.
+  // Edit the rotations once and both paths stay consistent.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  CVec2 coherent_estimation_partial(
-      const Photon &photon,
-      const Sample &medium,
-      const Matrix &P_last_in,
-      const Matrix &P_last_out,
-      const CMatrix &Tmid,
-      int layer_at_n, // ← NEW: photon.current_layer at call site
-      int layer_at_1  // ← NEW: photon.first_scatter_layer
-  )
+  // Normalization factor F: expected scattered intensity for a given input Jones
+  // vector and azimuth. Used identically by transport (run_photon) and by the
+  // estimator's angular density p(Ω) = F / (π · I_norm).
+  static double phase_F(const CMatrix &S, double cos_phi, double sin_phi, const CVec2 &E)
   {
-    // Direcciones clave
-    const Vec3 s0 = row_vec3(photon.P0, 2);
-    const Vec3 s1 = row_vec3(photon.P1, 2);
-    const Vec3 snm1 = row_vec3(P_last_in, 2);
-    const Vec3 sn = row_vec3(P_last_out, 2);
+    const double s22 = std::norm(S(0, 0));
+    const double s11 = std::norm(S(1, 1));
+    const double Emm = std::norm(E.m);
+    const double Enn = std::norm(E.n);
+    const double c2 = cos_phi * cos_phi;
+    const double s2 = sin_phi * sin_phi;
+    return Emm * (s22 * c2 + s11 * s2) +
+           Enn * (s22 * s2 + s11 * c2) +
+           2.0 * std::real(E.m * std::conj(E.n)) * (s22 - s11) * sin_phi * cos_phi;
+  }
 
-    // Bases transversales
-    const Vec3 m0 = row_vec3(photon.P0, 0);
-    const Vec3 n0 = row_vec3(photon.P0, 1);
+  // Build the exit local frame after scattering by (θ, φ), using the SAME
+  // A-update convention as the transport loop (rows = m', n', s').
+  static Matrix scatter_frame(const Matrix &P, double theta, double cos_phi, double sin_phi)
+  {
+    const double ct = std::cos(theta);
+    const double st = std::sin(theta);
+    Matrix A(3, 3);
+    A(0, 0) = ct * cos_phi;
+    A(0, 1) = ct * sin_phi;
+    A(0, 2) = -st;
+    A(1, 0) = -sin_phi;
+    A(1, 1) = cos_phi;
+    A(1, 2) = 0;
+    A(2, 0) = st * cos_phi;
+    A(2, 1) = st * sin_phi;
+    A(2, 2) = ct;
+    Matrix out(3, 3);
+    matmul(A, P, out);
+    return out;
+  }
 
-    const Vec3 m1 = row_vec3(photon.P1, 0);
-    const Vec3 n1 = row_vec3(photon.P1, 1);
+  // Project a local Jones vector (m, n) onto the lab (x, y) plane.
+  // P rows are (m, n, s); columns 0/1 are the x/y lab components.
+  static void project_to_lab(const CVec2 &E, const Matrix &P,
+                             std::complex<double> &Ex, std::complex<double> &Ey)
+  {
+    Ex = E.m * P(0, 0) + E.n * P(1, 0);
+    Ey = E.m * P(0, 1) + E.n * P(1, 1);
+  }
 
-    const Vec3 mnm1 = row_vec3(P_last_in, 0);
-    const Vec3 nnm1 = row_vec3(P_last_in, 1);
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  Reverse-path electric field — THE single implementation of the 3-stage algo
+  //
+  //  Stage A : first reverse scatter at r_n,   s0      -> -s_{n-1}
+  //  Stage B : interior segment via reciprocity, E <- Q · T_interior^T · Q · E
+  //  Stage C : last reverse scatter at r_1,     -s1     ->  s_n
+  //
+  //  Uses the RAW (un-F-normalized) interior product and normalizes the result
+  //  ONCE at the end. Energy is carried by photon.weight, not by the Jones norm,
+  //  so any scalar inside the path cancels — keeping this consistent with the
+  //  normalized forward field used by both callers.
+  // ─────────────────────────────────────────────────────────────────────────────
+  static CVec2 reverse_field(const Sample &medium,
+                             const Matrix &P0, const Matrix &P1,
+                             const Matrix &P_nm1, const Matrix &P_n,
+                             const CMatrix &T_interior_raw,
+                             int layer_n, int layer_1,
+                             const CVec2 &E_in)
+  {
+    // Propagation directions (row 2) and transverse bases (rows 0,1).
+    const Vec3 s0 = row_vec3(P0, 2);
+    const Vec3 s1 = row_vec3(P1, 2);
+    const Vec3 snm1 = row_vec3(P_nm1, 2);
+    const Vec3 sn = row_vec3(P_n, 2);
 
-    const Vec3 mn = row_vec3(P_last_out, 0);
-    const Vec3 nn = row_vec3(P_last_out, 1);
+    const Vec3 m0 = row_vec3(P0, 0), n0 = row_vec3(P0, 1);
+    const Vec3 m1 = row_vec3(P1, 0), n1 = row_vec3(P1, 1);
+    const Vec3 mnm1 = row_vec3(P_nm1, 0), nnm1 = row_vec3(P_nm1, 1);
+    const Vec3 mn = row_vec3(P_n, 0), nn = row_vec3(P_n, 1);
 
-    // Q = diag(1,-1)
     CMatrix Q(2, 2);
     Q(0, 0) = 1;
     Q(0, 1) = 0;
     Q(1, 0) = 0;
     Q(1, 1) = -1;
 
-    // T^T (NO conjugada)
-    CMatrix Tt(2, 2);
-    Tt(0, 0) = Tmid(0, 0);
-    Tt(0, 1) = Tmid(1, 0);
-    Tt(1, 0) = Tmid(0, 1);
-    Tt(1, 1) = Tmid(1, 1);
-
-    // ===========================
-    // Stage A: scatter en r_n (estimado)
-    // s_in = s0, s_out = -s_{n-1}
-    // ===========================
+    // ── Stage A: scatter at r_n, s0 -> -s_{n-1} ──
     const Vec3 s_in_a = s0;
     const Vec3 s_out_a = snm1 * (-1.0);
-
-    const ScatteringMedium *medium_at_n = medium.get_layer(layer_at_n).medium;
-
     const double th_a = std::acos(clamp_pm1(dot(s_in_a, s_out_a)));
-    const CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0);
+    const CMatrix S_a = medium.get_layer(layer_n).medium->scattering_matrix(th_a, 0.0);
 
     const Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
     const Vec3 mprime_in = safe_unit(cross(nprime, s_in_a), m0);
     const Vec3 mprime_out = safe_unit(cross(nprime, s_out_a), mnm1);
 
-    // Rotación desde (m0,n0) hacia el plano
-    const CMatrix Rn = rot2(mprime_in, nprime, m0, n0);
+    CMatrix SR_a(2, 2);
+    matcmul(S_a, rot2(mprime_in, nprime, m0, n0), SR_a); // S(θ)·R(φn)
+    CVec2 E = apply2(SR_a, E_in);
+    E = apply2(rot2(mnm1, nnm1 * (-1.0), mprime_out, nprime), E); // R(φn'): -> (m_{n-1}, -n_{n-1})
 
-    // extrae cos/sin de Rn (asume rotación real 2D)
-    const double cphi_a = std::real(Rn(0, 0));
-    const double sphi_a = std::real(Rn(0, 1));
-
-    CVec2 E = apply_scatter_normalized(S_a, cphi_a, sphi_a, photon.initial_polarization);
-
-    // Rotación hacia base del mid-segment: (m_{n-1}, -n_{n-1})
-    const Vec3 n_to_mid = nnm1 * (-1.0);
-    const CMatrix Rnp = rot2(mnm1, n_to_mid, mprime_out, nprime);
-    E = apply2(Rnp, E);
-
-    // ===========================
-    // Stage B: Q T^T Q
-    // ===========================
+    // ── Stage B: interior via reciprocity  E <- Q T^T Q E ──
+    CMatrix Tt(2, 2);
+    Tt(0, 0) = T_interior_raw(0, 0);
+    Tt(0, 1) = T_interior_raw(1, 0);
+    Tt(1, 0) = T_interior_raw(0, 1);
+    Tt(1, 1) = T_interior_raw(1, 1);
     E = apply2(Q, E);
     E = apply2(Tt, E);
     E = apply2(Q, E);
 
-    // ===========================
-    // Stage C: scatter en r_1
-    // s_in = -s1, s_out = s_n
-    // ===========================
+    // ── Stage C: scatter at r_1, -s1 -> sn ──
     const Vec3 s_in_c = s1 * (-1.0);
     const Vec3 s_out_c = sn;
-
-    const ScatteringMedium *medium_at_1 = medium.get_layer(layer_at_1).medium; // capa del scatter inicial
-
     const double th_c = std::acos(clamp_pm1(dot(s_in_c, s_out_c)));
-    const CMatrix S_c = medium_at_1->scattering_matrix(th_c, 0.0);
+    const CMatrix S_c = medium.get_layer(layer_1).medium->scattering_matrix(th_c, 0.0);
 
     const Vec3 npp = safe_unit(cross(s_in_c, s_out_c), n1 * (-1.0));
     const Vec3 mpp_in = safe_unit(cross(npp, s_in_c), m1);
     const Vec3 mpp_out = safe_unit(cross(npp, s_out_c), mn);
 
-    const Vec3 n_mid_end = n1 * (-1.0);
-    const CMatrix R1p = rot2(mpp_in, npp, m1, n_mid_end);
+    CMatrix SR_c(2, 2);
+    matcmul(S_c, rot2(mpp_in, npp, m1, n1 * (-1.0)), SR_c); // S(θ)·R(φ1')
+    E = apply2(SR_c, E);
+    E = apply2(rot2(mn, nn, mpp_out, npp), E); // R_out: -> exit basis (m_n, n_n)
 
-    const double cphi_c = std::real(R1p(0, 0));
-    const double sphi_c = std::real(R1p(0, 1));
-
-    E = apply_scatter_normalized(S_c, cphi_c, sphi_c, E);
-
-    const CMatrix Rout = rot2(mn, nn, mpp_out, npp);
-    E = apply2(Rout, E);
-
-    return E; // en base (mn,nn) del frame P_last_out
-  }
-
-  void coherent_calculation(Photon &photon, const Sample &medium)
-  {
-    // --- Extract local frames and propagation directions ---
-    // Same structure as coherent_estimation, but uses photon.Pn (actual exit
-    // frame) instead of an externally-supplied estimator frame.
-    Vec3 s0 = row_vec3(photon.P0, 2);    // Initial propagation direction
-    Vec3 s1 = row_vec3(photon.P1, 2);    // Direction after first scatter
-    Vec3 snm1 = row_vec3(photon.Pn1, 2); // Direction before last scatter
-    Vec3 sn = row_vec3(photon.Pn, 2);    // Actual exit direction
-
-    Vec3 m0 = row_vec3(photon.P0, 0);
-    Vec3 n0 = row_vec3(photon.P0, 1);
-
-    Vec3 m1 = row_vec3(photon.P1, 0);
-    Vec3 n1 = row_vec3(photon.P1, 1);
-
-    Vec3 mnm1 = row_vec3(photon.Pn1, 0);
-    Vec3 nnm1 = row_vec3(photon.Pn1, 1);
-
-    Vec3 mn = row_vec3(photon.Pn, 0);
-    Vec3 nn = row_vec3(photon.Pn, 1);
-
-    // ===========================
-    // Stage A: First reverse scatter at r_n
-    //   s_in  = s0       (original incidence direction)
-    //   s_out = -s_{n-1} (reversed penultimate direction)
-    // ===========================
-    Vec3 s_in_a = s0;
-    Vec3 s_out_a = snm1 * (-1.0);
-
-    double cos_th_a = clamp_pm1(dot(s_in_a, s_out_a));
-    double th_a = std::acos(cos_th_a);
-    const ScatteringMedium *medium_at_n = medium.get_layer(photon.last_scatter_layer).medium;
-    CMatrix S_a = medium_at_n->scattering_matrix(th_a, 0.0);
-
-    // Scattering plane normal: n' = s_in x s_out
-    Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
-    Vec3 mprime_in = safe_unit(cross(nprime, s_in_a), m0);
-    Vec3 mprime_out = safe_unit(cross(nprime, s_out_a), mnm1);
-
-    // Rotation R(phi_n): from initial basis (m0,n0) to scattering plane
-    CMatrix Rn = rot2(mprime_in, nprime, m0, n0);
-
-    // Apply scattering matrix in the scattering plane; output in (mprime_out, nprime)
-    // CVec2 E = scatter_event(S_a, Rn, photon.initial_polarization);
-
-    // // Rotation R(phi_n'): from scattering plane to reverse mid-segment basis
-    // // Target basis: (m_{n-1}, -n_{n-1}) in direction -s_{n-1}
-    // Vec3 n_to_mid_start = nnm1 * (-1.0);
-    // CMatrix Rnp = rot2(mnm1, n_to_mid_start, mprime_out, nprime);
-    // E = apply2(Rnp, E);
-
-    // NEW
-    CMatrix raw_A(2, 2);
-    matcmul(S_a, Rn, raw_A);
-    CVec2 E;
-    E.m = raw_A(0, 0) * photon.initial_polarization.m + raw_A(0, 1) * photon.initial_polarization.n;
-    E.n = raw_A(1, 0) * photon.initial_polarization.m + raw_A(1, 1) * photon.initial_polarization.n;
-    Vec3 n_to_mid_start = nnm1 * (-1.0);
-    CMatrix Rnp = rot2(mnm1, n_to_mid_start, mprime_out, nprime);
-    E = apply2(Rnp, E);
-
-    // ===========================
-    // Stage B: Middle segment via reciprocity shortcut
-    //   E <- Q * T^T * Q * E
-    // ===========================
-
-    // --- Q matrix: parity flip for reciprocity ---
-    CMatrix Q(2, 2);
-    Q(0, 0) = 1;
-    Q(0, 1) = 0;
-    Q(1, 0) = 0;
-    Q(1, 1) = -1;
-
-    // --- T^T (transpose, NOT conjugate transpose) ---
-    CMatrix Tt_raw(2, 2);
-    Tt_raw(0, 0) = photon.matrix_T_raw(0, 0);
-    Tt_raw(0, 1) = photon.matrix_T_raw(1, 0); // transpuesta
-    Tt_raw(1, 0) = photon.matrix_T_raw(0, 1);
-    Tt_raw(1, 1) = photon.matrix_T_raw(1, 1);
-
-    E = apply2(Q, E);
-    E = apply2(Tt_raw, E);
-    E = apply2(Q, E);
-
-    // E is now in basis (m1, -n1) propagating in direction -s1
-
-    // ===========================
-    // Stage C: Last reverse scatter at r_1
-    //   s_in  = -s1  (reversed post-first-scatter direction)
-    //   s_out = sn   (actual exit direction)
-    // ===========================
-    Vec3 s_in_b = s1 * (-1.0);
-    Vec3 s_out_b = sn;
-
-    double cos_th_b = clamp_pm1(dot(s_in_b, s_out_b));
-    double th_b = std::acos(cos_th_b);
-    const ScatteringMedium *medium_at_1 = medium.get_layer(photon.first_scatter_layer).medium;
-    CMatrix S_b = medium_at_1->scattering_matrix(th_b, 0.0);
-
-    // Scattering plane normal: n'' = (-s1) x sn
-    Vec3 npp = safe_unit(cross(s_in_b, s_out_b), n1 * (-1.0));
-    Vec3 mpp_in = safe_unit(cross(npp, s_in_b), m1);
-    Vec3 mpp_out = safe_unit(cross(npp, s_out_b), mn);
-
-    // Rotation R(phi_1'): from mid-segment basis (m1,-n1) to scattering plane
-    Vec3 n_mid_end = n1 * (-1.0);
-    CMatrix R1p = rot2(mpp_in, npp, m1, n_mid_end);
-
-    // // Apply scattering; output in (mpp_out, npp)
-    // E = scatter_event(S_b, R1p, E);
-
-    // // Final rotation: from scattering plane to actual exit basis (mn, nn)
-    // CMatrix Rout = rot2(mn, nn, mpp_out, npp);
-    // E = apply2(Rout, E);
-
-    // // Store the reverse-path Jones vector on the photon for use by process_hit.
-    // photon.polarization_reverse = E_out;
-
-    // NEW
-    CMatrix raw_C(2, 2);
-    matcmul(S_b, R1p, raw_C);
-    CVec2 E_out;
-    E_out.m = raw_C(0, 0) * E.m + raw_C(0, 1) * E.n;
-    E_out.n = raw_C(1, 0) * E.m + raw_C(1, 1) * E.n;
-    CMatrix Rout = rot2(mn, nn, mpp_out, npp);
-    E_out = apply2(Rout, E_out);
-    double norm_r = std::sqrt(std::norm(E_out.m) + std::norm(E_out.n));
-    if (norm_r > 1e-300)
+    // Normalize once.
+    const double nrm = std::sqrt(std::norm(E.m) + std::norm(E.n));
+    if (nrm > 1e-300)
     {
-      photon.polarization_reverse.m = E_out.m / norm_r;
-      photon.polarization_reverse.n = E_out.n / norm_r;
+      E.m /= nrm;
+      E.n /= nrm;
     }
     else
     {
-      photon.polarization_reverse.m = 0;
-      photon.polarization_reverse.n = 0;
+      E.m = 0;
+      E.n = 0;
     }
+    return E;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  Sensor helpers
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Time bin index:  0  = time-resolved disabled (use bin 0 only)
+  //                 >=1 = valid resolved bin
+  //                 -1  = out of range, skip this contribution.
+  int FarFieldCBSSensor::time_bin(double arrival_time) const
+  {
+    if (dt <= 0)
+      return 0;
+    if (arrival_time < 0 || arrival_time >= t_max)
+      return -1;
+    const int idx = static_cast<int>(arrival_time / dt) + 1;
+    return (idx < N_t) ? idx : -1;
+  }
+
+  // Accumulate coherent (|E_f + E_r|²) and incoherent (|E_f|² + |E_r|²) Stokes
+  // into the time-integrated bin 0 and, if enabled, the resolved bin t_idx.
+  void FarFieldCBSSensor::accumulate_stokes(int it, int jp, int t_idx,
+                                            std::complex<double> Efx, std::complex<double> Efy,
+                                            std::complex<double> Erx, std::complex<double> Ery)
+  {
+    // Coherent: fields interfere.
+    const std::complex<double> Ex = Efx + Erx;
+    const std::complex<double> Ey = Efy + Ery;
+    const double S0c = std::norm(Ex) + std::norm(Ey);
+    const double S1c = std::norm(Ex) - std::norm(Ey);
+    const double S2c = 2.0 * std::real(Ex * std::conj(Ey));
+    const double S3c = 2.0 * std::imag(Ex * std::conj(Ey));
+
+    // Incoherent: intensities add (no interference) — background baseline.
+    const double S0i = std::norm(Efx) + std::norm(Efy) + std::norm(Erx) + std::norm(Ery);
+    const double S1i = std::norm(Efx) - std::norm(Efy) + std::norm(Erx) - std::norm(Ery);
+    const double S2i = 2.0 * (std::real(Efx * std::conj(Efy)) + std::real(Erx * std::conj(Ery)));
+    const double S3i = 2.0 * (std::imag(Efx * std::conj(Efy)) + std::imag(Erx * std::conj(Ery)));
+
+    auto add = [&](int t)
+    {
+      S0_coh[t](it, jp) += S0c;
+      S1_coh[t](it, jp) += S1c;
+      S2_coh[t](it, jp) += S2c;
+      S3_coh[t](it, jp) += S3c;
+      S0_incoh[t](it, jp) += S0i;
+      S1_incoh[t](it, jp) += S1i;
+      S2_incoh[t](it, jp) += S2i;
+      S3_incoh[t](it, jp) += S3i;
+    };
+    add(0);
+    if (t_idx >= 1)
+      add(t_idx);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  Direct detection
+  // ─────────────────────────────────────────────────────────────────────────────
+  void FarFieldCBSSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
+  {
+    if (photon.events < 2) // CBS needs ≥2 events to form a time-reversed pair.
+      return;
+
+    const int t_idx = time_bin(photon.launch_time + photon.opticalpath / photon.velocity);
+    if (t_idx < 0)
+      return;
+
+    // Far-field angular bin (θ=0 is exact backscatter, the -z direction).
+    const Matrix &P = photon.P_local;
+    const Vec3 s_out{P(2, 0), P(2, 1), P(2, 2)};
+    const double theta = std::acos(-s_out.z);
+    double phi = std::atan2(s_out.y, s_out.x);
+    if (phi < 0)
+      phi += 2.0 * M_PI;
+    const int it = static_cast<int>(theta / dtheta);
+    const int jp = static_cast<int>(phi / dphi);
+    if (it < 0 || it >= N_theta || jp < 0 || jp >= N_phi)
+      return;
+
+    // Reverse-path Jones vector in the exit basis (m_n, n_n).
+    const CVec2 Er_loc = reverse_field(
+        medium, photon.P0, photon.P1, photon.Pn1, photon.Pn,
+        photon.matrix_T_raw, photon.last_scatter_layer, photon.first_scatter_layer,
+        photon.initial_polarization);
+    photon.polarization_reverse = Er_loc;
+
+    // CBS geometric phase: exp(i (s_out + s_in)·k · (r_n - r_1)).
+    const Vec3 s_in{photon.P0(2, 0), photon.P0(2, 1), photon.P0(2, 2)};
+    const Vec3 qb = (s_out + s_in) * photon.k;
+    const std::complex<double> path_phase =
+        std::exp(std::complex<double>(0.0, dot(qb, photon.r_n - photon.r_1)));
+
+    // Common amplitude (info.phase cancels in the coherent term but keeps the
+    // absolute phase consistent between forward and reverse).
+    const std::complex<double> amp = info.phase * std::sqrt(photon.weight);
+
+    // Forward is tracked continuously; reverse carries the CBS phase. Both in P.
+    const CVec2 Ef{photon.polarization.m * amp, photon.polarization.n * amp};
+    const CVec2 Er{Er_loc.m * amp * path_phase, Er_loc.n * amp * path_phase};
+
+    std::complex<double> Efx, Efy, Erx, Ery;
+    project_to_lab(Ef, P, Efx, Efy);
+    project_to_lab(Er, P, Erx, Ery);
+
+    accumulate_stokes(it, jp, t_idx, Efx, Efy, Erx, Ery);
+    hits += 1;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  Last-flight estimation (forced detection over every angular bin)
+  // ─────────────────────────────────────────────────────────────────────────────
+  void FarFieldCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
+  {
+    if (photon.events < 1) // estimated path = events+1 ≥ 2 scatters.
+      return;
+
+    const ScatteringMedium *med = medium.get_layer(photon.current_layer).medium;
+
+    // I_norm cache: keyed on BOTH medium and k (critical for layered samples).
+    if (_I_norm < 0.0 || _I_norm_medium != med || std::abs(_I_norm_k - photon.k) > 1e-12)
+    {
+      _I_norm = compute_I_norm(*med, photon.k);
+      _I_norm_k = photon.k;
+      _I_norm_medium = med;
+    }
+    if (_I_norm < 1e-300)
+      return;
+
+    // Detector angular grid is built around the backscatter axis -s_in.
+    const Vec3 e1 = row_vec3(photon.P0, 0);
+    const Vec3 e2 = row_vec3(photon.P0, 1);
+    const Vec3 s_in = row_vec3(photon.P0, 2);
+    const Vec3 e3 = s_in * (-1.0); // θ_det = 0 → exact backscatter
+
+    const Matrix &Pcur = photon.P_local;
+    const Vec3 m_cur = row_vec3(Pcur, 0);
+    const Vec3 n_cur = row_vec3(Pcur, 1);
+    const Vec3 s_cur = row_vec3(Pcur, 2);
+
+    // Raw interior product for the estimated path (n = events+1): the scatter
+    // just executed becomes the new penultimate (interior) event, so we fold the
+    // buffered J into the committed product.
+    CMatrix Tmid_raw = photon.matrix_T_raw;
+    if (photon.events >= 2 && photon.has_T_prev)
+    {
+      CMatrix tmp(2, 2);
+      matcmul(photon.matrix_T_raw_buffer, photon.matrix_T_raw, tmp);
+      Tmid_raw = std::move(tmp);
+    }
+
+    const double w_scatter = photon.weight * (med->mu_scattering / med->mu_attenuation);
+    if (w_scatter < 1e-300)
+      return;
+
+    const double th_cap = (theta_pp_max > 0.0) ? std::min(theta_pp_max, theta_max) : theta_max;
+    const int i_max = std::min(N_theta, static_cast<int>(th_cap / dtheta));
+
+    for (int it = 0; it < i_max; ++it)
+    {
+      const double th0 = it * dtheta;
+      const double th1 = (it + 1) * dtheta;
+      const double dOmega_theta = std::cos(th0) - std::cos(th1); // exact θ-band solid angle (×dφ)
+      const double th_det = (it + 0.5) * dtheta;
+      const double s_th = std::sin(th_det);
+      const double c_th = std::cos(th_det);
+
+      for (int jp = 0; jp < N_phi; ++jp)
+      {
+        const double ph_det = (jp + 0.5) * dphi;
+        const double c_ph = std::cos(ph_det);
+        const double s_ph = std::sin(ph_det);
+
+        // Bin direction in lab coords: s_out = sinθ cosφ e1 + sinθ sinφ e2 + cosθ e3.
+        const Vec3 s_out = e1 * (s_th * c_ph) + e2 * (s_th * s_ph) + e3 * c_th;
+
+        // Path to the detector plane and transmittance without further scatter.
+        double L;
+        if (!intersect_plane(photon.pos, s_out, origin, normal, L))
+          continue;
+        const double Tr = std::exp(-med->mu_attenuation * L);
+        if (Tr < 1e-20)
+          continue;
+
+        // Estimated scatter geometry s_cur -> s_out, expressed in the (m_cur,n_cur) basis.
+        const Vec3 pv = cross(s_cur, s_out);
+        const double pn = norm(pv);
+        if (pn < 1e-12)
+          continue; // forward/backward degenerate scattering plane
+        const Vec3 p_hat = pv * (1.0 / pn);
+        const double sin_phi = -dot(m_cur, p_hat);
+        const double cos_phi = dot(n_cur, p_hat);
+        const double th_scat = std::acos(clamp_pm1(dot(s_cur, s_out)));
+
+        const CMatrix S = med->scattering_matrix(th_scat, 0.0);
+
+        // Angular density p(Ω) = F / (π I_norm); weight that lands in this bin.
+        const double F = phase_F(S, cos_phi, sin_phi, photon.polarization);
+        if (F < 1e-300)
+          continue;
+        const double prob_bin = (F / (M_PI * _I_norm)) * (dOmega_theta * dphi);
+        double w_bin = w_scatter * Tr * prob_bin;
+        if (w_bin < 1e-300)
+          continue;
+
+        // Optional variance reduction: clip the heavy-tailed forward-peak spikes.
+        // Scaling both Ef and Er by sqrt(w_bin) keeps their ratio, so the
+        // enhancement is preserved while a single near-forward vertex can no
+        // longer dominate a bin. Disabled (no bias) when w_lf_max <= 0.
+        if (w_lf_max > 0.0 && w_bin > w_lf_max)
+          w_bin = w_lf_max;
+
+        const std::complex<double> amp =
+            std::sqrt(w_bin) * std::exp(std::complex<double>(0.0, photon.k * L));
+
+        // Estimated exit frame (same convention as transport).
+        const Matrix P_exit = scatter_frame(Pcur, th_scat, cos_phi, sin_phi);
+
+        // Forward (unit) and reverse (unit) Jones vectors in the P_exit basis.
+        const CVec2 Ef_loc = apply_scatter_normalized(S, cos_phi, sin_phi, photon.polarization);
+        const CVec2 Er_loc = reverse_field(
+            medium, photon.P0, photon.P1, Pcur, P_exit,
+            Tmid_raw, photon.current_layer, photon.first_scatter_layer,
+            photon.initial_polarization);
+
+        // CBS geometric phase (estimated r_n = current position).
+        const Vec3 qb = (s_out + s_in) * photon.k;
+        const std::complex<double> path_phase =
+            std::exp(std::complex<double>(0.0, dot(qb, photon.pos - photon.r_1)));
+
+        // Time bin uses the extra straight path L to the detector.
+        const int t_idx = time_bin(photon.launch_time + (photon.opticalpath + L) / photon.velocity);
+        if (t_idx < 0)
+          continue;
+
+        const CVec2 Ef{Ef_loc.m * amp, Ef_loc.n * amp};
+        const CVec2 Er{Er_loc.m * amp * path_phase, Er_loc.n * amp * path_phase};
+
+        std::complex<double> Efx, Efy, Erx, Ery;
+        project_to_lab(Ef, P_exit, Efx, Efy);
+        project_to_lab(Er, P_exit, Erx, Ery);
+
+        accumulate_stokes(it, jp, t_idx, Efx, Efy, Erx, Ery);
+      }
+    }
+    hits += 1;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
