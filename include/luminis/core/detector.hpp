@@ -65,6 +65,7 @@ namespace luminis::core
     Vec3 intersection_point;              ///< Exact (x, y, z) coordinates where the photon crossed the detector plane.
     std::complex<double> phase;           ///< Accumulated optical phase exp(i * k * optical_path) at the intersection point.
     CrossingDirection crossing_direction; ///< Whether the photon was traveling toward z+ (Forward) or z- (Backward) when crossing.
+    double opticalpath_at_hit;            ///< Geometric path length Σ dᵢ [mm] up to the exact intersection point (photon.opticalpath minus the overshoot beyond the plane). Use this for time-of-flight (= opticalpath_at_hit / velocity) so the arrival time stays consistent with `phase`.
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -451,9 +452,7 @@ namespace luminis::core
     int N_t;             ///< Number of time bins (1 if time-integrated).
 
     // --- NEW: partial photon / next-event estimator control ---
-    double theta_pp_max{-1.0};     // si <0 => usa theta_max
-    int theta_stride{1};           // subsampling para performance
-    int phi_stride{1};
+    double theta_pp_max{-1.0};     // si <0 => usa theta_max (limita el rango angular del estimador)
 
     // --- NEW: cache para normalización angular (depende de k y del medio) ---
     mutable double _I_norm{-1.0};

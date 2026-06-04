@@ -210,21 +210,28 @@ namespace luminis::core
         const double t = dot(detector_origin - xn, detector_normal) / denom;
 
         // Compute the hit point and correct the optical path length.
-        // The photon may have overshot the plane, so we subtract the
-        // extra distance to get the path length at the intersection.
+        // The photon may have overshot the plane, so we subtract the extra
+        // distance to get the path length at the intersection. The phase uses the
+        // OPTICAL path (Σ nᵢ·dᵢ); the overshoot is removed with the local n.
         const Vec3 hit_point = xn + d * t;
         const double correction_distance = luminis::math::norm(hit_point - xf);
-        double opticalpath_correction = photon.opticalpath;
+        const double n_local = 1.0 / medium.light_speed_in_medium();
+        double optical_path_correction = photon.optical_path;
+        double opticalpath_at_hit = photon.opticalpath;
         if (correction_distance > 0)
         {
-          opticalpath_correction -= correction_distance;
+          // Remove the overshoot beyond the plane from BOTH the optical path
+          // (phase, weighted by the local n) and the geometric path (time-of-flight).
+          optical_path_correction -= correction_distance * n_local;
+          opticalpath_at_hit -= correction_distance;
         }
 
         // Build the interaction info with the corrected propagation phase.
         InteractionInfo info;
         info.intersection_point = hit_point;
-        info.phase = std::exp(std::complex<double>(0, photon.k * opticalpath_correction));
+        info.phase = std::exp(std::complex<double>(0, photon.k * optical_path_correction));
         info.crossing_direction = crossing_dir;
+        info.opticalpath_at_hit = opticalpath_at_hit;
 
         for (Sensor *det : it->second)
         {
@@ -452,8 +459,8 @@ namespace luminis::core
     photon_rec.events = photon.events;
     photon_rec.penetration_depth = photon.penetration_depth;
     photon_rec.launch_time = photon.launch_time;
-    photon_rec.arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
-    photon_rec.opticalpath = photon.opticalpath;
+    photon_rec.arrival_time = photon.launch_time + (info.opticalpath_at_hit / photon.velocity);
+    photon_rec.opticalpath = info.opticalpath_at_hit;
     photon_rec.weight = photon.weight;
     photon_rec.k = photon.k;
     photon_rec.position_detector = info.intersection_point;
@@ -768,7 +775,7 @@ namespace luminis::core
     int t_idx = -1;
     if (dt > 0)
     {
-      double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+      double arrival_time = photon.launch_time + (info.opticalpath_at_hit / photon.velocity);
       if (arrival_time < 0 || arrival_time >= len_t)
         return;
       t_idx = static_cast<int>(arrival_time / dt) + 1;
@@ -1057,8 +1064,6 @@ namespace luminis::core
     det->filter_events_min = filter_events_min;
     det->filter_events_max = filter_events_max;
     det->theta_pp_max = theta_pp_max;
-    det->theta_stride = theta_stride;
-    det->phi_stride = phi_stride;
     return det;
   }
 
@@ -1274,7 +1279,7 @@ namespace luminis::core
     if (photon.events < 2) // CBS needs ≥2 events to form a time-reversed pair.
       return;
 
-    const int t_idx = time_bin(photon.launch_time + photon.opticalpath / photon.velocity);
+    const int t_idx = time_bin(photon.launch_time + info.opticalpath_at_hit / photon.velocity);
     if (t_idx < 0)
       return;
 
@@ -1325,6 +1330,16 @@ namespace luminis::core
   void FarFieldCBSSensor::process_estimation(const Photon &photon, const Sample &medium)
   {
     if (photon.events < 1) // estimated path = events+1 ≥ 2 scatters.
+      return;
+
+    // Scattering-order filter. process_estimation does NOT go through
+    // check_conditions(), so set_events_limit() would otherwise be ignored here,
+    // breaking the order-by-order study. We filter on the committed event count
+    // (photon.events); note the estimated path actually has events+1 scatters,
+    // so to match a given order N of the direct detector set the limit to N-1.
+    if (filter_events_enabled &&
+        (static_cast<int>(photon.events) < filter_events_min ||
+         static_cast<int>(photon.events) > filter_events_max))
       return;
 
     const ScatteringMedium *med = medium.get_layer(photon.current_layer).medium;
@@ -1608,7 +1623,7 @@ namespace luminis::core
 
   void StatisticsSensor::process_hit(Photon &photon, InteractionInfo &info, const Sample &medium)
   {
-    const double arrival_time = photon.launch_time + (photon.opticalpath / photon.velocity);
+    const double arrival_time = photon.launch_time + (info.opticalpath_at_hit / photon.velocity);
     int t_idx = -1;
     if (N_t > 1 && dt > 0.0 && arrival_time >= 0.0 && arrival_time < t_max)
     {
