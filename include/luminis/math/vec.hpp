@@ -1,13 +1,70 @@
 #pragma once
 #include "luminis/log/logger.hpp"
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <cstdlib>
 #include <sys/types.h>
+#include <utility>
 #include <vector>
 
 namespace luminis::math {
+
+/**
+ * @brief Small-buffer-optimized contiguous storage for Matrix/CMatrix.
+ *
+ * Matrices in the per-photon hot path are always tiny (2×2 or 3×3), while the
+ * sensor grids are large (N_x×N_y, N_theta×N_phi, …).  This container keeps up
+ * to @c SBO_CAP elements inline (no heap allocation) and transparently falls
+ * back to a heap `std::vector` for anything larger.  The public surface mirrors
+ * the subset of `std::vector` the codebase relies on (`resize`, `operator[]`,
+ * `data()`, `size()`, `swap()`), so it is a drop-in replacement.
+ *
+ * Storage is always contiguous, so `data()` remains valid for the NumPy buffer
+ * protocol bindings.  There are no self-referential pointers, so the default
+ * copy/move/assignment are correct.
+ */
+template <typename T>
+struct SmallStorage {
+  static constexpr std::size_t SBO_CAP = 16; // covers every 2×2/3×3/4×4 hot-path matrix
+
+  std::array<T, SBO_CAP> small_{};
+  std::vector<T> heap_{};
+  std::size_t size_{0};
+  bool on_heap_{false};
+
+  void resize(std::size_t n, T value = T{}) {
+    if (n > SBO_CAP) {
+      heap_.assign(n, value);
+      on_heap_ = true;
+    } else {
+      for (std::size_t i = 0; i < n; ++i)
+        small_[i] = value;
+      on_heap_ = false;
+    }
+    size_ = n;
+  }
+
+  // Hot-path element access: `on_heap_` is a perfectly predictable branch (always
+  // false for the tiny transport matrices) and the inline path avoids the heap
+  // pointer indirection a std::vector would incur on every access.
+  T &operator[](std::size_t i) { return on_heap_ ? heap_[i] : small_[i]; }
+  const T &operator[](std::size_t i) const { return on_heap_ ? heap_[i] : small_[i]; }
+
+  T *data() { return on_heap_ ? heap_.data() : small_.data(); }
+  const T *data() const { return on_heap_ ? heap_.data() : small_.data(); }
+
+  std::size_t size() const { return size_; }
+
+  void swap(SmallStorage &o) {
+    std::swap(small_, o.small_);
+    heap_.swap(o.heap_);
+    std::swap(size_, o.size_);
+    std::swap(on_heap_, o.on_heap_);
+  }
+};
 
 struct Vec3 {
   double x{0.0};
@@ -55,7 +112,7 @@ struct CVec2 {
 struct Matrix {
   uint rows;
   uint cols;
-  std::vector<double> data;
+  SmallStorage<double> data;
 
   Matrix() = default;
 
@@ -80,7 +137,7 @@ struct Matrix {
 struct CMatrix {
   uint rows;
   uint cols;
-  std::vector<std::complex<double>> data;
+  SmallStorage<std::complex<double>> data;
 
   CMatrix() = default;
 

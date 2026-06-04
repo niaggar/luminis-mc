@@ -142,7 +142,7 @@ def run_single_simulation(exp, radius, volume_fraction):
     config.laser = laser
     config.track_reverse_paths = True          # <-- imprescindible para CBS
     config.pin_threads_to_cores = False
-    config.n_threads = 6
+    config.n_threads = 8
     config.show_progress = True
 
     # --- params guardados ---
