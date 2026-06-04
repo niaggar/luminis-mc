@@ -63,5 +63,6 @@ def print_info_particle(radius, volume_fraction, n_particle):
     print("-" * 30)
 
 
-print_info_particle(radius=0.110, volume_fraction=0.8, n_particle=1.59)
+print_info_particle(radius=0.110, volume_fraction=0.1, n_particle=1.59)
+print_info_particle(radius=0.110, volume_fraction=0.2, n_particle=1.59)
 

@@ -145,9 +145,26 @@ struct ScatteringMedium {
    *
    * @param theta  Polar scattering angle θ [rad].
    * @param phi    Azimuthal scattering angle φ [rad].
-   * @return       2×2 complex amplitude scattering matrix.
+   * @param out    Pre-allocated 2×2 matrix written in place (no allocation).
+   *
+   * @note This out-param form is the hot-path entry point: it lets `run_photon`
+   *       reuse a single scratch matrix across every scattering event instead of
+   *       heap-allocating a fresh `CMatrix` per event.
    */
-  virtual CMatrix scattering_matrix(const double theta, const double phi) const = 0;
+  virtual void scattering_matrix(const double theta, const double phi, CMatrix &out) const = 0;
+
+  /**
+   * @brief Convenience overload returning a freshly-allocated scattering matrix.
+   *
+   * Forwards to the out-param virtual above.  Used off the hot path (detector
+   * CBS reconstruction, tests, Python bindings) where the extra allocation is
+   * irrelevant.
+   */
+  CMatrix scattering_matrix(const double theta, const double phi) const {
+    CMatrix out(2, 2);
+    scattering_matrix(theta, phi, out);
+    return out;
+  }
 
 
   void set_scattering_coefficient(double mu_s);
@@ -171,6 +188,11 @@ struct ScatteringMedium {
 struct RGDMedium : public ScatteringMedium {
   double mean_free_path; ///< Mean free path l = 1/μ_s [mm]
   double radius;         ///< Particle radius [mm]
+
+  /// Precomputed RGD amplitude prefactor -k³ (m-1) V / (2π), constant for the
+  /// medium.  Computed once in the constructor so the per-event scattering
+  /// matrix only multiplies it by the form factor (and cosθ for s2).
+  double rgd_prefactor{0.0};
 
   /**
    * @brief Construct a RGDMedium.
@@ -202,9 +224,10 @@ struct RGDMedium : public ScatteringMedium {
    *
    * @param theta  Polar scattering angle θ [rad].
    * @param phi    Azimuthal scattering angle φ [rad] (unused in RGD).
-   * @return       2×2 complex amplitude scattering matrix.
+   * @param out    Pre-allocated 2×2 matrix written in place.
    */
-  CMatrix scattering_matrix(const double theta, const double phi) const override;
+  void scattering_matrix(const double theta, const double phi, CMatrix &out) const override;
+  using ScatteringMedium::scattering_matrix; // keep the by-value convenience overload visible
 
 
   void set_mean_free_path(double mfp);
@@ -260,9 +283,10 @@ struct MieMedium : public ScatteringMedium {
    *
    * @param theta  Polar scattering angle θ [rad].
    * @param phi    Azimuthal scattering angle φ [rad] (unused; symmetry is handled upstream).
-   * @return       2×2 complex amplitude scattering matrix.
+   * @param out    Pre-allocated 2×2 matrix written in place.
    */
-  CMatrix scattering_matrix(const double theta, const double phi) const override;
+  void scattering_matrix(const double theta, const double phi, CMatrix &out) const override;
+  using ScatteringMedium::scattering_matrix; // keep the by-value convenience overload visible
 
   /**
    * @brief Precompute S1 and S2 Mie amplitude functions over [0, π].

@@ -497,8 +497,9 @@ PYBIND11_MODULE(_core, m)
       .def("sample_conditional_azimuthal_angle", &ScatteringMedium::sample_conditional_azimuthal_angle,
            py::arg("rng"), py::arg("S"), py::arg("E"), py::arg("theta"),
            "Sample the azimuthal angle conditioned on scattering angle theta")
-      .def("scattering_matrix", &ScatteringMedium::scattering_matrix, py::arg("theta"),
-           py::arg("phi"),
+      .def("scattering_matrix",
+           static_cast<CMatrix (ScatteringMedium::*)(const double, const double) const>(&ScatteringMedium::scattering_matrix),
+           py::arg("theta"), py::arg("phi"),
            "Get the scattering matrix for given angles and wavenumber")
       .def("set_scattering_coefficient", &ScatteringMedium::set_scattering_coefficient, py::arg("mu_s"),
            "Set the scattering coefficient mu_s for the medium")

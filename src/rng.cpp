@@ -10,7 +10,9 @@ std::uint64_t mix_seed(std::uint64_t base, std::uint64_t tid) {
 }
 
 double Rng::uniform() {
-  return uni(gen);
+  // Top 53 bits → double in [0, 1).  Matches the standard xoshiro recipe and is
+  // far cheaper than std::uniform_real_distribution.
+  return (next_u64() >> 11) * 0x1.0p-53;
 }
 
 double Rng::normal(const double mean, const double stddev) {

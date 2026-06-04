@@ -82,6 +82,14 @@ namespace luminis::core
     this->n_medium = n_medium;
     this->wavelength = wavelength;
     this->k = 2 * M_PI * n_medium / wavelength; // Compute wave number from wavelength
+
+    // Precompute the RGD amplitude prefactor -k³ (m-1) V / (2π).  This is a
+    // medium-level constant, so the per-event scattering matrix reduces to a
+    // couple of multiplies instead of recomputing pow(k,3)/pow(r,3) every event.
+    const double kkk = k * k * k;
+    const double volume = 4.0 * M_PI * (radius * radius * radius) / 3.0;
+    const double mm = (n_particle / n_medium) - 1.0; // contrast index (m - 1)
+    this->rgd_prefactor = -1.0 * kkk * mm * volume / (2.0 * M_PI);
   }
 
   /// Exponential distribution: l = -l_mean · ln(U), U ~ Uniform(0, 1).
@@ -100,23 +108,18 @@ namespace luminis::core
    *
    * where V = (4π/3) r³ is the sphere volume and F is the form factor.
    */
-  CMatrix RGDMedium::scattering_matrix(const double theta, const double phi) const
+  void RGDMedium::scattering_matrix(const double theta, const double phi, CMatrix &out) const
   {
     const double F = form_factor(theta, k, radius);
-    const double kkk = std::pow(k, 3);
-    const double volume = 4 * M_PI * std::pow(radius, 3) / 3.0;
-    const double relative_refractive_index = n_particle / n_medium;
-    const double mm = relative_refractive_index - 1.0; // contrast index (m - 1)
 
-    const std::complex<double> s2 = std::complex<double>(0, -1 * kkk * mm * volume * F * std::cos(theta) / (2 * M_PI));
-    const std::complex<double> s1 = std::complex<double>(0, -1 * kkk * mm * volume * F / (2 * M_PI));
+    // rgd_prefactor = -k³ (m-1) V / (2π) is precomputed in the constructor.
+    const std::complex<double> s2 = std::complex<double>(0, rgd_prefactor * F * std::cos(theta));
+    const std::complex<double> s1 = std::complex<double>(0, rgd_prefactor * F);
 
-    CMatrix res(2, 2);
-    res(0, 0) = s2;
-    res(0, 1) = std::complex<double>(0, 0);
-    res(1, 0) = std::complex<double>(0, 0);
-    res(1, 1) = s1;
-    return res;
+    out(0, 0) = s2;
+    out(0, 1) = std::complex<double>(0, 0);
+    out(1, 0) = std::complex<double>(0, 0);
+    out(1, 1) = s1;
   }
 
   void RGDMedium::set_mean_free_path(double mfp)
@@ -150,20 +153,15 @@ namespace luminis::core
   }
 
   /// Interpolates S1(θ) and S2(θ) from the precomputed DataTables.
-  CMatrix MieMedium::scattering_matrix(const double theta, const double phi) const
+  void MieMedium::scattering_matrix(const double theta, const double phi, CMatrix &out) const
   {
-    std::complex<double> s1;
-    std::complex<double> s2;
+    const std::complex<double> s1 = S1_table.Sample(theta);
+    const std::complex<double> s2 = S2_table.Sample(theta);
 
-    s1 = S1_table.Sample(theta);
-    s2 = S2_table.Sample(theta);
-
-    CMatrix res(2, 2);
-    res(0, 0) = s2;
-    res(0, 1) = std::complex<double>(0, 0);
-    res(1, 0) = std::complex<double>(0, 0);
-    res(1, 1) = s1;
-    return res;
+    out(0, 0) = s2;
+    out(0, 1) = std::complex<double>(0, 0);
+    out(1, 0) = std::complex<double>(0, 0);
+    out(1, 1) = s1;
   }
 
   /**
