@@ -594,7 +594,7 @@ class Experiment:
         elif t == "FarFieldCBSSensor":
             for k in [
                 "N_theta", "N_phi", "N_t", "t_max", "theta_max", "phi_max", "dtheta", "dphi",
-                "theta_pp_max", "theta_stride", "phi_stride",
+                "theta_pp_max",
             ]:
                 if hasattr(sensor, k):
                     _write_attr(g_meta, k, getattr(sensor, k))

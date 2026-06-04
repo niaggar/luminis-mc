@@ -304,7 +304,14 @@ namespace luminis::core
           const double remaining_optical = (step - step_to_iface) * sample.get_layer(photon.current_layer).medium->mu_attenuation;
 
           // Move photon exactly to the interface.
-          photon.opticalpath += step_to_iface;
+          // opticalpath: geometric distance (for time). optical_path: Σ nᵢ·dᵢ
+          // (for phase). The refractive index is uniform (host) for now; when a
+          // per-layer n is introduced (§3.4), replace n_step with that layer's n.
+          {
+            const double n_step = 1.0 / sample.light_speed_in_medium();
+            photon.opticalpath += step_to_iface;
+            photon.optical_path += n_step * step_to_iface;
+          }
           photon.prev_pos = photon.pos;
           photon.pos.x += dir_x * step_to_iface;
           photon.pos.y += dir_y * step_to_iface;
@@ -347,7 +354,8 @@ namespace luminis::core
       if (!photon.alive)
         break;
 
-      photon.opticalpath += step;
+      photon.opticalpath += step; // geometric distance (time)
+      photon.optical_path += (1.0 / sample.light_speed_in_medium()) * step; // Σ nᵢ·dᵢ (phase)
       photon.prev_pos = photon.pos;
       photon.pos.x += dir_x * step;
       photon.pos.y += dir_y * step;

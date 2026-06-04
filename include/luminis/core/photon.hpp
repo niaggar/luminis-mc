@@ -76,7 +76,8 @@ namespace luminis::core
     bool alive{true};             ///< False when the photon has been terminated (absorbed or exited).
     double wavelength_nm{0.0};    ///< Free-space wavelength [nm].
     double k{0.0};                ///< Wave number in free space: k = 2π / λ [rad/mm].
-    double opticalpath{0.0};      ///< Accumulated optical path length [mm].
+    double opticalpath{0.0};      ///< Accumulated GEOMETRIC (physical) path length Σ dᵢ [mm]. Used for time-of-flight (= opticalpath / velocity). NOTE: name kept for API stability; this is physical distance, not Σ nᵢ·dᵢ.
+    double optical_path{0.0};     ///< Accumulated OPTICAL path length Σ nᵢ·dᵢ [mm]. Used for the propagation phase exp(i·k·optical_path) with k the free-space wave number.
     double launch_time{0.0};      ///< Emission time [ns]; used for time-gated detection.
     double velocity{1.0};         ///< Phase velocity in the medium [mm/ns] (c/n).
     double weight{1.0};           ///< Statistical weight for variance reduction (Russian roulette / absorption).
