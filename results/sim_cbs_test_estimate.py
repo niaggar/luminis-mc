@@ -68,7 +68,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Numero de fotones (modesto: es una prueba, no una corrida de produccion)
-n_photons = 1000
+n_photons = 10000
 
 # ---------------------------------------------------------------------------
 # Sensor de campo lejano (cono CBS)

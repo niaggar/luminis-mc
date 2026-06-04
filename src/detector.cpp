@@ -448,6 +448,7 @@ namespace luminis::core
   {
     const auto &o = dynamic_cast<const PhotonRecordSensor &>(other);
     hits += o.hits;
+    recorded_photons.reserve(recorded_photons.size() + o.recorded_photons.size());
     recorded_photons.insert(recorded_photons.end(), o.recorded_photons.begin(), o.recorded_photons.end());
   }
 
