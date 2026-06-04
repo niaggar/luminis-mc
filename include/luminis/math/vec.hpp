@@ -1,5 +1,6 @@
 #pragma once
 #include "luminis/log/logger.hpp"
+#include <cassert>
 #include <cmath>
 #include <complex>
 #include <cstdlib>
@@ -62,19 +63,16 @@ struct Matrix {
     data.resize(rows * cols, 0.0);
   }
 
+  // Bounds checks are kept as assert() so they are active in Debug builds but
+  // compiled out under NDEBUG (Release) — element access sits in the per-event
+  // hot loop and must not carry a branch + library call.
   double& operator()(uint i, uint j) {
-    if (i >= rows || j >= cols) {
-      LLOG_ERROR("Matrix index out of range");
-      std::exit(EXIT_FAILURE);
-    }
+    assert(i < rows && j < cols && "Matrix index out of range");
     return data[i * cols + j];
   }
 
   const double& operator()(uint i, uint j) const {
-    if (i >= rows || j >= cols) {
-      LLOG_ERROR("Matrix index out of range");
-      std::exit(EXIT_FAILURE);
-    }
+    assert(i < rows && j < cols && "Matrix index out of range");
     return data[i * cols + j];
   }
 };
@@ -91,18 +89,12 @@ struct CMatrix {
   }
 
   std::complex<double>& operator()(uint i, uint j) {
-    if (i >= rows || j >= cols) {
-      LLOG_ERROR("CMatrix index out of range");
-      std::exit(EXIT_FAILURE);
-    }
+    assert(i < rows && j < cols && "CMatrix index out of range");
     return data[i * cols + j];
   }
 
   const std::complex<double>& operator()(uint i, uint j) const {
-    if (i >= rows || j >= cols) {
-      LLOG_ERROR("CMatrix index out of range");
-      std::exit(EXIT_FAILURE);
-    }
+    assert(i < rows && j < cols && "CMatrix index out of range");
     return data[i * cols + j];
   }
 

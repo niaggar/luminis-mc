@@ -1,6 +1,12 @@
 #include <luminis/math/vec.hpp>
+#include <stdexcept>
 
 namespace luminis::math {
+
+// Maximum number of output elements handled on the stack (no heap allocation).
+// All matrices multiplied in the transport/CBS hot paths are 2×2 or 3×3, so a
+// 4×4 (16-element) scratch buffer covers every case without allocating.
+static constexpr uint LUMINIS_MATMUL_STACK = 16;
 
 double dot(const Vec3 &a, const Vec3 &b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -27,18 +33,41 @@ double norm(const Vec3 &v) {
 
 void matcmul(const CMatrix &A, const CMatrix &B, CMatrix &C) {
   if (A.cols != B.rows || A.rows != C.rows || B.cols != C.cols) {
-    LLOG_ERROR("CMatrix multiplication dimension mismatch");
-    std::exit(EXIT_FAILURE);
+    throw std::invalid_argument("CMatrix multiplication dimension mismatch");
   }
 
-  CMatrix C_temp(A.rows, B.cols);
+  const uint n = A.rows, p = B.cols, kdim = A.cols;
+  const uint out = n * p;
 
-  for (uint i = 0; i < A.rows; ++i) {
-    for (uint j = 0; j < B.cols; ++j) {
-      C_temp(i, j) = std::complex<double>(0.0, 0.0);
-      for (uint k = 0; k < A.cols; ++k) {
-        C_temp(i, j) += A(i, k) * B(k, j);
+  // Fast path: accumulate the full product into a stack buffer first (so the
+  // output may safely alias A or B), then copy into C. No heap allocation.
+  // Accumulation order is identical to the previous implementation, so results
+  // are bit-for-bit unchanged.
+  if (out <= LUMINIS_MATMUL_STACK) {
+    std::complex<double> tmp[LUMINIS_MATMUL_STACK];
+    for (uint i = 0; i < n; ++i) {
+      for (uint j = 0; j < p; ++j) {
+        std::complex<double> acc(0.0, 0.0);
+        for (uint k = 0; k < kdim; ++k) {
+          acc += A.data[i * A.cols + k] * B.data[k * B.cols + j];
+        }
+        tmp[i * p + j] = acc;
       }
+    }
+    for (uint idx = 0; idx < out; ++idx) {
+      C.data[idx] = tmp[idx];
+    }
+    return;
+  }
+
+  CMatrix C_temp(n, p);
+  for (uint i = 0; i < n; ++i) {
+    for (uint j = 0; j < p; ++j) {
+      std::complex<double> acc(0.0, 0.0);
+      for (uint k = 0; k < kdim; ++k) {
+        acc += A.data[i * A.cols + k] * B.data[k * B.cols + j];
+      }
+      C_temp.data[i * p + j] = acc;
     }
   }
   C.data.swap(C_temp.data);
@@ -46,18 +75,37 @@ void matcmul(const CMatrix &A, const CMatrix &B, CMatrix &C) {
 
 void matmul(const Matrix &A, const Matrix &B, Matrix &C) {
   if (A.cols != B.rows || A.rows != C.rows || B.cols != C.cols) {
-    LLOG_ERROR("Matrix multiplication dimension mismatch");
-    std::exit(EXIT_FAILURE);
+    throw std::invalid_argument("Matrix multiplication dimension mismatch");
   }
 
-  Matrix C_temp(A.rows, B.cols);
+  const uint n = A.rows, p = B.cols, kdim = A.cols;
+  const uint out = n * p;
 
-  for (uint i = 0; i < A.rows; ++i) {
-    for (uint j = 0; j < B.cols; ++j) {
-      C_temp(i, j) = 0.0;
-      for (uint k = 0; k < A.cols; ++k) {
-        C_temp(i, j) += A(i, k) * B(k, j);
+  if (out <= LUMINIS_MATMUL_STACK) {
+    double tmp[LUMINIS_MATMUL_STACK];
+    for (uint i = 0; i < n; ++i) {
+      for (uint j = 0; j < p; ++j) {
+        double acc = 0.0;
+        for (uint k = 0; k < kdim; ++k) {
+          acc += A.data[i * A.cols + k] * B.data[k * B.cols + j];
+        }
+        tmp[i * p + j] = acc;
       }
+    }
+    for (uint idx = 0; idx < out; ++idx) {
+      C.data[idx] = tmp[idx];
+    }
+    return;
+  }
+
+  Matrix C_temp(n, p);
+  for (uint i = 0; i < n; ++i) {
+    for (uint j = 0; j < p; ++j) {
+      double acc = 0.0;
+      for (uint k = 0; k < kdim; ++k) {
+        acc += A.data[i * A.cols + k] * B.data[k * B.cols + j];
+      }
+      C_temp.data[i * p + j] = acc;
     }
   }
   C.data.swap(C_temp.data);

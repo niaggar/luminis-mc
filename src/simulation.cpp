@@ -18,11 +18,13 @@
 #include <luminis/core/sample.hpp>
 #include <luminis/log/logger.hpp>
 #include <luminis/math/utils.hpp>
+#include <algorithm>
 #include <cmath>
 #include <thread>
 #include <vector>
 #include <exception>
 #include <atomic>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 
@@ -107,15 +109,17 @@ namespace luminis::core
     // --- Determine effective thread count ---
     // If n_threads == 0, fall back to the hardware concurrency hint.
     // Never spawn more threads than there are photons.
-    int thread_count = std::thread::hardware_concurrency();
+    const unsigned int hw_threads = std::thread::hardware_concurrency();
 
     std::size_t n_threads = config.n_threads;
     if (n_threads == 0)
-      n_threads = std::thread::hardware_concurrency();
+      n_threads = hw_threads;
+    if (n_threads == 0)
+      n_threads = 1; // hardware_concurrency() may report 0; never end up with no workers.
     if (n_threads > config.n_photons)
       n_threads = config.n_photons;
 
-    LLOG_INFO("Configuring simulation for {} threads of {} available hardware threads", n_threads, thread_count);
+    LLOG_INFO("Configuring simulation for {} threads of {} available hardware threads", n_threads, hw_threads);
 
     const std::size_t BATCH_SIZE = config.batch_size > 0 ? config.batch_size : 256;
     std::atomic<std::size_t> next_photon{0};
@@ -144,6 +148,7 @@ namespace luminis::core
 
     std::atomic<bool> any_error{false};
     std::exception_ptr thread_exception = nullptr;
+    std::mutex error_mutex;
 
     luminis::log::ProgressReporter reporter;
     if (config.show_progress)
@@ -198,8 +203,12 @@ namespace luminis::core
         }
         catch (...)
         {
-          any_error = true;
-          thread_exception = std::current_exception();
+          // Capture only the first exception; the assignment must be guarded
+          // because std::exception_ptr is not atomic and several workers may
+          // fault concurrently.
+          std::lock_guard<std::mutex> lk(error_mutex);
+          if (!any_error.exchange(true))
+            thread_exception = std::current_exception();
         } });
     }
 
@@ -260,6 +269,17 @@ namespace luminis::core
     photon.has_T_prev = false;
 
     photon.coherent_path_calculated = false;
+
+    // --- Reusable per-event scratch matrices ---
+    // Allocated once per photon and overwritten in place each scattering event.
+    // This keeps the hot loop free of heap allocations (the matrices are tiny
+    // fixed-size 2×2/3×3 buffers) without changing any arithmetic.
+    Matrix A_update(3, 3);   // local-frame rotation A(θ,φ)
+    CMatrix R(2, 2);         // in-plane azimuthal rotation
+    CMatrix T_current(2, 2); // normalized scattering operator S·R
+    CMatrix T_current_raw(2, 2);
+    CMatrix t_scratch(2, 2);     // buffer for matrix_T product (swapped, not moved)
+    CMatrix t_scratch_raw(2, 2); // buffer for matrix_T_raw product
 
     // ─── Main transport loop ─────────────────────────────────────────────────
     while (photon.alive)
@@ -403,7 +423,6 @@ namespace luminis::core
       const double cos_phi = std::cos(phi);
       const double sin_phi = std::sin(phi);
 
-      Matrix A_update = Matrix(3, 3);
       A_update(0, 0) = cos_theta * cos_phi;
       A_update(0, 1) = cos_theta * sin_phi;
       A_update(0, 2) = -sin_theta;
@@ -422,12 +441,10 @@ namespace luminis::core
         // The combined scattering operator for this event is T_current = S * R,
         // where R is the in-plane rotation by φ and S is the amplitude
         // scattering matrix. Both are 2×2 in the local (m, n) basis.
-        CMatrix R(2, 2);
         R(0, 0) = cos_phi;
         R(0, 1) = sin_phi;
         R(1, 0) = -sin_phi;
         R(1, 1) = cos_phi;
-        CMatrix T_current = CMatrix(2, 2);
         matcmul(S_matrix, R, T_current);
 
         // --- Normalization factor F ---
@@ -443,8 +460,8 @@ namespace luminis::core
         const double s22 = std::norm(S_matrix(0, 0));
         const double s11 = std::norm(S_matrix(1, 1));
 
-        const double pow_cos_phi = std::pow(cos_phi, 2);
-        const double pow_sin_phi = std::pow(sin_phi, 2);
+        const double pow_cos_phi = cos_phi * cos_phi;
+        const double pow_sin_phi = sin_phi * sin_phi;
 
         const double F =
             Emm * (s22 * pow_cos_phi + s11 * pow_sin_phi) +
@@ -462,7 +479,6 @@ namespace luminis::core
         {
           // Raw (un-normalized) Jones matrix for this scattering event.
           // Used in matrix_T_raw which tracks the unnormalized path product.
-          CMatrix T_current_raw(2, 2);
           T_current_raw(0, 0) = S_matrix(0, 0) * cos_phi;
           T_current_raw(0, 1) = S_matrix(0, 0) * sin_phi;
           T_current_raw(1, 0) = -S_matrix(1, 1) * sin_phi;
@@ -505,27 +521,27 @@ namespace luminis::core
             else
             {
               // Third event and beyond: the buffered event is confirmed interior,
-              // so prepend it to matrix_T (T_mid = J_prev * T_mid).
-              CMatrix tmp(2, 2);
-              matcmul(photon.matrix_T_buffer, photon.matrix_T, tmp);
-              photon.matrix_T = std::move(tmp);
+              // so prepend it to matrix_T (T_mid = J_prev * T_mid). The product is
+              // written into a reused scratch buffer and swapped in (instead of a
+              // heap-allocating move) so no allocation occurs per event.
+              matcmul(photon.matrix_T_buffer, photon.matrix_T, t_scratch);
+              photon.matrix_T.data.swap(t_scratch.data);
               photon.matrix_T_buffer = T_current;
 
               // Update the raw matrix with Frobenius normalization to prevent
               // numerical overflow on very long paths.
-              CMatrix tmp_raw(2, 2);
-              matcmul(photon.matrix_T_raw_buffer, photon.matrix_T_raw, tmp_raw);
+              matcmul(photon.matrix_T_raw_buffer, photon.matrix_T_raw, t_scratch_raw);
               double frob = std::sqrt(
-                  std::norm(tmp_raw(0, 0)) + std::norm(tmp_raw(0, 1)) +
-                  std::norm(tmp_raw(1, 0)) + std::norm(tmp_raw(1, 1)));
+                  std::norm(t_scratch_raw(0, 0)) + std::norm(t_scratch_raw(0, 1)) +
+                  std::norm(t_scratch_raw(1, 0)) + std::norm(t_scratch_raw(1, 1)));
               if (frob > 1e-300)
               {
-                tmp_raw(0, 0) /= frob;
-                tmp_raw(0, 1) /= frob;
-                tmp_raw(1, 0) /= frob;
-                tmp_raw(1, 1) /= frob;
+                t_scratch_raw(0, 0) /= frob;
+                t_scratch_raw(0, 1) /= frob;
+                t_scratch_raw(1, 0) /= frob;
+                t_scratch_raw(1, 1) /= frob;
               }
-              photon.matrix_T_raw = std::move(tmp_raw);
+              photon.matrix_T_raw.data.swap(t_scratch_raw.data);
               photon.matrix_T_raw_buffer = T_current_raw;
             }
           }
