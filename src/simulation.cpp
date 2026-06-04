@@ -169,10 +169,12 @@ namespace luminis::core
             }
           }
 
-          // Each thread gets a deterministic but independent seed derived from
-          // the global seed and its thread index via mix_seed().
-          const std::uint64_t thread_seed = mix_seed(config.seed, static_cast<std::uint64_t>(t));
-          Rng rng(thread_seed);
+          // The RNG is re-seeded per *photon index* (not per thread) below, so a
+          // given photon always draws the same random stream regardless of which
+          // thread happens to grab its batch. This makes the whole simulation
+          // bit-reproducible for a fixed seed across runs AND thread counts,
+          // while keeping the dynamic batch scheduling that balances the load.
+          Rng rng(config.seed);
 
           SensorsGroup &det = *thread_detectors[t];
           Absorption *abs_ptr = config.absorption ? &thread_absorptions[t] : nullptr;
@@ -190,6 +192,10 @@ namespace luminis::core
             
             for (std::size_t i = start; i < end; ++i)
             {
+              // Per-photon deterministic seeding: the stream depends only on the
+              // global seed and the photon index, never on thread assignment.
+              rng.seed_state(mix_seed(config.seed, static_cast<std::uint64_t>(i)));
+
               Photon photon = config.laser->emit_photon(rng);
               photon.velocity = initial_velocity;
               photon.current_layer = config.sample->get_layer_index_at(photon.pos.z);
@@ -280,6 +286,7 @@ namespace luminis::core
     CMatrix T_current_raw(2, 2);
     CMatrix t_scratch(2, 2);     // buffer for matrix_T product (swapped, not moved)
     CMatrix t_scratch_raw(2, 2); // buffer for matrix_T_raw product
+    CMatrix S_matrix(2, 2);      // amplitude scattering matrix J(θ) for the current event
 
     // ─── Main transport loop ─────────────────────────────────────────────────
     while (photon.alive)
@@ -410,7 +417,7 @@ namespace luminis::core
 
       // --- Step 5: Sample scattering angles ---
       const double theta = scatter_medium.sample_scattering_angle(rng);
-      CMatrix S_matrix = scatter_medium.scattering_matrix(theta, 0);
+      scatter_medium.scattering_matrix(theta, 0, S_matrix);
       const double phi = scatter_medium.sample_conditional_azimuthal_angle(rng, S_matrix, photon.polarization, theta);
 
       // --- Step 6: Update local frame (P_local) ---
