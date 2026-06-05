@@ -42,7 +42,7 @@ double PhaseFunction::sample_phi_conditional(double theta, CMatrix& S, CVec2& E,
       const double phi = 2.0*M_PI*rng.uniform();
       const double cp = std::cos(phi), sp = std::sin(phi);
       const double F  = a*cp*cp + b*sp*sp + c*cp*sp;
-      // protección numérica mínima
+      // minimal numerical guard against negative F
       const double Fclamped = std::max(F, 0.0);
       if (rng.uniform()*Fmax <= Fclamped) return phi;
     }

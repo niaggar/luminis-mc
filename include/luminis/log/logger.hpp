@@ -1,3 +1,12 @@
+/**
+ * @file logger.hpp
+ * @brief Minimal thread-safe, level-filtered logger with std::format formatting.
+ *
+ * A process-wide singleton `Logger` writes timestamped, level-tagged lines to
+ * stderr under a mutex. Use the `LLOG_*` convenience macros to log at a given
+ * level; messages below the configured threshold are discarded with no cost.
+ */
+
 #pragma once
 #include <atomic>
 #include <chrono>
@@ -9,7 +18,10 @@
 
 namespace luminis::log {
 
+/// @brief Severity levels, ordered from most to least verbose; `off` disables all output.
 enum class Level : int { debug = 1, info = 2, warn = 3, error = 4, off = 6 };
+
+/// @brief Single-character tag for a level (used in the log line prefix).
 
 inline std::string_view to_string(Level lv) {
   switch (lv) {
@@ -26,21 +38,27 @@ inline std::string_view to_string(Level lv) {
   }
 }
 
+/// @brief Process-wide singleton logger writing to stderr.
 class Logger {
 public:
+  /// @brief Access the global logger instance.
   static Logger &instance() {
     static Logger L;
     return L;
   }
 
+  /// @brief Set the minimum level that will be emitted.
   void set_level(Level lv) {
     level_.store(lv, std::memory_order_relaxed);
   }
 
+  /// @brief Return the current minimum emitted level.
   Level level() const {
     return level_.load(std::memory_order_relaxed);
   }
 
+  /// @brief Format and emit a message if `lv` meets the configured threshold.
+  /// @param fmt std::format-style format string; `args` are the substitutions.
   template <class... Args>
   void log(Level lv, std::string_view fmt, Args &&...args) {
     log_impl(lv, fmt, std::forward<Args>(args)...);

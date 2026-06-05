@@ -417,7 +417,7 @@ namespace luminis::core
   ///
   /// **How it works (process_hit):**
   /// 1. Requires photon.events >= 2 (single-scattering has no reciprocal partner).
-  /// 2. Calls coherent_calculation() to compute the reverse-path polarization state
+  /// 2. Calls reverse_field() to compute the reverse-path polarization state
   ///    (photon.polarization_reverse) from stored scattering history.
   /// 3. Computes the CBS geometric phase factor:
   ///      path_phase = exp(i * k * (s_out + s_in) · (r_n - r_1))
@@ -438,7 +438,7 @@ namespace luminis::core
   ///   Use postprocess_farfield_cbs() to normalize the raw accumulated Stokes data
   ///   by solid angle and photon count.
   ///
-  /// @see coherent_calculation() for the reverse-path polarization computation.
+  /// @see reverse_field() for the reverse-path polarization computation.
   /// @see postprocess_farfield_cbs() for result normalization.
   struct FarFieldCBSSensor : public Sensor
   {
@@ -446,18 +446,23 @@ namespace luminis::core
     double theta_max, phi_max; ///< Maximum angular extents [rad].
     double dtheta, dphi;       ///< Angular bin widths [rad].
 
-    // Timed sensor
+    /// @name Time resolution
+    /// @{
     double t_max;        ///< Total time window length (0 for time-integrated).
     double dt;           ///< Time bin width (0 for time-integrated, meaning N_t = 1).
     int N_t;             ///< Number of time bins (1 if time-integrated).
+    /// @}
 
-    // --- NEW: partial photon / next-event estimator control ---
-    double theta_pp_max{-1.0};     // si <0 => usa theta_max (limita el rango angular del estimador)
+    /// @brief Angular cap for the next-event estimator. If < 0, falls back to theta_max.
+    double theta_pp_max{-1.0};
 
-    // --- NEW: cache para normalización angular (depende de k y del medio) ---
-    mutable double _I_norm{-1.0};
-    mutable double _I_norm_k{0.0};
-    mutable const ScatteringMedium *_I_norm_medium{nullptr}; ///< Cache key: medium for which _I_norm was computed.
+    /// @name Angular normalization cache
+    /// @brief Caches the estimator's angular normalization, which depends on k and the medium.
+    /// @{
+    mutable double _I_norm{-1.0};  ///< Cached normalization value (-1 = not yet computed).
+    mutable double _I_norm_k{0.0}; ///< Wave number k for which `_I_norm` was computed.
+    mutable const ScatteringMedium *_I_norm_medium{nullptr}; ///< Medium for which `_I_norm` was computed (cache key).
+    /// @}
 
     /// @name Coherent Stokes grids
     /// @brief Accumulated |E_forward + E_reverse|^2 Stokes parameters [N_theta × N_phi].

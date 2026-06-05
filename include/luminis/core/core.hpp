@@ -1,3 +1,14 @@
+/**
+ * @file core.hpp
+ * @brief Legacy post-processing declarations (currently disabled).
+ *
+ * Historically this header exposed standalone histogram / speckle / spatial-
+ * intensity helpers that operated directly on a Sensor. That functionality now
+ * lives in the sensor classes (detector.hpp) and the post-processing helpers
+ * (results.hpp). The declarations below are kept, commented out, only as a
+ * reference to the previous API and are not part of the build.
+ */
+
 #pragma once
 #include <cstddef>
 #include <luminis/core/photon.hpp>

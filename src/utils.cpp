@@ -2,11 +2,11 @@
 
 namespace luminis::math
 {
-  // Evento de scattering en el estilo de tu forward:
-  // E_plane = R * E_in
-  // E_out_un = S * E_plane
-  // F = ||E_out_un||^2
-  // E_out = E_out_un / sqrt(F)   (consistente con tu muestreo)
+  // One scattering event, matching the forward-transport convention:
+  //   E_plane  = R * E_in            (rotate into the scattering plane)
+  //   E_out_un = S * E_plane         (apply the amplitude scattering matrix)
+  //   F        = ||E_out_un||^2
+  //   E_out    = E_out_un / sqrt(F)  (renormalize, consistent with the sampling)
   CVec2 scatter_event(const CMatrix &S, const CMatrix &R_in_to_plane, const CVec2 &E_in)
   {
     CVec2 E_plane = apply2(R_in_to_plane, E_in);
@@ -19,7 +19,7 @@ namespace luminis::math
     double inv = 1.0 / std::sqrt(F);
     E_out_un.m *= inv;
     E_out_un.n *= inv;
-    return E_out_un; // en la base "plane_out"
+    return E_out_un; // in the outgoing-plane basis
   }
 
   double clamp_pm1(double x)
@@ -43,13 +43,13 @@ namespace luminis::math
     {
       double f2 = dot(fallback, fallback);
       if (f2 < eps)
-        return Vec3(1, 0, 0); // último recurso
+        return Vec3(1, 0, 0); // last resort
       return fallback * (1.0 / std::sqrt(f2));
     }
     return v * (1.0 / std::sqrt(n2));
   }
 
-  // Rotación 2x2 que transforma componentes de (m_from,n_from) -> (m_to,n_to)
+  // 2x2 rotation mapping components from (m_from, n_from) to (m_to, n_to).
   CMatrix rot2(const Vec3 &m_to, const Vec3 &n_to, const Vec3 &m_from, const Vec3 &n_from)
   {
     CMatrix R(2, 2);

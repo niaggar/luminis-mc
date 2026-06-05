@@ -1,3 +1,8 @@
+/**
+ * @file progress.hpp
+ * @brief Lock-free terminal progress bar for photon simulations.
+ */
+
 #pragma once
 #include <atomic>
 #include <chrono>
@@ -8,7 +13,7 @@ namespace luminis::log
 {
 
   /**
-   * Lock-free terminal progress reporter for photon simulations.
+   * @brief Lock-free terminal progress reporter for photon simulations.
    *
    * Threads call tick() after each photon. The reporter redraws the
    * progress line on stdout using \r — no newline spam, no mutex.
@@ -21,6 +26,7 @@ namespace luminis::log
   public:
     ProgressReporter() = default;
 
+    /// @brief Begin tracking. @param total Total work units. @param interval_pct Redraw cadence (% of total).
     void setup(std::size_t total, std::size_t interval_pct = 5)
     {
       total_ = total;
@@ -31,6 +37,7 @@ namespace luminis::log
       enabled_ = true;
     }
 
+    /// @brief Advance the counter (called per completed unit) and redraw on cadence. Thread-safe.
     void tick(std::size_t count = 1)
     {
       if (!enabled_)
@@ -51,7 +58,7 @@ namespace luminis::log
       }
     }
 
-    // Imprime la línea final con newline al terminar
+    /// @brief Draw the final 100% line followed by a newline and disable the reporter.
     void finish()
     {
       if (!enabled_)
@@ -68,25 +75,25 @@ namespace luminis::log
     {
       double fraction = (total_ > 0) ? double(done) / double(total_) : 1.0;
 
-      // Barra de 20 caracteres
+      // 20-character bar
       constexpr int BAR_WIDTH = 20;
       int filled = int(fraction * BAR_WIDTH);
       std::string bar(filled, '#');
       bar += std::string(BAR_WIDTH - filled, '-');
 
-      // Fotones/segundo
+      // Photons per second
       auto now = std::chrono::steady_clock::now();
       double secs = std::chrono::duration<double>(now - start_time_).count();
       double rate = (secs > 0) ? double(done) / secs : 0.0;
 
-      // ETA en segundos
+      // ETA in seconds
       double remaining = (rate > 0 && done < total_)
                              ? double(total_ - done) / rate
                              : 0.0;
       int eta_m = int(remaining) / 60;
       int eta_s = int(remaining) % 60;
 
-      // Formatear con separadores de miles usando un helper simple
+      // Print with thousands separators via a small helper
       std::printf("\r  Photons  [%s]  %s / %s  %5.1f%%  |  %.2g ph/s  |  ETA %d:%02d   ",
                   bar.c_str(),
                   format_int(done).c_str(),
@@ -99,7 +106,7 @@ namespace luminis::log
 
     static std::string format_int(std::size_t n)
     {
-      // Formatea con espacios: 1 000 000
+      // Group digits with spaces: 1 000 000
       std::string s = std::to_string(n);
       int i = int(s.size()) - 3;
       while (i > 0)

@@ -25,8 +25,8 @@
  *
  * ## CBS bookkeeping
  * When `SimConfig::track_reverse_paths` is `true`, `run_photon()` maintains
- * the CBS frame history fields on the `Photon` struct (P0, P1, Pn1, Pn, r_1,
- * r_n, matrix_T). These are consumed by `coherent_calculation()` inside
+ * the CBS frame history fields on the `Photon` struct (P0, P1, Pn2, Pn1, Pn,
+ * r_1, r_n, matrix_T). These are consumed by `reverse_field()` inside
  * `FarFieldCBSSensor::process_hit()` to compute the reverse-path amplitude.
  *
  * @see photon.hpp for the CBS fields on the Photon struct.
@@ -81,7 +81,7 @@ namespace luminis::core
 
     bool pin_threads_to_cores{false}; ///< Requests per-worker thread affinity in run_simulation_parallel (best effort, platform dependent).
 
-    bool track_reverse_paths{false}; ///< Enable CBS reverse-path tracking (populates P0/P1/Pn/matrix_T on each Photon).
+    bool track_reverse_paths{false}; ///< Enable CBS reverse-path tracking (populates P0/P1/Pn2/Pn1/Pn, r_1/r_n, matrix_T on each Photon).
 
     Sample *sample{nullptr};                       ///< Layered sample with shared host medium. Must not be null.
     Laser *laser{nullptr};                        ///< Photon source (position, direction, polarization). Must not be null.
@@ -137,8 +137,8 @@ namespace luminis::core
    * 5. Samples a scattering angle (θ) and azimuthal angle (φ).
    * 6. Updates the local frame `P_local` via the rotation matrix A.
    * 7. Updates the Jones vector with the normalized scattering matrix S·R.
-   * 8. Updates CBS frame history (P0, P1, Pn, r_0, r_n, matrix_T) when
-   *    `track_reverse_paths` is true.
+   * 8. Updates CBS frame history (P0, P1, Pn2, Pn1, Pn, r_1, r_n, matrix_T)
+   *    when `track_reverse_paths` is true.
    * 9. Applies weight splitting (absorption) and Russian roulette.
    *
    * @param photon              Photon packet to transport (modified in place).

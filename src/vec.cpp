@@ -120,29 +120,19 @@ void matcmulscalar(const double &scalar, CMatrix &A) {
 }
 
 double calculate_rotation_angle(const Vec3& u, const Vec3& v) {
-  // 1. Verificar vectores nulos (evitar división por cero en normalización interna si la hubiera)
+    // Unsigned angle between u and v via the dot-product definition.
+    // A null vector yields an undefined angle; return 0 (no rotation).
     double norm_u = std::sqrt(dot(u, u));
     double norm_v = std::sqrt(dot(v, v));
-    
     if (norm_u < 1e-12 || norm_v < 1e-12) {
-        return 0.0; // Si un vector es nulo, el ángulo es indefinido (asumimos 0 rotación)
+        return 0.0;
     }
 
-    // 2. Calcular coseno
+    // Clamp the cosine to [-1, 1] to guard acos against NaN from rounding.
     double cos_val = dot(u, v) / (norm_u * norm_v);
-
-    // 3. CLAMPING (Vital para evitar NaN en acos)
     if (cos_val > 1.0) cos_val = 1.0;
     if (cos_val < -1.0) cos_val = -1.0;
 
-    // 4. Determinar signo (usualmente se necesita un tercer vector de referencia para el signo en 0..2pi, 
-    // pero para rotaciones de matrices de scattering a veces acos basta si es simétrico. 
-    // Nota: Tu función original 'calculate_rotation_angle' probablemente maneja el signo usando cross product.
-    // Si es así, asegúrate de que esa lógica también tenga guards).
-    
-    // Asumiendo que tu función original 'calculate_rotation_angle' hace algo más complejo para el signo:
-    // Lo mejor es NO usar la función original si los vectores son peligrosos.
-    
     return std::acos(cos_val);
 }
 

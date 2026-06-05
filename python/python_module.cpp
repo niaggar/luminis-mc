@@ -271,7 +271,7 @@ PYBIND11_MODULE(_core, m)
            {
           auto cloned_det = det.clone();
           self.add_detector(std::move(cloned_det));
-          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Agrega un detector y devuelve una referencia a la copia interna");
+          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Add a (cloned) detector to the group and return a reference to the internal copy");
 
   // CrossingDirection enum
   py::enum_<CrossingDirection>(m, "CrossingDirection")
@@ -324,13 +324,13 @@ PYBIND11_MODULE(_core, m)
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
       .def(py::init<double, bool>(),
            py::arg("z"), py::arg("absorb") = true,
-           "Initialize a Sensor at a given z position")
+           "Sensor that stores a full PhotonRecord for each detected photon at plane z")
       .def_readonly("recorded_photons", &PhotonRecordSensor::recorded_photons);
 
   py::class_<PlanarFieldSensor, Sensor>(m, "PlanarFieldSensor")
       .def(py::init<double, double, double, double, double, bool, bool>(),
            py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("dx"), py::arg("dy"), py::arg("absorb") = true, py::arg("estimator") = false,
-           "Initialize a Sensor at a given z position")
+           "Sensor accumulating the complex electric field on an N_x x N_y grid at plane z")
       .def_readonly("N_x", &PlanarFieldSensor::N_x)
       .def_readonly("N_y", &PlanarFieldSensor::N_y)
       .def_readonly("dx", &PlanarFieldSensor::dx)
@@ -343,7 +343,7 @@ PYBIND11_MODULE(_core, m)
   py::class_<PlanarFluenceSensor, Sensor>(m, "PlanarFluenceSensor")
       .def(py::init<double, double, double, double, double, double, double, bool, bool>(),
            py::arg("z"), py::arg("len_x"), py::arg("len_y"), py::arg("len_t"), py::arg("dx"), py::arg("dy"), py::arg("dt"), py::arg("absorb") = true, py::arg("estimator") = false,
-           "Initialize a Sensor at a given z position")
+           "Sensor accumulating Stokes parameters on a spatial (optionally time-resolved) grid at plane z")
       .def_readonly("N_x", &PlanarFluenceSensor::N_x)
       .def_readonly("N_y", &PlanarFluenceSensor::N_y)
       .def_readonly("N_t", &PlanarFluenceSensor::N_t)
@@ -361,7 +361,7 @@ PYBIND11_MODULE(_core, m)
   py::class_<FarFieldCBSSensor, Sensor>(m, "FarFieldCBSSensor")
       .def(py::init<double, double, double, double, double, double, bool>(),
            py::arg("theta_max"), py::arg("phi_max"), py::arg("len_t"), py::arg("d_theta"), py::arg("d_phi"), py::arg("d_t"), py::arg("estimator") = false,
-           "Initialize a Sensor at a given z position")
+           "Far-field CBS sensor accumulating coherent and incoherent Stokes on a (theta, phi) grid")
       .def_readonly("N_theta", &FarFieldCBSSensor::N_theta)
       .def_readonly("N_phi", &FarFieldCBSSensor::N_phi)
       .def_readonly("N_t", &FarFieldCBSSensor::N_t)
@@ -384,7 +384,7 @@ PYBIND11_MODULE(_core, m)
   py::class_<StatisticsSensor, Sensor>(m, "StatisticsSensor")
       .def(py::init<double, bool>(),
            py::arg("z"), py::arg("absorb") = false,
-           "Initialize a Sensor at a given z position")
+           "Sensor accumulating configurable histograms of detected photon properties at plane z")
       .def_readonly("events_histogram", &StatisticsSensor::events_histogram)
       .def_readonly("theta_histogram", &StatisticsSensor::theta_histogram)
       .def_readonly("phi_histogram", &StatisticsSensor::phi_histogram)
@@ -468,15 +468,15 @@ PYBIND11_MODULE(_core, m)
 
   m.def("postprocess_planar_fluence", &postprocess_planar_fluence,
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_photon") = true, py::arg("normalize_per_area") = true, py::arg("eps") = 1e-30,
-        "Calculate the Stokes parameters from a list of photon records for a planar fluence sensor");
+        "Normalize a PlanarFluenceSensor's accumulated Stokes grids (per photon and/or per pixel area)");
 
   m.def("postprocess_planar_field", &postprocess_planar_field,
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_photon") = true, py::arg("normalize_per_area") = true, py::arg("eps") = 1e-30,
-        "Calculate the electric field components from a list of photon records for a planar field sensor");
+        "Normalize a PlanarFieldSensor's accumulated complex field (per photon and/or per pixel area)");
 
   m.def("postprocess_farfield_cbs", &postprocess_farfield_cbs,
         py::arg("det"), py::arg("n_photons"), py::arg("normalize_per_solid_angle") = true, py::arg("normalize_per_photon") = true, py::arg("eps") = 1e-30,
-        "Calculate the Stokes matrix from a list of photon records");
+        "Normalize a FarFieldCBSSensor's coherent/incoherent Stokes grids (per solid angle and/or per photon)");
 
   // ScatteringMedium bindings
   py::class_<ScatteringMedium>(m, "ScatteringMedium")
@@ -512,7 +512,7 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("mean_free_path", &RGDMedium::mean_free_path)
       .def_readonly("radius", &RGDMedium::radius)
       .def("set_mean_free_path", &RGDMedium::set_mean_free_path, py::arg("mfp"),
-           "Set the mean free path for the medium (overrides n_particle) and updates mu_s accordingly");
+           "Set the mean free path used for free-path sampling (does NOT update mu_s/mu_t)");
 
   py::class_<MieMedium, ScatteringMedium>(m, "MieMedium")
       .def(py::init<PhaseFunction *, double, double, double, double>(),
@@ -521,7 +521,7 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("radius", &MieMedium::radius)
       .def_readonly("m", &MieMedium::m)
       .def("set_mean_free_path", &MieMedium::set_mean_free_path, py::arg("mfp"),
-           "Set the mean free path for the medium (overrides n_particle) and updates mu_s accordingly");
+           "Set the mean free path used for free-path sampling (does NOT update mu_s/mu_t)");
 
   // Sample bindings
   py::class_<SampleLayer>(m, "SampleLayer")
@@ -677,8 +677,8 @@ PYBIND11_MODULE(_core, m)
                     "Get the generated MCMC samples");
 
   py::class_<Exponential, TargetDistribution>(m, "Exponential")
-      .def(py::init<double>(), py::arg("lambda"),
-           "Initialize the exponential distribution with rate parameter lambda")
+      .def(py::init<double>(), py::arg("lambda_"),
+           "Initialize the exponential free-path distribution with mean free path lambda")
       .def("evaluate", &Exponential::evaluate, py::arg("x"),
            "Evaluate the exponential distribution at x");
 

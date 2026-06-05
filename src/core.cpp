@@ -1,3 +1,14 @@
+/**
+ * @file core.cpp
+ * @brief Legacy post-processing routines (disabled).
+ *
+ * These histogram / speckle / spatial-intensity / file-IO helpers were
+ * superseded by the sensor classes (detector.cpp) and the post-processing
+ * helpers (results.cpp). The bodies are kept commented out only as a reference
+ * to the previous API and are not compiled into the library.
+ *
+ * @see include/luminis/core/core.hpp
+ */
 #include <luminis/core/core.hpp>
 
 namespace luminis::core

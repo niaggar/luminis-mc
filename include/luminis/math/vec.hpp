@@ -66,6 +66,7 @@ struct SmallStorage {
   }
 };
 
+/// @brief 3D vector with component-wise arithmetic (positions and directions).
 struct Vec3 {
   double x{0.0};
   double y{0.0};
@@ -93,6 +94,7 @@ const Vec3 X_UNIT_VEC3{1.0, 0.0, 0.0};
 const Vec3 Y_UNIT_VEC3{0.0, 1.0, 0.0};
 const Vec3 Z_UNIT_VEC3{0.0, 0.0, 1.0};
 
+/// @brief 2D real vector.
 struct Vec2 {
   double x{0.0};
   double y{0.0};
@@ -101,14 +103,16 @@ struct Vec2 {
   Vec2(double x, double y) : x(x), y(y) {}
 };
 
+/// @brief Jones vector: complex field amplitudes along the local (m, n) axes.
 struct CVec2 {
-  std::complex<double> m{0.0, 0.0};
-  std::complex<double> n{0.0, 0.0};
+  std::complex<double> m{0.0, 0.0}; ///< Amplitude along the m-axis.
+  std::complex<double> n{0.0, 0.0}; ///< Amplitude along the n-axis.
 
   CVec2() = default;
   CVec2(std::complex<double> m, std::complex<double> n) : n(n), m(m) {}
 };
 
+/// @brief Dense row-major real matrix backed by SmallStorage (SBO for tiny matrices).
 struct Matrix {
   uint rows;
   uint cols;
@@ -134,6 +138,7 @@ struct Matrix {
   }
 };
 
+/// @brief Dense row-major complex matrix backed by SmallStorage (SBO for tiny matrices).
 struct CMatrix {
   uint rows;
   uint cols;
@@ -164,12 +169,19 @@ struct CMatrix {
   }
 };
 
+/// @brief Dot product a · b.
 double dot(const Vec3 &a, const Vec3 &b);
+/// @brief Cross product a × b.
 Vec3 cross(const Vec3 &a, const Vec3 &b);
+/// @brief Euclidean norm |v|.
 double norm(const Vec3 &v);
+/// @brief Complex matrix product C = A · B (C written in place, no allocation).
 void matcmul(const CMatrix &A, const CMatrix &B, CMatrix &C);
+/// @brief Scale a complex matrix in place: A *= scalar.
 void matcmulscalar(const double &scalar, CMatrix &A);
+/// @brief Real matrix product C = A · B (C written in place, no allocation).
 void matmul(const Matrix &A, const Matrix &B, Matrix &C);
+/// @brief Signed rotation angle [rad] taking direction n_from to n_to.
 double calculate_rotation_angle(const Vec3& n_from, const Vec3& n_to);
 
 } // namespace luminis::math
