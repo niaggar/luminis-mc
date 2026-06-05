@@ -22,9 +22,9 @@
  *
  * ## CBS frame history
  * For coherent backscattering (CBS), the simulation must retain the local
- * frames at the first and last two scattering vertices (P0, P1, Pn1, Pn),
- * the positions of those vertices (r_1, r_n), and the accumulated Jones
- * transfer matrix T. These fields are updated during transport only when
+ * frames at the first and last scattering vertices (P0, P1, Pn2, Pn1, Pn),
+ * the positions of the first and last vertices (r_1, r_n), and the accumulated
+ * Jones transfer matrix T. These fields are updated during transport only when
  * `SimConfig::track_reverse_paths` is enabled.
  *
  * @see detector.hpp for the CBS algorithm that consumes the frame history.
@@ -67,7 +67,7 @@ namespace luminis::core
 
     Vec3 prev_pos{0, 0, 0};     ///< Position at the start of the current step (before move).
     Vec3 pos{0, 0, 0};          ///< Current position.
-    Vec3 detected_pos{0, 0, 0}; ///< Position at the last detection plane crossing.
+    Vec3 detected_pos{0, 0, 0}; ///< Reserved: intended detection-plane crossing point. Currently unused (never written).
 
     // ─── Transport scalars ───────────────────────────────────────────────────
 
@@ -115,20 +115,20 @@ namespace luminis::core
     CVec2 polarization{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
     /**
-     * @brief Reverse-path Jones vector, populated by `coherent_calculation()`.
+     * @brief Reverse-path Jones vector, populated by `reverse_field()`.
      *
-     * This field is written just before the photon reaches a CBS detector.
-     * It holds the Jones vector of the time-reversed path, computed via the
-     * three-stage algorithm (stages A, B, C) using the stored frame history
-     * and the accumulated Jones transfer matrix T.
+     * This field is written when the photon reaches a CBS detector. It holds
+     * the Jones vector of the time-reversed path, computed via the three-stage
+     * algorithm using the stored frame history and the accumulated Jones
+     * transfer matrix T.
      *
-     * @see coherent_calculation() in detector.cpp
+     * @see reverse_field() in detector.cpp
      */
     CVec2 polarization_reverse{std::complex<double>(1, 0), std::complex<double>(0, 0)};
 
     // ─── CBS frame history ───────────────────────────────────────────────────
 
-    bool coherent_path_calculated{false}; ///< Flag: set to true once the reverse path has been computed for this step.
+    bool coherent_path_calculated{false}; ///< Reserved flag, reset to false per photon. Currently unused (never set true or read).
 
     /**
      * @brief Jones vector of the photon as launched (before any scattering).
@@ -165,10 +165,11 @@ namespace luminis::core
     /**
      * @name Jones transfer matrix (T) and double-buffered updates
      *
-     * `matrix_T` accumulates the product of all scattering amplitude matrices
-     * along the forward path, expressed in the frame-to-frame basis. It is
-     * used by `coherent_calculation()` as the middle-segment operator via
-     * Q·T^T·Q (reciprocity shortcut).
+     * `matrix_T` accumulates the product of the *interior* normalized scattering
+     * matrices J_2·…·J_{n-1} along the forward path (the first and last events
+     * are applied separately), expressed in the frame-to-frame basis. It is used
+     * by `reverse_field()` as the middle-segment operator via Q·T^T·Q
+     * (reciprocity shortcut).
      *
      * A double-buffer scheme (active + `_buffer`) avoids overwriting the
      * committed matrix while the current step is being processed.

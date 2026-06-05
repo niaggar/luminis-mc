@@ -86,3 +86,10 @@ if(LUMINIS_LTO)
 endif()
 
 install(TARGETS _core DESTINATION luminis_mc)
+
+# --- Type stubs ---
+install(FILES
+    python/luminis_mc/_core.pyi
+    python/luminis_mc/py.typed
+    DESTINATION luminis_mc
+)

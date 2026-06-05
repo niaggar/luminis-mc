@@ -11,7 +11,7 @@
  * - Z-plane intersection for photon hit detection (SensorsGroup::record_hit)
  * - Stokes parameter accumulation from Jones vector fields
  * - Next-event estimation (forced detection) for variance reduction
- * - Three-stage reverse path computation for CBS (coherent_calculation)
+ * - Three-stage reverse path computation for CBS (reverse_field)
  * - CBS geometric phase and coherent/incoherent Stokes decomposition
  *
  * @see detector.hpp for class declarations and detailed API documentation.
@@ -92,8 +92,8 @@ namespace luminis::core
     return tau;
   }
 
-  // Normalización de fase function implícita en S_matrix:
-  // I_norm = ∫_0^π (|S11|^2 + |S22|^2) sinθ dθ
+  // Implicit phase-function normalization carried by S_matrix:
+  //   I_norm = ∫_0^π (|S11|^2 + |S22|^2) sinθ dθ
   static double compute_I_norm(const ScatteringMedium &medium, double k, int n = 2048)
   {
     double acc = 0.0;
@@ -109,7 +109,7 @@ namespace luminis::core
     return acc * dth;
   }
 
-  // Aplica T = S*R y normaliza usando F (tu misma fórmula)
+  // Apply T = S*R and renormalize by F (same formula as the transport kernel).
   static inline CVec2 apply_scatter_normalized(const CMatrix &S, double cos_phi, double sin_phi, const CVec2 &Ein)
   {
     // R(phi)

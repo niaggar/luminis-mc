@@ -27,9 +27,11 @@
  *       where s2 acts on the parallel (p) component and s1 on the perpendicular
  *       (s) component of the electric field.
  *
- * @note The global refractive index of the host medium (solvent) is stored in
- *       the `Sample` class, not in individual scattering media. All layers
- *       share the same host medium; only the particle properties differ.
+ * @note The host index that drives photon velocity/transport lives in the
+ *       `Sample` class and is shared by all layers; only the particle properties
+ *       differ. Each `ScatteringMedium` additionally keeps its own `n_medium`
+ *       copy, used solely to compute the wave number k and the contrast (m − 1);
+ *       it is expected to match the Sample's host index.
  *
  * @see luminis/sample/phase.hpp   — PhaseFunction interface
  * @see luminis/sample/table.hpp   — DataTable for tabulated S1/S2
@@ -167,8 +169,10 @@ struct ScatteringMedium {
   }
 
 
+  /// @brief Set μ_s and refresh μ_t = μ_a + μ_s.
   void set_scattering_coefficient(double mu_s);
 
+  /// @brief Set μ_a and refresh μ_t = μ_a + μ_s.
   void set_absorption_coefficient(double mu_a);
 };
 
@@ -230,6 +234,9 @@ struct RGDMedium : public ScatteringMedium {
   using ScatteringMedium::scattering_matrix; // keep the by-value convenience overload visible
 
 
+  /// @brief Set the mean free path used by sample_free_path().
+  /// @note Only assigns `mean_free_path`; it does NOT update μ_s/μ_t. Set those
+  ///       separately via set_scattering_coefficient() if needed.
   void set_mean_free_path(double mfp);
 };
 
@@ -302,6 +309,9 @@ struct MieMedium : public ScatteringMedium {
   void precompute_scattering_tables(double wavelength, double size_parameter, std::size_t n_samples = 1000);
 
 
+  /// @brief Set the mean free path used by sample_free_path().
+  /// @note Only assigns `mean_free_path`; it does NOT update μ_s/μ_t. Set those
+  ///       separately via set_scattering_coefficient() if needed.
   void set_mean_free_path(double mfp);
 };
 
