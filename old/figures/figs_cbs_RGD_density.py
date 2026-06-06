@@ -1,10 +1,10 @@
 from scipy.sparse.linalg._isolve.lsqr import eps
-from utils.loaders import load_sweep
-from utils.styles import apply
-import utils.figures as figures
-import utils.cbs as cbs
+from results.utils.loaders import load_sweep
+from results.utils.styles import apply
+import results.utils.figures as figures
+import results.utils.cbs as cbs
 from scipy.ndimage import uniform_filter1d
-from utils.cbs_fit import fit_cbs, plot_cbs_fit
+from results.utils.cbs_fit import fit_cbs, plot_cbs_fit
 
 import numpy as np
 import matplotlib.pyplot as plt

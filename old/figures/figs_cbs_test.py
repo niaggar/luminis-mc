@@ -15,8 +15,8 @@ Los mapas guardados son 2D (theta, phi); aqui se promedian azimutalmente
 (sobre phi) para obtener el perfil 1D del cono CBS.
 """
 
-from utils.loaders import load_sweep
-from utils.styles import apply
+from results.utils.loaders import load_sweep
+from results.utils.styles import apply
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,8 +25,8 @@ import matplotlib.pyplot as plt
 
 apply(context="paper", col="single")
 
-save_path = "/Users/niaggar/Documents/Thesis/tests/"
-folder = "cbs_test/"  # carpeta dentro de `base_dir` donde se guardaron los resultados de la simulacion
+save_path = "/home/niaggar/Developer/luminis-mc/temporal_results"
+folder = "estimator_vs_full"  # carpeta dentro de `base_dir` donde se guardaron los resultados de la simulacion
 
 eps = 1e-30
 

@@ -15,7 +15,7 @@ Ejecutar desde el directorio `plots/`:
     python figs_sampling_accuracy.py
 """
 
-from utils.styles import apply, COLORS
+from results.utils.styles import apply, COLORS
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
@@ -24,7 +24,7 @@ from luminis_mc import RayleighDebyeEMCPhaseFunction, MiePhaseFunction
 
 apply(context="paper", col="single")
 
-save_path = "/Users/niaggar/Documents/Thesis/tests"
+save_path = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 # ---------------------------------------------------------------------------
 # Parámetros base (coherentes con figs_RGD_valid.py). Unidades en micrómetros.
@@ -398,7 +398,6 @@ def main():
     fig_guideline(res)
     fig_timing()
     print(f"\nFiguras guardadas en {save_path}")
-    plt.show()
 
 
 if __name__ == "__main__":
