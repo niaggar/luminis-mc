@@ -359,37 +359,36 @@ def estimate(spec: SimSpec, verbose: bool = True) -> dict:
 if __name__ == "__main__":
     # ---- EJEMPLO 1: CBS far-field con resolucion temporal, 14 hilos ----------
     spec = SimSpec(
-        n_photons=1_000_000_000,
-        n_threads=14,
+        n_photons=10_000_000,
+        n_threads=15,
         track_reverse_paths=True,
         sensors=[
             # CBS angular con tiempo: theta_max, phi_max, d_theta, d_phi, len_t, dt
             FarFieldCBS(
-                theta_max=math.radians(2.0),    # cono CBS estrecho
+                theta_max=math.radians(10.0),    # cono CBS estrecho
                 phi_max=2 * math.pi,
-                d_theta=math.radians(2.0) / 200, # 200 bins en theta
-                d_phi=2 * math.pi / 360,         # 360 bins en phi
-                len_t=5.0, dt=0.05,              # Nt = 101
+                d_theta=math.radians(10.0) / 300, # 300 bins en theta
+                d_phi=2 * math.pi / 1,         # 360 bins en phi
+                len_t=35.0, dt=1,              # Nt = 101
             ),
-            # Histogramas de estadistica (baratos).
-            Statistics(max_events=1000, n_bins_theta=200, n_t=101),
+            # Statistics(max_events=1000, n_bins_theta=300, n_t=101),
         ],
         # absorption=AbsorptionGrid(radius=10, depth=10, d_r=0.05, d_z=0.05,
         #                           len_t=5.0, dt=0.05),
     )
     estimate(spec)
 
-    print()
-    # ---- EJEMPLO 2: muestra el efecto del tiempo y los hilos -----------------
-    print("Sensibilidad a la resolucion temporal (mismo grid angular, 14 hilos):")
-    for dt in (0.0, 0.5, 0.1, 0.02):
-        s = SimSpec(
-            n_photons=1_000_000_000, n_threads=14, track_reverse_paths=True,
-            sensors=[FarFieldCBS(
-                theta_max=math.radians(2.0), phi_max=2 * math.pi,
-                d_theta=math.radians(2.0) / 200, d_phi=2 * math.pi / 360,
-                len_t=5.0, dt=dt)],
-        )
-        r = estimate(s, verbose=False)
-        nt = n_bins_time(5.0, dt)
-        print(f"   dt={dt:<5} (Nt={nt:>4}) -> {human(r['total_with_overhead'])}")
+    # print()
+    # # ---- EJEMPLO 2: muestra el efecto del tiempo y los hilos -----------------
+    # print("Sensibilidad a la resolucion temporal (mismo grid angular, 14 hilos):")
+    # for dt in (0.0, 0.5, 0.1, 0.02):
+    #     s = SimSpec(
+    #         n_photons=1_000_000_000, n_threads=14, track_reverse_paths=True,
+    #         sensors=[FarFieldCBS(
+    #             theta_max=math.radians(2.0), phi_max=2 * math.pi,
+    #             d_theta=math.radians(2.0) / 200, d_phi=2 * math.pi / 360,
+    #             len_t=5.0, dt=dt)],
+    #     )
+    #     r = estimate(s, verbose=False)
+    #     nt = n_bins_time(5.0, dt)
+    #     print(f"   dt={dt:<5} (Nt={nt:>4}) -> {human(r['total_with_overhead'])}")

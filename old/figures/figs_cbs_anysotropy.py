@@ -1,7 +1,7 @@
-from utils.loaders import load_sweep
-from utils.styles import apply
-import utils.figures as figures
-import utils.cbs as cbs
+from results.utils.loaders import load_sweep
+from results.utils.styles import apply
+import results.utils.figures as figures
+import results.utils.cbs as cbs
 
 from luminis_mc import MiePhaseFunction
 

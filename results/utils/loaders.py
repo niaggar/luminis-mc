@@ -3,7 +3,7 @@ from pathlib import Path
 from luminis_mc import ResultsLoader 
 import os
 
-BASE_RESULTS = Path("/Users/niaggar/Documents/Thesis/tests")   # or read from env var / config file
+BASE_RESULTS = Path("/home/niaggar/Developer/luminis-mc/temporal_results")   # or read from env var / config file
 
 
 def load_run(run_dir: str | Path):

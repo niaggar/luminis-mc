@@ -1,4 +1,3 @@
-from utils.styles import apply
 import numpy as np
 
 from luminis_mc import (
@@ -9,9 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 
-apply(context="paper", col="single")
 
-save_path = "/Users/niaggar/Documents/Thesis/Results"
 
 
 # Things to study:
@@ -63,6 +60,5 @@ def print_info_particle(radius, volume_fraction, n_particle):
     print("-" * 30)
 
 
-print_info_particle(radius=0.110, volume_fraction=0.1, n_particle=1.59)
-print_info_particle(radius=0.110, volume_fraction=0.2, n_particle=1.59)
+print_info_particle(radius=0.110, volume_fraction=1, n_particle=1.59)
 

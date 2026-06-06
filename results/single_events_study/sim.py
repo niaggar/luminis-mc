@@ -34,14 +34,13 @@ set_log_level(LogLevel.info)
 # ---------------------------------------------------------------------------
 # Salida
 # ---------------------------------------------------------------------------
-exp_name = "cbs_test"
-base_dir = "/Users/niaggar/Documents/Thesis/tests"
+exp_name = "single_events_study"
+base_dir = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
 sweep.log_readme(
-    "Prueba de deteccion CBS (forward + reverse). Un solo FarFieldCBSSensor, "
-    "polarizacion circular, medio RGD semi-infinito."
+    "Test of the CBS profile comparing the full calcualtion (forward + reverse paths) with the estimator approach."
 )
 
 # ---------------------------------------------------------------------------
@@ -68,7 +67,7 @@ phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
 # Numero de fotones (modesto: es una prueba, no una corrida de produccion)
-n_photons = 4_000_000
+n_photons_estimator = 100_000
 
 # ---------------------------------------------------------------------------
 # Sensor de campo lejano (cono CBS)
@@ -85,8 +84,13 @@ t_max = 0.0
 d_time = 0.0
 
 
-def run_single_simulation(exp, radius, volume_fraction):
-    # --- medio RGD ---
+events = [2, 3, 4, 5, 10, 15, 20, 30, 50, 100, 150, 200, 300, 500, 1000, 1001]
+
+
+
+
+
+def run_estimator_simulation(exp, radius, volume_fraction):
     phase = RayleighDebyeEMCPhaseFunction(
         wavelength, radius, n_particle, n_medium,
         phasef_ndiv, phasef_theta_min, phasef_theta_max,
@@ -95,7 +99,7 @@ def run_single_simulation(exp, radius, volume_fraction):
     sample = Sample(n_medium)
     sample.add_layer(medium, 0.0, float("inf"))
 
-    scattering_efficiency = medium.phase_function.scattering_efficiency()
+    scattering_efficiency = phase.scattering_efficiency()
     mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
     inv_mean_free_path = 1.0 / mean_free_path
     mu_absortion = mu_absortion_percent * inv_mean_free_path
@@ -126,23 +130,27 @@ def run_single_simulation(exp, radius, volume_fraction):
 
     # --- sensores ---
     sens = SensorsGroup()
-    det = sens.add_detector(
-        FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False)
-    )
-    det.set_theta_limit(0, theta_max_far_field)
+    detectors = []
+    for event in events:
+        det = sens.add_detector(
+            FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, True)
+        )
+        det.set_theta_limit(0, theta_max_far_field)
+        det.set_events_limit(event, event)
+        detectors.append(det)
 
     stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
     stats.set_theta_limit(0, theta_max_far_field)
 
     # --- config ---
     config = SimConfig()
-    config.n_photons = n_photons
+    config.n_photons = n_photons_estimator
     config.sample = sample
     config.detector = sens
     config.laser = laser
     config.track_reverse_paths = True          # <-- imprescindible para CBS
-    config.pin_threads_to_cores = False
-    config.n_threads = 6
+    config.pin_threads_to_cores = True
+    config.n_threads = 15
     config.show_progress = True
 
     # --- params guardados ---
@@ -163,7 +171,7 @@ def run_single_simulation(exp, radius, volume_fraction):
         wavelength_um=wavelength,
         laser_m_polarization_state=str(laser_m_polarization_state),
         laser_n_polarization_state=str(laser_n_polarization_state),
-        n_photons=n_photons,
+        n_photons=n_photons_estimator,
         theta_max_rad=theta_max_far_field,
         n_theta=n_theta_far_field,
         n_phi=n_phi_far_field,
@@ -173,36 +181,43 @@ def run_single_simulation(exp, radius, volume_fraction):
     t0 = time.time()
     run_simulation_parallel(config)
     print("runtime_s:", time.time() - t0)
-    print("hits:", det.hits)
+    for det in detectors:
+        print("hits:", det.hits)
 
     # --- guardar RAW + derivados ---
-    exp.save_sensor(det, "farfield_cbs")
+    for det in detectors:
+        exp.save_sensor(det, "farfield_cbs")
     exp.save_sensor(stats, "statistics")
 
-    cbs = postprocess_farfield_cbs(det, n_photons)
+    for e, det in enumerate(detectors):
+        cbs = postprocess_farfield_cbs(det, n_photons_estimator)
+    
+        theta = np.linspace(0, det.theta_max, det.N_theta)
+        phi = np.linspace(0, det.phi_max, det.N_phi)
+        exp.save_derived("axes/theta_rad", theta)
+        exp.save_derived("axes/phi_rad", phi)
 
-    theta = np.linspace(0, det.theta_max, det.N_theta)
-    phi = np.linspace(0, det.phi_max, det.N_phi)
-    exp.save_derived("axes/theta_rad", theta)
-    exp.save_derived("axes/phi_rad", phi)
+        # Una sola ventana temporal (t = 0): guardamos los mapas 2D (theta, phi).
+        coh = cbs.coherent[0]
+        inc = cbs.incoherent[0]
+        exp.save_derived(f"farfield_cbs_{e}/coherent/s0", np.array(coh.S0, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/coherent/s1", np.array(coh.S1, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/coherent/s2", np.array(coh.S2, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/coherent/s3", np.array(coh.S3, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/incoherent/s0", np.array(inc.S0, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/incoherent/s1", np.array(inc.S1, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/incoherent/s2", np.array(inc.S2, copy=False))
+        exp.save_derived(f"farfield_cbs_{e}/incoherent/s3", np.array(inc.S3, copy=False))
 
-    # Una sola ventana temporal (t = 0): guardamos los mapas 2D (theta, phi).
-    coh = cbs.coherent[0]
-    inc = cbs.incoherent[0]
-    exp.save_derived("farfield_cbs/coherent/s0", np.array(coh.S0, copy=False))
-    exp.save_derived("farfield_cbs/coherent/s1", np.array(coh.S1, copy=False))
-    exp.save_derived("farfield_cbs/coherent/s2", np.array(coh.S2, copy=False))
-    exp.save_derived("farfield_cbs/coherent/s3", np.array(coh.S3, copy=False))
-    exp.save_derived("farfield_cbs/incoherent/s0", np.array(inc.S0, copy=False))
-    exp.save_derived("farfield_cbs/incoherent/s1", np.array(inc.S1, copy=False))
-    exp.save_derived("farfield_cbs/incoherent/s2", np.array(inc.S2, copy=False))
-    exp.save_derived("farfield_cbs/incoherent/s3", np.array(inc.S3, copy=False))
 
 
 for i, data in enumerate(params_sweep):
     radius = data["radius"]
     volume_fraction = data["volume_fraction"]
     run_name = f"radius_{radius:.3f}_volumefraction_{volume_fraction:.3f}"
-    fun = lambda exp, r=radius, v=volume_fraction: run_single_simulation(exp, r, v)
+
+    fun_estimator = lambda exp, r=radius, v=volume_fraction: run_estimator_simulation(exp, r, v)
+    
     print(f"Running CBS test for radius={radius:.3f}, f={volume_fraction:.2f}")
-    sweep.run(i, run_name, fun)
+    print("--------- Running estimator simulation")
+    sweep.run(i, run_name + "_estimator", fun_estimator)
