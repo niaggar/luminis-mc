@@ -456,6 +456,19 @@ namespace luminis::core
     /// @brief Angular cap for the next-event estimator. If < 0, falls back to theta_max.
     double theta_pp_max{-1.0};
 
+    /// @name Precomputed angular bin caches
+    /// @brief Trig of the bin centers and per-θ solid-angle band, constant across
+    ///        all photons and events. Filled in the constructor (and thus in clone(),
+    ///        which reconstructs via the constructor) so process_estimation() avoids
+    ///        4·N_theta + 2·N_phi transcendental calls per invocation.
+    /// @{
+    std::vector<double> cos_th_det;     ///< cos((it+0.5)·dtheta) for each θ bin.
+    std::vector<double> sin_th_det;     ///< sin((it+0.5)·dtheta) for each θ bin.
+    std::vector<double> dOmega_theta;   ///< cos(it·dtheta) − cos((it+1)·dtheta) (θ-band solid angle, ×dφ).
+    std::vector<double> cos_ph_det;     ///< cos((jp+0.5)·dphi) for each φ bin.
+    std::vector<double> sin_ph_det;     ///< sin((jp+0.5)·dphi) for each φ bin.
+    /// @}
+
     /// @name Angular normalization cache
     /// @brief Caches the estimator's angular normalization, which depends on k and the medium.
     /// @{

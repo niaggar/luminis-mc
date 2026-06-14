@@ -72,14 +72,52 @@ void DataTable::initialize(const std::vector<double>& x_vals, const std::vector<
   }
   x_values = x_vals;
   y_values = y_vals;
+  uniform_ = false;
+}
+
+void DataTable::initialize_uniform(double x_min, double dx, const std::vector<std::complex<double>>& y_vals) {
+  if (y_vals.empty()) {
+    LLOG_ERROR("DataTable::initialize_uniform: y_vals must not be empty");
+    throw std::invalid_argument("y_vals must not be empty");
+  }
+  if (dx <= 0.0) {
+    LLOG_ERROR("DataTable::initialize_uniform: dx must be positive, got {}", dx);
+    throw std::invalid_argument("dx must be positive");
+  }
+
+  y_values = y_vals;
+  uniform_ = true;
+  x_min_ = x_min;
+  dx_ = dx;
+  inv_dx_ = 1.0 / dx;
+
+  // Mirror the abscissae into x_values so any code that inspects the grid still works.
+  x_values.resize(y_vals.size());
+  for (std::size_t i = 0; i < y_vals.size(); ++i)
+    x_values[i] = x_min + static_cast<double>(i) * dx;
 }
 
 std::complex<double> DataTable::Sample(double x) const {
-  if (x_values.empty() || y_values.empty()) {
+  if (y_values.empty()) {
     LLOG_ERROR("DataTable::Sample called on an uninitialized table");
     throw std::runtime_error("DataTable is not initialized");
   }
 
+  // ── Uniform grid: O(1) direct index + linear interpolation ──
+  if (uniform_) {
+    const double pos = (x - x_min_) * inv_dx_;
+    if (pos <= 0.0)
+      return y_values.front();
+    const std::size_t n = y_values.size();
+    const std::size_t last = n - 1;
+    if (pos >= static_cast<double>(last))
+      return y_values.back();
+    const std::size_t i = static_cast<std::size_t>(pos); // floor, 0 <= i < last
+    const double t = pos - static_cast<double>(i);
+    return y_values[i] + t * (y_values[i + 1] - y_values[i]);
+  }
+
+  // ── Arbitrary grid: binary search + linear interpolation ──
   auto it = std::lower_bound(x_values.begin(), x_values.end(), x);
   int index = std::distance(x_values.begin(), it);
 

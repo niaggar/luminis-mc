@@ -90,6 +90,33 @@ namespace luminis::core
     const double volume = 4.0 * M_PI * (radius * radius * radius) / 3.0;
     const double mm = (n_particle / n_medium) - 1.0; // contrast index (m - 1)
     this->rgd_prefactor = -1.0 * kkk * mm * volume / (2.0 * M_PI);
+
+    // Tabulate s1(θ)/s2(θ) on a uniform θ grid so the hot-path scattering_matrix
+    // is a couple of O(1) look-ups instead of recomputing the form factor.
+    precompute_scattering_tables(2000);
+  }
+
+  void RGDMedium::precompute_scattering_tables(std::size_t n_samples)
+  {
+    if (n_samples < 2)
+      n_samples = 2;
+
+    const double dtheta = M_PI / static_cast<double>(n_samples - 1);
+
+    std::vector<std::complex<double>> s1_values(n_samples);
+    std::vector<std::complex<double>> s2_values(n_samples);
+
+    for (std::size_t i = 0; i < n_samples; ++i)
+    {
+      const double theta = static_cast<double>(i) * dtheta;
+      const double F = form_factor(theta, k, radius);
+      // s2 = -i k³ (m-1) V F cosθ / (2π),  s1 = -i k³ (m-1) V F / (2π).
+      s1_values[i] = std::complex<double>(0.0, rgd_prefactor * F);
+      s2_values[i] = std::complex<double>(0.0, rgd_prefactor * F * std::cos(theta));
+    }
+
+    S1_table.initialize_uniform(0.0, dtheta, s1_values);
+    S2_table.initialize_uniform(0.0, dtheta, s2_values);
   }
 
   /// Exponential distribution: l = -l_mean · ln(U), U ~ Uniform(0, 1).
@@ -110,11 +137,9 @@ namespace luminis::core
    */
   void RGDMedium::scattering_matrix(const double theta, const double phi, CMatrix &out) const
   {
-    const double F = form_factor(theta, k, radius);
-
-    // rgd_prefactor = -k³ (m-1) V / (2π) is precomputed in the constructor.
-    const std::complex<double> s2 = std::complex<double>(0, rgd_prefactor * F * std::cos(theta));
-    const std::complex<double> s1 = std::complex<double>(0, rgd_prefactor * F);
+    // O(1) interpolated look-up from the uniform θ tables built in the constructor.
+    const std::complex<double> s1 = S1_table.Sample(theta);
+    const std::complex<double> s2 = S2_table.Sample(theta);
 
     out(0, 0) = s2;
     out(0, 1) = std::complex<double>(0, 0);
@@ -177,7 +202,6 @@ namespace luminis::core
    */
   void MieMedium::precompute_scattering_tables(double wavelength, double size_parameter, std::size_t n_samples)
   {
-    std::vector<double> theta_values(n_samples);
     std::vector<std::complex<double>> s1_values(n_samples);
     std::vector<std::complex<double>> s2_values(n_samples);
 
@@ -185,25 +209,30 @@ namespace luminis::core
     std::complex<double>* s2tab = new std::complex<double>[n_samples];
     double *mulist = new double[n_samples];
 
-    // Build a uniform θ grid; convert to μ = cos(θ) for MIEV0.
+    // Build a uniform θ grid in [0, π]; convert to μ = cos(θ) for MIEV0.
+    const double dtheta = M_PI / static_cast<double>(n_samples - 1);
     for (std::size_t i = 0; i < n_samples; ++i)
     {
-      double theta = (static_cast<double>(i) / (n_samples - 1)) * M_PI;
+      const double theta = static_cast<double>(i) * dtheta;
       mulist[i] = std::cos(theta);
     }
 
     miev(size_parameter, m, n_samples, mulist, s1tab, s2tab);
 
-    // Convert μ back to θ and copy into STL vectors for DataTable initialisation.
+    // The θ grid is exactly uniform by construction, so store the tables as a
+    // uniform grid to enable O(1) direct-index look-ups (no acos round-trip).
     for (std::size_t i = 0; i < n_samples; ++i)
     {
-      theta_values[i] = std::acos(mulist[i]);
       s1_values[i] = s1tab[i];
       s2_values[i] = s2tab[i];
     }
 
-    S1_table.initialize(theta_values, s1_values);
-    S2_table.initialize(theta_values, s2_values);
+    S1_table.initialize_uniform(0.0, dtheta, s1_values);
+    S2_table.initialize_uniform(0.0, dtheta, s2_values);
+
+    delete[] s1tab;
+    delete[] s2tab;
+    delete[] mulist;
   }
 
   void MieMedium::set_mean_free_path(double mfp)
