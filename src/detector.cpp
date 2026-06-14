@@ -56,6 +56,12 @@ namespace luminis::core
     std::size_t layer = medium.get_layer_index_at(p.z);
     if (layer >= medium.size())
       return 0.0; // start already outside the stack
+
+    // Fast path: a single-layer sample has no internal interfaces to cross, so
+    // the optical depth is simply μ_t · L over the whole ray. This is the common
+    // case and is hit once per angular bin by the CBS estimator.
+    if (medium.size() == 1)
+      return medium.get_layer(layer).medium->mu_attenuation * L_total;
     const double dz = dir.z;
 
     while (traveled < L_total - 1e-15)
@@ -1018,6 +1024,28 @@ namespace luminis::core
     S1_incoh.resize(N_t, Matrix(N_theta, N_phi));
     S2_incoh.resize(N_t, Matrix(N_theta, N_phi));
     S3_incoh.resize(N_t, Matrix(N_theta, N_phi));
+
+    // Precompute the angular bin-center trig and per-θ solid-angle bands once.
+    // These are constant across all photons/events and are reused by the
+    // estimator's per-bin loop (process_estimation).
+    cos_th_det.resize(N_theta);
+    sin_th_det.resize(N_theta);
+    dOmega_theta.resize(N_theta);
+    for (int it = 0; it < N_theta; ++it)
+    {
+      const double th_det = (it + 0.5) * dtheta;
+      cos_th_det[it] = std::cos(th_det);
+      sin_th_det[it] = std::sin(th_det);
+      dOmega_theta[it] = std::cos(it * dtheta) - std::cos((it + 1) * dtheta);
+    }
+    cos_ph_det.resize(N_phi);
+    sin_ph_det.resize(N_phi);
+    for (int jp = 0; jp < N_phi; ++jp)
+    {
+      const double ph_det = (jp + 0.5) * dphi;
+      cos_ph_det[jp] = std::cos(ph_det);
+      sin_ph_det[jp] = std::sin(ph_det);
+    }
   }
 
   void FarFieldCBSSensor::merge_from(const Sensor &other)
@@ -1126,34 +1154,36 @@ namespace luminis::core
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  //  Reverse-path electric field — THE single implementation of the 3-stage algo
+  //  Reverse-path electric field — the 3-stage time-reversed (reciprocal) algo
   //
   //  Stage A : first reverse scatter at r_n,   s0      -> -s_{n-1}
   //  Stage B : interior segment via reciprocity, E <- Q · T_interior^T · Q · E
   //  Stage C : last reverse scatter at r_1,     -s1     ->  s_n
   //
   //  Uses the RAW (un-F-normalized) interior product and normalizes the result
-  //  ONCE at the end. Energy is carried by photon.weight, not by the Jones norm,
-  //  so any scalar inside the path cancels — keeping this consistent with the
-  //  normalized forward field used by both callers.
+  //  ONCE at the end (in the suffix). Energy is carried by photon.weight, not by
+  //  the Jones norm, so any scalar inside the path cancels — keeping this
+  //  consistent with the normalized forward field used by both callers.
+  //
+  //  The algorithm is split into a PREFIX (Stages A+B) and a SUFFIX (Stage C).
+  //  In the CBS estimator, the prefix depends only on P0, P_{n-1} (= current
+  //  frame), the interior product and the input polarization — all FIXED across
+  //  the angular bins — while only Stage C depends on the exit frame P_n that
+  //  varies per bin. Hoisting the prefix out of the bin loop avoids recomputing
+  //  Stage A's scattering matrix and the interior reciprocity product for every
+  //  bin. The split is exact: prefix∘suffix is bit-identical to the old monolith.
   // ─────────────────────────────────────────────────────────────────────────────
-  static CVec2 reverse_field(const Sample &medium,
-                             const Matrix &P0, const Matrix &P1,
-                             const Matrix &P_nm1, const Matrix &P_n,
-                             const CMatrix &T_interior_raw,
-                             int layer_n, int layer_1,
-                             const CVec2 &E_in)
-  {
-    // Propagation directions (row 2) and transverse bases (rows 0,1).
-    const Vec3 s0 = row_vec3(P0, 2);
-    const Vec3 s1 = row_vec3(P1, 2);
-    const Vec3 snm1 = row_vec3(P_nm1, 2);
-    const Vec3 sn = row_vec3(P_n, 2);
 
+  // Stages A + B. Returns the Jones vector right before the last reverse scatter.
+  static CVec2 reverse_field_prefix(const Sample &medium,
+                                    const Matrix &P0, const Matrix &P_nm1,
+                                    const CMatrix &T_interior_raw,
+                                    int layer_n, const CVec2 &E_in)
+  {
+    const Vec3 s0 = row_vec3(P0, 2);
+    const Vec3 snm1 = row_vec3(P_nm1, 2);
     const Vec3 m0 = row_vec3(P0, 0), n0 = row_vec3(P0, 1);
-    const Vec3 m1 = row_vec3(P1, 0), n1 = row_vec3(P1, 1);
     const Vec3 mnm1 = row_vec3(P_nm1, 0), nnm1 = row_vec3(P_nm1, 1);
-    const Vec3 mn = row_vec3(P_n, 0), nn = row_vec3(P_n, 1);
 
     CMatrix Q(2, 2);
     Q(0, 0) = 1;
@@ -1186,6 +1216,19 @@ namespace luminis::core
     E = apply2(Tt, E);
     E = apply2(Q, E);
 
+    return E;
+  }
+
+  // Stage C + final normalization. `E_prefix` is the output of reverse_field_prefix.
+  static CVec2 reverse_field_suffix(const Sample &medium,
+                                    const Matrix &P1, const Matrix &P_n,
+                                    int layer_1, const CVec2 &E_prefix)
+  {
+    const Vec3 s1 = row_vec3(P1, 2);
+    const Vec3 sn = row_vec3(P_n, 2);
+    const Vec3 m1 = row_vec3(P1, 0), n1 = row_vec3(P1, 1);
+    const Vec3 mn = row_vec3(P_n, 0), nn = row_vec3(P_n, 1);
+
     // ── Stage C: scatter at r_1, -s1 -> sn ──
     const Vec3 s_in_c = s1 * (-1.0);
     const Vec3 s_out_c = sn;
@@ -1198,7 +1241,7 @@ namespace luminis::core
 
     CMatrix SR_c(2, 2);
     matcmul(S_c, rot2(mpp_in, npp, m1, n1 * (-1.0)), SR_c); // S(θ)·R(φ1')
-    E = apply2(SR_c, E);
+    CVec2 E = apply2(SR_c, E_prefix);
     E = apply2(rot2(mn, nn, mpp_out, npp), E); // R_out: -> exit basis (m_n, n_n)
 
     // Normalize once.
@@ -1214,6 +1257,19 @@ namespace luminis::core
       E.n = 0;
     }
     return E;
+  }
+
+  // Convenience wrapper: full prefix∘suffix. Used by the direct detector
+  // (process_hit), which evaluates one exit frame per photon.
+  static CVec2 reverse_field(const Sample &medium,
+                             const Matrix &P0, const Matrix &P1,
+                             const Matrix &P_nm1, const Matrix &P_n,
+                             const CMatrix &T_interior_raw,
+                             int layer_n, int layer_1,
+                             const CVec2 &E_in)
+  {
+    const CVec2 prefix = reverse_field_prefix(medium, P0, P_nm1, T_interior_raw, layer_n, E_in);
+    return reverse_field_suffix(medium, P1, P_n, layer_1, prefix);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1384,20 +1440,23 @@ namespace luminis::core
     const double th_cap = (theta_pp_max > 0.0) ? std::min(theta_pp_max, theta_max) : theta_max;
     const int i_max = std::min(N_theta, static_cast<int>(th_cap / dtheta));
 
+    // Reverse-path PREFIX (Stages A+B) is identical for every angular bin: it
+    // depends only on P0, the current frame Pcur (= penultimate scatter), the
+    // interior product Tmid_raw and the input polarization — none of which vary
+    // across bins. Compute it once here; the per-bin loop only runs Stage C.
+    const CVec2 rev_prefix = reverse_field_prefix(
+        medium, photon.P0, Pcur, Tmid_raw, photon.current_layer, photon.initial_polarization);
+
     for (int it = 0; it < i_max; ++it)
     {
-      const double th0 = it * dtheta;
-      const double th1 = (it + 1) * dtheta;
-      const double dOmega_theta = std::cos(th0) - std::cos(th1); // exact θ-band solid angle (×dφ)
-      const double th_det = (it + 0.5) * dtheta;
-      const double s_th = std::sin(th_det);
-      const double c_th = std::cos(th_det);
+      const double dOmega_band = dOmega_theta[it]; // exact θ-band solid angle (×dφ)
+      const double s_th = sin_th_det[it];
+      const double c_th = cos_th_det[it];
 
       for (int jp = 0; jp < N_phi; ++jp)
       {
-        const double ph_det = (jp + 0.5) * dphi;
-        const double c_ph = std::cos(ph_det);
-        const double s_ph = std::sin(ph_det);
+        const double c_ph = cos_ph_det[jp];
+        const double s_ph = sin_ph_det[jp];
 
         // Bin direction in lab coords: s_out = sinθ cosφ e1 + sinθ sinφ e2 + cosθ e3.
         const Vec3 s_out = e1 * (s_th * c_ph) + e2 * (s_th * s_ph) + e3 * c_th;
@@ -1429,7 +1488,7 @@ namespace luminis::core
         const double F = phase_F(S, cos_phi, sin_phi, photon.polarization);
         if (F < 1e-300)
           continue;
-        const double prob_bin = (F / (M_PI * _I_norm)) * (dOmega_theta * dphi);
+        const double prob_bin = (F / (M_PI * _I_norm)) * (dOmega_band * dphi);
         const double w_bin = w_scatter * Tr * prob_bin;
         if (w_bin < 1e-300)
           continue;
@@ -1441,11 +1500,11 @@ namespace luminis::core
         const Matrix P_exit = scatter_frame(Pcur, th_scat, cos_phi, sin_phi);
 
         // Forward (unit) and reverse (unit) Jones vectors in the P_exit basis.
+        // The reverse prefix (Stages A+B) was hoisted out of the loop; only the
+        // bin-dependent Stage C (suffix) runs here.
         const CVec2 Ef_loc = apply_scatter_normalized(S, cos_phi, sin_phi, photon.polarization);
-        const CVec2 Er_loc = reverse_field(
-            medium, photon.P0, photon.P1, Pcur, P_exit,
-            Tmid_raw, photon.current_layer, photon.first_scatter_layer,
-            photon.initial_polarization);
+        const CVec2 Er_loc = reverse_field_suffix(
+            medium, photon.P1, P_exit, photon.first_scatter_layer, rev_prefix);
 
         // CBS geometric phase (estimated r_n = current position).
         const Vec3 qb = (s_out + s_in) * photon.k;

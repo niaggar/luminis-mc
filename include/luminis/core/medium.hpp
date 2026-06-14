@@ -45,6 +45,7 @@
 #include <luminis/math/vec.hpp>
 #include <luminis/sample/phase.hpp>
 #include <luminis/sample/meanfreepath.hpp>
+#include <luminis/sample/table.hpp>
 
 using namespace luminis::math;
 using namespace luminis::sample;
@@ -198,6 +199,18 @@ struct RGDMedium : public ScatteringMedium {
   /// matrix only multiplies it by the form factor (and cosθ for s2).
   double rgd_prefactor{0.0};
 
+  /// @name Precomputed amplitude tables
+  /// @brief s2(θ) and s1(θ) tabulated on a uniform θ grid (like MieMedium).
+  /// @details The RGD amplitudes are analytic but evaluating the form factor
+  ///          (sin/cos/pow) per call is costly when scattering_matrix is hit
+  ///          hundreds of times per scattering event by the CBS estimator.
+  ///          Tabulating once in the constructor turns each call into two O(1)
+  ///          table look-ups + a lerp.
+  /// @{
+  DataTable S1_table; ///< s1(θ) = i · rgd_prefactor · F(θ).
+  DataTable S2_table; ///< s2(θ) = i · rgd_prefactor · F(θ) · cosθ.
+  /// @}
+
   /**
    * @brief Construct a RGDMedium.
    *
@@ -232,6 +245,12 @@ struct RGDMedium : public ScatteringMedium {
    */
   void scattering_matrix(const double theta, const double phi, CMatrix &out) const override;
   using ScatteringMedium::scattering_matrix; // keep the by-value convenience overload visible
+
+  /// @brief Precompute the S1(θ)/S2(θ) amplitude tables on a uniform θ grid.
+  /// @param n_samples Number of uniformly-spaced angle samples in [0, π].
+  /// @details Invoked automatically by the constructor. The form factor oscillates
+  ///          for larger size parameters, so a fairly dense grid is used by default.
+  void precompute_scattering_tables(std::size_t n_samples = 2000);
 
 
   /// @brief Set the mean free path used by sample_free_path().
