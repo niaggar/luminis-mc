@@ -73,14 +73,45 @@ from ._core import (
     HardSpheres,
 )
 
-from .manager import Experiment, ResultsLoader
+from .manager import (
+    Experiment, ResultsLoader, capture_params, derived_quantities,
+)
 from .sweepmanager import SweepManager
+from .records import (
+    SimParams, RunParams, LaserParams, MediumParams, LayerParams, SensorMeta,
+    FarFieldCBSResult, PlanarFluenceResult, PlanarFieldResult,
+    StatisticsResult, PhotonRecordsResult, AbsorptionResult,
+    FarFieldCBSProcessedResult, PlanarFluenceProcessedResult, PlanarFieldProcessedResult,
+)
+from .schema import SensorSchema, SENSOR_SCHEMAS
 
 __all__ = [
     # Manager
     "Experiment",
     "ResultsLoader",
     "SweepManager",
+    "capture_params",
+    "derived_quantities",
+    # Typed params
+    "SimParams",
+    "RunParams",
+    "LaserParams",
+    "MediumParams",
+    "LayerParams",
+    # Typed results
+    "SensorMeta",
+    "FarFieldCBSResult",
+    "PlanarFluenceResult",
+    "PlanarFieldResult",
+    "StatisticsResult",
+    "PhotonRecordsResult",
+    "AbsorptionResult",
+    "FarFieldCBSProcessedResult",
+    "PlanarFluenceProcessedResult",
+    "PlanarFieldProcessedResult",
+    # Schema registry
+    "SensorSchema",
+    "SENSOR_SCHEMAS",
     # RNG
     "Rng",
     # Math

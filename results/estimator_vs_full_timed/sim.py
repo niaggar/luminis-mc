@@ -1,14 +1,16 @@
 """
 Prueba de la deteccion de CBS con camino forward + reverse.
 
-Este script ejecuta una simulacion minima de retrodispersion coherente (CBS)
-comparando dos metodos de calculo:
-    1. Metodo completo: se simulan fotones individuales, se rastrean sus caminos
-       forward y reverse, y se calcula el campo lejano sumando las contribuciones
-       coherentes e incoherentes.
-    2. Metodo del estimador: se simula un numero reducido de fotones, se calculan
-       las contribuciones coherentes e incoherentes tras cada evento de scattering
-       a partir de la probabilidad de ser dispersado en la direccion de retrodispersion.
+Compara dos metodos de calculo del cono de retrodispersion coherente (CBS):
+    1. Metodo completo (estimator=False): se simulan fotones individuales y se
+       suma la contribucion coherente/incoherente del campo lejano.
+    2. Metodo del estimador (estimator=True): se calcula la contribucion tras
+       cada evento de scattering, requiriendo muchos menos fotones.
+
+Ambos casos comparten una unica funcion `run_cbs`: la construccion fisica del
+sistema sigue siendo imperativa y flexible, mientras que el guardado de
+parametros, sensores y resultados procesados esta estandarizado por la nueva
+capa de persistencia (`save_params` / `save_sensors` / `save_processed`).
 """
 
 import __main__
@@ -16,10 +18,11 @@ import time
 import numpy as np
 
 from luminis_mc import (
+    Experiment,
     SweepManager,
     Laser, RGDMedium, Sample, FarFieldCBSSensor, StatisticsSensor, SensorsGroup,
     SimConfig, RayleighDebyeEMCPhaseFunction,
-    run_simulation_parallel, postprocess_farfield_cbs,
+    run_simulation_parallel, postprocess_farfield_cbs, derived_quantities,
     set_log_level, LogLevel, LaserSource,
 )
 
@@ -35,7 +38,8 @@ base_dir = "/home/niaggar/Developer/luminis-mc/temporal_results"
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
 sweep.log_readme(
-    "Test of the CBS profile comparing the full calcualtion (forward + reverse paths) with the estimator approach. TIMED."
+    "Test of the CBS profile comparing the full calculation (forward + reverse paths) "
+    "with the estimator approach. TIMED."
 )
 
 # ---------------------------------------------------------------------------
@@ -61,7 +65,7 @@ phasef_theta_min = 0.0
 phasef_theta_max = np.pi
 phasef_ndiv = 100_000
 
-# Numero de fotones (modesto: es una prueba, no una corrida de produccion)
+# Numero de fotones por metodo
 n_photons_full = 100_000_000
 n_photons_estimator = 10_000
 
@@ -75,13 +79,14 @@ n_phi_far_field = 1
 d_theta = theta_max_far_field / n_theta_far_field
 d_phi = phi_max_far_field / n_phi_far_field
 
-# Una sola ventana temporal -> integrado en el tiempo
+# Ventanas temporales
 t_max = 35.0
 d_time = 1.0
-n_time_bins = int((t_max / d_time) + 1) if d_time > 0 else 1
 
 
-def run_estimator_simulation(exp, radius, volume_fraction):
+def run_cbs(exp: Experiment, *, radius, volume_fraction, n_photons, estimator):
+    """Construye el sistema, ejecuta la simulacion CBS y guarda los resultados."""
+    # --- sistema fisico (imperativo, flexible) ---
     phase = RayleighDebyeEMCPhaseFunction(
         wavelength, radius, n_particle, n_medium,
         phasef_ndiv, phasef_theta_min, phasef_theta_max,
@@ -90,11 +95,11 @@ def run_estimator_simulation(exp, radius, volume_fraction):
     sample = Sample(n_medium)
     sample.add_layer(medium, 0.0, float("inf"))
 
-    scattering_efficiency = phase.scattering_efficiency()
-    mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
-    inv_mean_free_path = 1.0 / mean_free_path
-    mu_absortion = mu_absortion_percent * inv_mean_free_path
-    mu_scattering = inv_mean_free_path - mu_absortion
+    dq = derived_quantities(medium, volume_fraction)   # Q_sca, g, l_s, l*, theta_coh, ...
+    mean_free_path = dq["mean_free_path"]
+    inv_mfp = 1.0 / mean_free_path
+    mu_absortion = mu_absortion_percent * inv_mfp
+    mu_scattering = inv_mfp - mu_absortion
 
     medium.set_mean_free_path(mean_free_path)
     medium.set_scattering_coefficient(mu_scattering)
@@ -105,24 +110,19 @@ def run_estimator_simulation(exp, radius, volume_fraction):
         wavelength, laser_radius * mean_free_path, laser_type,
     )
 
-    anysotropy = phase.get_anisotropy_factor()[0]
-    transport_mean_free_path = mean_free_path / (1.0 - anysotropy)
-    m_relative = n_particle / n_medium
-    size_parameter = 2 * np.pi * radius * n_medium / wavelength
-    k_medium = 2 * np.pi * n_medium / wavelength
-    theta_coherent = 1.0 / (k_medium * transport_mean_free_path)  # ancho del cono (rad)
-
     print("---- Parametros de la simulacion -----")
-    print(f"eficiencia de scattering: {scattering_efficiency:.3f}")
+    print(f"metodo: {'estimador' if estimator else 'completo'}")
+    print(f"eficiencia de scattering: {dq['scattering_efficiency']:.3f}")
     print(f"camino libre medio l_s: {mean_free_path:.3f} um")
-    print(f"camino de transporte l*: {transport_mean_free_path:.3f} um")
-    print(f"factor de anisotropia g: {anysotropy:.4f}")
-    print(f"ancho aprox del cono CBS: {np.rad2deg(theta_coherent):.3f} deg")
+    print(f"camino de transporte l*: {dq['transport_mean_free_path']:.3f} um")
+    print(f"factor de anisotropia g: {dq['anisotropy_g']:.4f}")
+    print(f"ancho aprox del cono CBS: {np.rad2deg(dq['theta_coherent']):.3f} deg")
 
     # --- sensores ---
     sens = SensorsGroup()
     det = sens.add_detector(
-        FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, True)
+        FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max,
+                          d_theta, d_phi, d_time, estimator)
     )
     det.set_theta_limit(0, theta_max_far_field)
 
@@ -131,7 +131,7 @@ def run_estimator_simulation(exp, radius, volume_fraction):
 
     # --- config ---
     config = SimConfig()
-    config.n_photons = n_photons_estimator
+    config.n_photons = n_photons
     config.sample = sample
     config.detector = sens
     config.laser = laser
@@ -140,29 +140,8 @@ def run_estimator_simulation(exp, radius, volume_fraction):
     config.n_threads = 15
     config.show_progress = True
 
-    # --- params guardados ---
-    exp.log_params(
-        radius_um=radius,
-        volume_fraction=volume_fraction,
-        n_particle=n_particle,
-        n_medium=n_medium,
-        m_relative=m_relative,
-        scattering_efficiency=scattering_efficiency,
-        mu_scattering_um_inv=mu_scattering,
-        mu_absortion_um_inv=mu_absortion,
-        anisotropy_factor=anysotropy,
-        size_parameter=size_parameter,
-        mean_free_path_ls_um=mean_free_path,
-        transport_mean_free_path_lstar_um=transport_mean_free_path,
-        theta_coherent_rad=theta_coherent,
-        wavelength_um=wavelength,
-        laser_m_polarization_state=str(laser_m_polarization_state),
-        laser_n_polarization_state=str(laser_n_polarization_state),
-        n_photons=n_photons_estimator,
-        theta_max_rad=theta_max_far_field,
-        n_theta=n_theta_far_field,
-        n_phi=n_phi_far_field,
-    )
+    # --- params (auto-capturados de los objetos + derivados) ---
+    exp.save_params(config, extra=dq)
 
     # --- run ---
     t0 = time.time()
@@ -170,142 +149,10 @@ def run_estimator_simulation(exp, radius, volume_fraction):
     print("runtime_s:", time.time() - t0)
     print("hits:", det.hits)
 
-    # --- guardar RAW + derivados ---
-    exp.save_sensor(det, "farfield_cbs")
-    exp.save_sensor(stats, "statistics")
-
-    cbs = postprocess_farfield_cbs(det, n_photons_estimator)
-
-    theta = np.linspace(0, det.theta_max, det.N_theta)
-    phi = np.linspace(0, det.phi_max, det.N_phi)
-    exp.save_derived("axes/theta_rad", theta)
-    exp.save_derived("axes/phi_rad", phi)
-
-    # Una sola ventana temporal (t = 0): guardamos los mapas 2D (theta, phi).
-    for t_bin in range(n_time_bins):
-        coh = cbs.coherent[t_bin]
-        inc = cbs.incoherent[t_bin]
-        exp.save_derived(f"farfield_cbs/coherent/s0_t{t_bin}", np.array(coh.S0, copy=False))
-        exp.save_derived(f"farfield_cbs/coherent/s1_t{t_bin}", np.array(coh.S1, copy=False))
-        exp.save_derived(f"farfield_cbs/coherent/s2_t{t_bin}", np.array(coh.S2, copy=False))
-        exp.save_derived(f"farfield_cbs/coherent/s3_t{t_bin}", np.array(coh.S3, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s0_t{t_bin}", np.array(inc.S0, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s1_t{t_bin}", np.array(inc.S1, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s2_t{t_bin}", np.array(inc.S2, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s3_t{t_bin}", np.array(inc.S3, copy=False))
-
-def run_full_simulation(exp, radius, volume_fraction):
-    phase = RayleighDebyeEMCPhaseFunction(
-        wavelength, radius, n_particle, n_medium,
-        phasef_ndiv, phasef_theta_min, phasef_theta_max,
-    )
-    medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
-    sample = Sample(n_medium)
-    sample.add_layer(medium, 0.0, float("inf"))
-
-    scattering_efficiency = medium.phase_function.scattering_efficiency()
-    mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
-    inv_mean_free_path = 1.0 / mean_free_path
-    mu_absortion = mu_absortion_percent * inv_mean_free_path
-    mu_scattering = inv_mean_free_path - mu_absortion
-
-    medium.set_mean_free_path(mean_free_path)
-    medium.set_scattering_coefficient(mu_scattering)
-    medium.set_absorption_coefficient(mu_absortion)
-
-    laser = Laser(
-        laser_m_polarization_state, laser_n_polarization_state,
-        wavelength, laser_radius * mean_free_path, laser_type,
-    )
-
-    anysotropy = phase.get_anisotropy_factor()[0]
-    transport_mean_free_path = mean_free_path / (1.0 - anysotropy)
-    m_relative = n_particle / n_medium
-    size_parameter = 2 * np.pi * radius * n_medium / wavelength
-    k_medium = 2 * np.pi * n_medium / wavelength
-    theta_coherent = 1.0 / (k_medium * transport_mean_free_path)  # ancho del cono (rad)
-
-    print("---- Parametros de la simulacion -----")
-    print(f"eficiencia de scattering: {scattering_efficiency:.3f}")
-    print(f"camino libre medio l_s: {mean_free_path:.3f} um")
-    print(f"camino de transporte l*: {transport_mean_free_path:.3f} um")
-    print(f"factor de anisotropia g: {anysotropy:.4f}")
-    print(f"ancho aprox del cono CBS: {np.rad2deg(theta_coherent):.3f} deg")
-
-    # --- sensores ---
-    sens = SensorsGroup()
-    det = sens.add_detector(
-        FarFieldCBSSensor(theta_max_far_field, phi_max_far_field, t_max, d_theta, d_phi, d_time, False)
-    )
-    det.set_theta_limit(0, theta_max_far_field)
-
-    stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
-    stats.set_theta_limit(0, theta_max_far_field)
-
-    # --- config ---
-    config = SimConfig()
-    config.n_photons = n_photons_full
-    config.sample = sample
-    config.detector = sens
-    config.laser = laser
-    config.track_reverse_paths = True          # <-- imprescindible para CBS
-    config.pin_threads_to_cores = True
-    config.n_threads = 15
-    config.show_progress = True
-
-    # --- params guardados ---
-    exp.log_params(
-        radius_um=radius,
-        volume_fraction=volume_fraction,
-        n_particle=n_particle,
-        n_medium=n_medium,
-        m_relative=m_relative,
-        scattering_efficiency=scattering_efficiency,
-        mu_scattering_um_inv=mu_scattering,
-        mu_absortion_um_inv=mu_absortion,
-        anisotropy_factor=anysotropy,
-        size_parameter=size_parameter,
-        mean_free_path_ls_um=mean_free_path,
-        transport_mean_free_path_lstar_um=transport_mean_free_path,
-        theta_coherent_rad=theta_coherent,
-        wavelength_um=wavelength,
-        laser_m_polarization_state=str(laser_m_polarization_state),
-        laser_n_polarization_state=str(laser_n_polarization_state),
-        n_photons=n_photons_full,
-        theta_max_rad=theta_max_far_field,
-        n_theta=n_theta_far_field,
-        n_phi=n_phi_far_field,
-    )
-
-    # --- run ---
-    t0 = time.time()
-    run_simulation_parallel(config)
-    print("runtime_s:", time.time() - t0)
-    print("hits:", det.hits)
-
-    # --- guardar RAW + derivados ---
-    exp.save_sensor(det, "farfield_cbs")
-    exp.save_sensor(stats, "statistics")
-
-    cbs = postprocess_farfield_cbs(det, n_photons_full)
-
-    theta = np.linspace(0, det.theta_max, det.N_theta)
-    phi = np.linspace(0, det.phi_max, det.N_phi)
-    exp.save_derived("axes/theta_rad", theta)
-    exp.save_derived("axes/phi_rad", phi)
-
-    # Una sola ventana temporal (t = 0): guardamos los mapas 2D (theta, phi).
-    for t_bin in range(n_time_bins):
-        coh = cbs.coherent[t_bin]
-        inc = cbs.incoherent[t_bin]
-        exp.save_derived(f"farfield_cbs/coherent/s0_t{t_bin}", np.array(coh.S0, copy=False))
-        exp.save_derived(f"farfield_cbs/coherent/s1_t{t_bin}", np.array(coh.S1, copy=False))
-        exp.save_derived(f"farfield_cbs/coherent/s2_t{t_bin}", np.array(coh.S2, copy=False))
-        exp.save_derived(f"farfield_cbs/coherent/s3_t{t_bin}", np.array(coh.S3, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s0_t{t_bin}", np.array(inc.S0, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s1_t{t_bin}", np.array(inc.S1, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s2_t{t_bin}", np.array(inc.S2, copy=False))
-        exp.save_derived(f"farfield_cbs/incoherent/s3_t{t_bin}", np.array(inc.S3, copy=False))
+    # --- guardar RAW + procesados (estandarizado) ---
+    exp.save_sensors({"farfield_cbs": det, "statistics": stats})
+    cbs = postprocess_farfield_cbs(det, n_photons)
+    exp.save_processed("farfield_cbs", cbs, sensor=det)
 
 
 for i, data in enumerate(params_sweep):
@@ -313,11 +160,14 @@ for i, data in enumerate(params_sweep):
     volume_fraction = data["volume_fraction"]
     run_name = f"radius_{radius:.3f}_volumefraction_{volume_fraction:.3f}"
 
-    fun_estimator = lambda exp, r=radius, v=volume_fraction: run_estimator_simulation(exp, r, v)
-    fun_full = lambda exp, r=radius, v=volume_fraction: run_full_simulation(exp, r, v)
-    
     print(f"Running CBS test for radius={radius:.3f}, f={volume_fraction:.2f}")
     print("--------- Running estimator simulation")
-    sweep.run(i, run_name + "_estimator", fun_estimator)
+    sweep.run(i, run_name + "_estimator",
+              lambda exp, r=radius, v=volume_fraction:
+                  run_cbs(exp, radius=r, volume_fraction=v,
+                          n_photons=n_photons_estimator, estimator=True))
     print("--------- Running full simulation")
-    sweep.run(i, run_name + "_full", fun_full)
+    sweep.run(i, run_name + "_full",
+              lambda exp, r=radius, v=volume_fraction:
+                  run_cbs(exp, radius=r, volume_fraction=v,
+                          n_photons=n_photons_full, estimator=False))

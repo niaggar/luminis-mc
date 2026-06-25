@@ -1,9 +1,9 @@
 from ..utils.loaders import load_sweep
 from ..utils.styles import apply
+from ..utils.analysis import cbs_profiles, circular
 
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Optional, Tuple
 
 
 
@@ -18,81 +18,28 @@ sweep_data = load_sweep(folder)
 run_names = sorted(sweep_data.keys())
 
 
-def azimuthal_average(mat):
-    """Promedio sobre phi -> perfil 1D en theta. Acepta 1D o 2D."""
-    arr = np.asarray(mat)
-    if arr.ndim == 1:
-        return arr
-    return arr.mean(axis=1)
-
-
-
 run_name = "0000_radius_0.110_volumefraction_1.000_estimator"
 loader = sweep_data[run_name]
 
-p = loader.params
-radius = p["radius_um"]
-volume_fraction = p["volume_fraction"]
-theta_coherent = p.get("theta_coherent_rad", None)
-n_photons_estimator = p["n_photons"]
-
-theta = loader.derived("axes/theta_rad")          # rad
-theta_mrad = theta * 1e3
-
-class Profiles:
-    Coh: Tuple[np.ndarray, np.ndarray, np.ndarray]
-    Inc: Tuple[np.ndarray, np.ndarray, np.ndarray]
-    Enh: Tuple[np.ndarray, np.ndarray, np.ndarray]
-
-def load_profiles(loader, event=0):
-    coh_s0 = azimuthal_average(loader.derived(f"farfield_cbs_{event}/coherent/s0"))
-    coh_s3 = azimuthal_average(loader.derived(f"farfield_cbs_{event}/coherent/s3"))
-    inc_s0 = azimuthal_average(loader.derived(f"farfield_cbs_{event}/incoherent/s0"))
-    inc_s3 = azimuthal_average(loader.derived(f"farfield_cbs_{event}/incoherent/s3"))
-
-    # Promedio azimutal → perfil 1D en theta
-    coh_s0 = azimuthal_average(coh_s0)
-    coh_s3 = azimuthal_average(coh_s3)
-    inc_s0 = azimuthal_average(inc_s0)
-    inc_s3 = azimuthal_average(inc_s3)
-
-    # Descomposición en canales circulares
-    coh_co    = (coh_s0 - coh_s3) / 2.0   # helicidad preservada
-    coh_cross = (coh_s0 + coh_s3) / 2.0   # helicidad revertida
-    coh_tot   = coh_co + coh_cross         # = coh_s0
-
-    inc_co    = (inc_s0 - inc_s3) / 2.0
-    inc_cross = (inc_s0 + inc_s3) / 2.0
-    inc_tot   = inc_co + inc_cross
-
-    # Enhancement (evitar NaN en bins vacíos)
-    enh_co    = (coh_co    + eps) / (inc_co    + eps)
-    enh_cross = (coh_cross + eps) / (inc_cross + eps)
-    enh_tot   = (coh_tot   + eps) / (inc_tot   + eps)
-
-    out = Profiles()
-    out.Coh   = (coh_co, coh_cross, coh_tot)
-    out.Inc   = (inc_co, inc_cross, inc_tot)
-    out.Enh = (enh_co, enh_cross, enh_tot)
-    return out
+p = loader.params                       # SimParams tipado
+radius = p.layers[0].medium.radius
+volume_fraction = p.extra["volume_fraction"]
+theta_coherent = p.extra.get("theta_coherent")
+n_photons_estimator = p.run.n_photons
 
 events = [2, 3, 4, 5, 10, 15, 20, 30, 50, 100, 150, 200, 300, 500, 1000]
 
-
-
-profiles = load_profiles(loader, 2)
-
-coh_co, coh_cross, coh_tot = profiles.Coh
-inc_co, inc_cross, inc_tot = profiles.Inc
-enh_co, enh_cross, enh_tot = profiles.Enh
+# Perfil CBS para un orden de scattering concreto (sensor farfield_cbs_{event})
+prof = cbs_profiles(loader.processed_cbs("farfield_cbs_2"), basis=circular, time_index=0)
+theta_mrad = prof.theta * 1e3
 
 
 # ===================================================================
 # Figura 1: intensidades coherente vs incoherente (total)
 # ===================================================================
 fig, ax = plt.subplots(figsize=(6, 4))
-ax.plot(theta_mrad, coh_tot, label="coherente")
-ax.plot(theta_mrad, inc_tot, label="incoherente")
+ax.plot(theta_mrad, prof.coherent["total"], label="coherente")
+ax.plot(theta_mrad, prof.incoherent["total"], label="incoherente")
 if theta_coherent is not None:
     ax.axvline(theta_coherent * 1e3, color="red", ls="--", alpha=0.6,
                label=r"$1/(k\,\ell^*)$")
@@ -105,9 +52,9 @@ fig.savefig(f"{save_path}/cbs_intensity_events.pdf")
 
 
 fig, ax = plt.subplots(figsize=(6, 4))
-ax.plot(theta_mrad, enh_co, label="helicidad preservada")
-ax.plot(theta_mrad, enh_cross, label="helicidad cruzada")
-ax.plot(theta_mrad, enh_tot, label="helicidad total")
+ax.plot(theta_mrad, prof.enhancement["co"], label="helicidad preservada")
+ax.plot(theta_mrad, prof.enhancement["cross"], label="helicidad cruzada")
+ax.plot(theta_mrad, prof.enhancement["total"], label="helicidad total")
 if theta_coherent is not None:
     ax.axvline(theta_coherent * 1e3, color="red", ls="--", alpha=0.6,
                label=r"$1/(k\,\ell^*)$")
