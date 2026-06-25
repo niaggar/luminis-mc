@@ -27,8 +27,14 @@ Supported sensor types
 ----------------------
 PhotonRecordSensor, PlanarFieldSensor, PlanarFluenceSensor,
 FarFieldCBSSensor, StatisticsSensor.
-To add a new sensor type extend the ``if/elif`` block in
-:py:meth:`Experiment.save_sensor`.
+The mapping from sensor attributes to HDF5 groups is data-driven: see the
+``SENSOR_SCHEMAS`` registry in :mod:`luminis_mc.schema`.  To add a new sensor
+type, add one entry there — no code in this module needs to change.
+
+Parameters are auto-captured from the simulation objects with
+:func:`capture_params` and stored both as a typed JSON blob
+(``/params`` attribute ``params_json``, reloaded as :class:`SimParams`) and as
+flat scalars under ``/params`` for quick inspection.
 """
 
 import os
@@ -36,10 +42,20 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import h5py
+
+from . import schema
+from .records import (
+    SimParams, RunParams, LaserParams, MediumParams, LayerParams,
+    RESULT_BUILDERS,
+    FarFieldCBSResult, PlanarFluenceResult, PlanarFieldResult,
+    StatisticsResult, PhotonRecordsResult, AbsorptionResult,
+    FarFieldCBSProcessedResult, PlanarFluenceProcessedResult, PlanarFieldProcessedResult,
+    _to_numpy, _py,
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Helpers
@@ -209,6 +225,127 @@ def _write_attr(g: h5py.Group, key: str, val: Any) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  Parameter capture
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _medium_params(medium) -> MediumParams:
+    """Build :class:`MediumParams` from a (bound) scattering medium object."""
+    return MediumParams(
+        kind=medium.__class__.__name__,
+        mu_s=float(medium.mu_s),
+        mu_a=float(medium.mu_a),
+        mu_t=float(medium.mu_t),
+        n_particle=float(medium.n_particle),
+        n_medium=float(medium.n_medium),
+        wavelength=float(medium.wavelength),
+        radius=(float(getattr(medium, "radius")) if hasattr(medium, "radius") else None),
+        mean_free_path=(float(getattr(medium, "mean_free_path"))
+                        if hasattr(medium, "mean_free_path") else None),
+    )
+
+
+def capture_params(config, extra: Optional[Dict[str, Any]] = None) -> SimParams:
+    """
+    Auto-capture a typed :class:`SimParams` snapshot from a ``SimConfig``.
+
+    Reads the run controls, laser, host medium, and every sample layer directly
+    from the bound objects, so the user never re-lists parameters by hand.
+    Derived / physical quantities that do not live on the C++ objects (``g``,
+    ``l*``, ``theta_coherent``, ...) can be supplied via *extra* — see
+    :func:`derived_quantities`.
+
+    Parameters
+    ----------
+    config:
+        A ``SimConfig`` with ``sample`` and ``laser`` set.
+    extra:
+        Optional mapping of derived quantities stored under ``SimParams.extra``.
+
+    Raises
+    ------
+    ValueError:
+        If ``config.sample`` or ``config.laser`` is not set.
+    """
+    if getattr(config, "sample", None) is None:
+        raise ValueError("capture_params: config.sample is not set.")
+    if getattr(config, "laser", None) is None:
+        raise ValueError("capture_params: config.laser is not set.")
+
+    sample = config.sample
+    laser = config.laser
+    pol = laser.polarization
+
+    run = RunParams(
+        n_photons=int(getattr(config, "n_photons", 0)),
+        n_threads=int(getattr(config, "n_threads", 1)),
+        seed=int(getattr(config, "seed", 0)),
+        max_events=int(getattr(config, "MAX_EVENTS", 0)),
+        track_reverse_paths=bool(getattr(config, "track_reverse_paths", False)),
+    )
+    laser_p = LaserParams(
+        source_type=str(laser.source_type.name),
+        wavelength=float(laser.wavelength),
+        sigma=float(laser.sigma),
+        m_state=complex(pol.m),
+        n_state=complex(pol.n),
+    )
+    layers = [
+        LayerParams(z_min=float(L.z_min), z_max=float(L.z_max),
+                    medium=_medium_params(L.medium))
+        for L in sample.layers
+    ]
+    return SimParams(
+        run=run,
+        laser=laser_p,
+        sample_n_medium=float(sample.refractive_index),
+        layers=layers,
+        extra=dict(extra) if extra else {},
+    )
+
+
+def derived_quantities(medium, volume_fraction: float) -> Dict[str, Any]:
+    """
+    Compute the standard set of derived physical quantities for *medium*.
+
+    Centralises the boilerplate that every script repeated by hand: scattering
+    efficiency, anisotropy ``g``, scattering mean free path ``l_s``, transport
+    mean free path ``l*``, CBS cone width ``theta_coherent = 1/(k·l*)``, size
+    parameter, and relative index.  The returned dict is meant to be passed as
+    ``extra=`` to :func:`capture_params` / :py:meth:`Experiment.save_params`.
+
+    Parameters
+    ----------
+    medium:
+        An ``RGDMedium`` / ``MieMedium`` (must expose ``radius``,
+        ``n_particle``, ``n_medium``, ``wavelength`` and ``phase_function``).
+    volume_fraction:
+        Particle volume fraction used to scale the mean free path.
+    """
+    phase = medium.phase_function
+    q_sca = float(phase.scattering_efficiency())
+    g = float(phase.get_anisotropy_factor()[0])
+    radius = float(medium.radius)
+    n_medium = float(medium.n_medium)
+    n_particle = float(medium.n_particle)
+    wavelength = float(medium.wavelength)
+
+    mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * q_sca)
+    transport_mean_free_path = mean_free_path / (1.0 - g)
+    k_medium = 2.0 * np.pi * n_medium / wavelength
+
+    return {
+        "volume_fraction": float(volume_fraction),
+        "scattering_efficiency": q_sca,
+        "anisotropy_g": g,
+        "mean_free_path": mean_free_path,
+        "transport_mean_free_path": transport_mean_free_path,
+        "theta_coherent": 1.0 / (k_medium * transport_mean_free_path),
+        "size_parameter": 2.0 * np.pi * radius * n_medium / wavelength,
+        "m_relative": n_particle / n_medium,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Experiment
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -370,6 +507,73 @@ class Experiment:
                         ds.attrs["unit"] = str(units[k])
         self.h5.flush()
 
+    def save_params(
+        self,
+        config,
+        *,
+        extra: Optional[Dict[str, Any]] = None,
+        units: Optional[Dict[str, str]] = None,
+    ) -> SimParams:
+        """
+        Auto-capture and persist a typed :class:`SimParams` from a ``SimConfig``.
+
+        The full parameter tree is stored as JSON in the ``params_json``
+        attribute of ``/params`` (reloaded as a typed :class:`SimParams` by
+        :py:attr:`ResultsLoader.params`).  A flat projection of the most useful
+        scalars is also written under ``/params`` via :py:meth:`log_params` so
+        the file stays inspectable with ``h5dump`` / ``h5ls``.
+
+        Parameters
+        ----------
+        config:
+            A ``SimConfig`` with ``sample`` and ``laser`` set.
+        extra:
+            Derived quantities to record (see :func:`derived_quantities`).
+        units:
+            Optional ``{name: unit}`` annotations for the flat scalars.
+
+        Returns
+        -------
+        SimParams
+            The captured snapshot (also returned for convenience / logging).
+        """
+        params = capture_params(config, extra)
+
+        self.g_params.attrs["params_json"] = params.to_json()
+
+        # Flat projection for quick inspection.
+        flat: Dict[str, Any] = {
+            "n_photons": params.run.n_photons,
+            "n_threads": params.run.n_threads,
+            "seed": params.run.seed,
+            "max_events": params.run.max_events,
+            "track_reverse_paths": params.run.track_reverse_paths,
+            "laser_source_type": params.laser.source_type,
+            "wavelength": params.laser.wavelength,
+            "laser_sigma": params.laser.sigma,
+            "sample_n_medium": params.sample_n_medium,
+            "n_layers": len(params.layers),
+        }
+        if params.layers:
+            top = params.layers[0].medium
+            flat.update({
+                "medium_kind": top.kind,
+                "mu_s": top.mu_s,
+                "mu_a": top.mu_a,
+                "mu_t": top.mu_t,
+                "n_particle": top.n_particle,
+                "n_medium": top.n_medium,
+            })
+            if top.radius is not None:
+                flat["radius"] = top.radius
+            if top.mean_free_path is not None:
+                flat["mean_free_path"] = top.mean_free_path
+        for k, v in params.extra.items():
+            if _is_scalar(v):
+                flat[k] = v
+        self.log_params(units=units, **flat)
+        return params
+
     # ── Script snapshot ────────────────────────────────────────────────────────
 
     def log_script(self, file_path: str, out_name: str = "script_snapshot.py") -> None:
@@ -484,6 +688,18 @@ class Experiment:
 
     # ── Sensor persistence ─────────────────────────────────────────────────────
 
+    def save_sensors(self, sensors: Dict[str, Any]) -> None:
+        """
+        Persist a mapping ``{name: sensor}`` in one call.
+
+        Convenience wrapper around :py:meth:`save_sensor` for saving a whole
+        ``SensorsGroup`` worth of detectors::
+
+            exp.save_sensors({"farfield_cbs": det, "statistics": stats})
+        """
+        for name, sensor in sensors.items():
+            self.save_sensor(sensor, name)
+
     def save_sensor(self, sensor: Any, name: str) -> None:
         """
         Persist a sensor's data to ``/sensors/<name>/`` in the HDF5 file.
@@ -493,8 +709,9 @@ class Experiment:
         - ``meta/`` — type name, grid dimensions, filter settings (HDF5 attrs).
         - ``data/`` — Stokes / field / record arrays (HDF5 datasets).
 
-        To add support for a new sensor type, insert an ``elif`` branch
-        below that writes the relevant attributes and arrays.
+        The attribute→group mapping is data-driven via the ``SENSOR_SCHEMAS``
+        registry in :mod:`luminis_mc.schema`.  To support a new sensor type, add
+        a ``SensorSchema`` entry there — this method does not change.
 
         Parameters
         ----------
@@ -505,144 +722,108 @@ class Experiment:
 
         Raises
         ------
-        TypeError:
-            If the sensor type is not yet supported.
+        KeyError:
+            If the sensor type has no registered schema.
         """
+        sch = schema.get_schema(sensor.__class__.__name__)
+
         g      = self.g_sensors.require_group(name)
         g_meta = g.require_group("meta")
         g_data = g.require_group("data")
 
-        # ── Common base attributes (all sensor types) ──────────────────────────
+        # ── Type tag + common base attributes ──────────────────────────────────
         _write_attr(g_meta, "type", sensor.__class__.__name__)
-        _write_attr(g_meta, "id", str(sensor.id))
-        _write_attr(g_meta, "origin", sensor.origin)
-        _write_attr(g_meta, "normal", sensor.normal)
-        _write_attr(g_meta, "backward_normal", sensor.backward_normal)
-        _write_attr(g_meta, "n_polarization", sensor.n_polarization)
-        _write_attr(g_meta, "m_polarization", sensor.m_polarization)
-        _write_attr(g_meta, "hits", sensor.hits)
-        _write_attr(g_meta, "absorb_photons", sensor.absorb_photons)
-        _write_attr(g_meta, "estimator_enabled", sensor.estimator_enabled)
-        _write_attr(g_meta, "filter_theta_enabled", sensor.filter_theta_enabled)
-        _write_attr(g_meta, "filter_theta_min", sensor.filter_theta_min)
-        _write_attr(g_meta, "filter_theta_max", sensor.filter_theta_max)
-        _write_attr(g_meta, "filter_phi_enabled", sensor.filter_phi_enabled)
-        _write_attr(g_meta, "filter_phi_min", sensor.filter_phi_min)
-        _write_attr(g_meta, "filter_phi_max", sensor.filter_phi_max)
-        _write_attr(g_meta, "filter_position_enabled", sensor.filter_position_enabled)
-        _write_attr(g_meta, "filter_x_min", sensor.filter_x_min)
-        _write_attr(g_meta, "filter_x_max", sensor.filter_x_max)
-        _write_attr(g_meta, "filter_y_min", sensor.filter_y_min)
-        _write_attr(g_meta, "filter_y_max", sensor.filter_y_max)
-        _write_attr(g_meta, "filter_direction_enabled", sensor.filter_direction_enabled)
-        _write_attr(g_meta, "filter_direction", sensor.filter_direction.name)
+        for attr in schema.COMMON_META:
+            if hasattr(sensor, attr):
+                _write_attr(g_meta, attr, getattr(sensor, attr))
 
-        t = sensor.__class__.__name__
+        # ── Type-specific scalar metadata ──────────────────────────────────────
+        for attr in sch.meta_attrs:
+            if hasattr(sensor, attr):
+                _write_attr(g_meta, attr, getattr(sensor, attr))
 
-        # ── PhotonRecordSensor ─────────────────────────────────────────────────
-        if t == "PhotonRecordSensor":
-            rec = sensor.recorded_photons
-            n   = len(rec)
-            _write_attr(g_meta, "n_records", n)
+        # ── Data: custom encoder or generic array dispatch ─────────────────────
+        if sch.encoder is not None:
+            sch.encoder(sensor, g, g_meta, g_data, _write_dataset, _write_attr)
+        else:
+            for attr in sch.data_attrs:
+                arr = _as_array(getattr(sensor, attr))
+                if arr is None or arr.size == 0:
+                    _write_attr(g_meta, f"skipped:{attr}", "empty (bins not set?)")
+                    continue
+                _write_dataset(g_data, attr, arr)
 
-            if n > 0:
-                rg = g.require_group("records")
-                events = np.array([r.events                          for r in rec], dtype=np.int32)
-                weight = np.array([r.weight                          for r in rec], dtype=np.float64)
-                depth  = np.array([r.penetration_depth               for r in rec], dtype=np.float64)
-                t0     = np.array([r.launch_time                     for r in rec], dtype=np.float64)
-                t1     = np.array([r.arrival_time                    for r in rec], dtype=np.float64)
-                r1     = np.array([[r.position_first_scattering.x,
-                                    r.position_first_scattering.y,
-                                    r.position_first_scattering.z]   for r in rec], dtype=np.float64)
-                rn     = np.array([[r.position_last_scattering.x,
-                                    r.position_last_scattering.y,
-                                    r.position_last_scattering.z]    for r in rec], dtype=np.float64)
-                Ef     = np.array([[r.polarization_forward.m,
-                                    r.polarization_forward.n]        for r in rec], dtype=np.complex128)
-                Er     = np.array([[r.polarization_reverse.m,
-                                    r.polarization_reverse.n]        for r in rec], dtype=np.complex128)
+        self.h5.flush()
 
-                _write_dataset(rg, "events",            events)
-                _write_dataset(rg, "weight",            weight)
-                _write_dataset(rg, "penetration_depth", depth)
-                _write_dataset(rg, "launch_time",       t0)
-                _write_dataset(rg, "arrival_time",      t1)
-                _write_dataset(rg, "r_first",           r1)
-                _write_dataset(rg, "r_last",            rn)
-                _write_dataset(rg, "E_forward",         Ef)
-                _write_dataset(rg, "E_reverse",         Er)
+    # ── Post-processed results ───────────────────────────────────────────────────
 
-        # ── PlanarFieldSensor ──────────────────────────────────────────────────
-        elif t == "PlanarFieldSensor":
-            for k in ["N_x", "N_y", "dx", "dy", "len_x", "len_y"]:
-                _write_attr(g_meta, k, getattr(sensor, k))
-            _write_dataset(g_data, "Ex", _as_array(sensor.Ex))
-            _write_dataset(g_data, "Ey", _as_array(sensor.Ey))
+    def save_processed(
+        self,
+        name: str,
+        processed: Any,
+        *,
+        sensor: Any = None,
+        theta: Optional[np.ndarray] = None,
+        phi: Optional[np.ndarray] = None,
+    ) -> None:
+        """
+        Persist a post-processed result object under ``/derived/<name>/``.
 
-        # ── PlanarFluenceSensor ────────────────────────────────────────────────
-        elif t == "PlanarFluenceSensor":
-            for k in ["N_x", "N_y", "N_t", "dx", "dy", "dt", "len_x", "len_y", "len_t"]:
-                _write_attr(g_meta, k, getattr(sensor, k))
-            # S*_t may be a list of matrices → stacked to (Nt, Nx, Ny)
-            _write_dataset(g_data, "S0", _as_array(sensor.S0))
-            _write_dataset(g_data, "S1", _as_array(sensor.S1))
-            _write_dataset(g_data, "S2", _as_array(sensor.S2))
-            _write_dataset(g_data, "S3", _as_array(sensor.S3))
+        Dispatches on the type returned by the ``postprocess_*`` functions:
 
-        # ── FarFieldCBSSensor ──────────────────────────────────────────────────
-        elif t == "FarFieldCBSSensor":
-            for k in [
-                "N_theta", "N_phi", "N_t", "t_max", "theta_max", "phi_max", "dtheta", "dphi",
-                "theta_pp_max",
-            ]:
-                if hasattr(sensor, k):
-                    _write_attr(g_meta, k, getattr(sensor, k))
+        - ``FarFieldCBSProcessed`` → ``coherent/{s0..s3}`` and
+          ``incoherent/{s0..s3}`` each stacked over time bins to shape
+          ``(N_t, N_theta, N_phi)``, plus ``axes/theta`` and ``axes/phi``.
+        - ``PlanarFluenceProcessed`` → ``{s0..s3}`` of shape ``(N_t, N_x, N_y)``.
+        - ``PlanarFieldProcessed`` → ``Ex``, ``Ey``.
 
-            _write_dataset(g_data, "S0_coh",   _as_array(sensor.S0_coh))
-            _write_dataset(g_data, "S1_coh",   _as_array(sensor.S1_coh))
-            _write_dataset(g_data, "S2_coh",   _as_array(sensor.S2_coh))
-            _write_dataset(g_data, "S3_coh",   _as_array(sensor.S3_coh))
-            _write_dataset(g_data, "S0_incoh", _as_array(sensor.S0_incoh))
-            _write_dataset(g_data, "S1_incoh", _as_array(sensor.S1_incoh))
-            _write_dataset(g_data, "S2_incoh", _as_array(sensor.S2_incoh))
-            _write_dataset(g_data, "S3_incoh", _as_array(sensor.S3_incoh))
+        Replaces the manual per-time-bin string-keyed save loops.
 
-        # ── StatisticsSensor ───────────────────────────────────────────────────
-        elif t == "StatisticsSensor":
-            for k in [
-                "events_histogram_bins_set", "max_events",
-                "theta_histogram_bins_set", "min_theta", "max_theta", "n_bins_theta", "dtheta",
-                "phi_histogram_bins_set", "min_phi", "max_phi", "n_bins_phi", "dphi",
-                "depth_histogram_bins_set", "max_depth", "n_bins_depth", "ddepth",
-                "N_t", "dt", "t_max",
-                "time_histogram_bins_set", "h_max_time", "n_bins_time", "h_dtime",
-                "weight_histogram_bins_set", "max_weight", "n_bins_weight", "dweight",
-            ]:
-                _write_attr(g_meta, k, getattr(sensor, k))
-            for name_ in [
-                "events_histogram", "theta_histogram", "phi_histogram",
-                "depth_histogram", "time_histogram", "weight_histogram"
-            ]:
-                seq = getattr(sensor, name_)
+        Parameters
+        ----------
+        name:
+            Key under ``/derived`` (e.g. ``"farfield_cbs"``).
+        processed:
+            Object returned by ``postprocess_farfield_cbs`` /
+            ``postprocess_planar_fluence`` / ``postprocess_planar_field``.
+        sensor:
+            Originating sensor; used to derive the ``theta``/``phi`` axes for
+            CBS results when *theta*/*phi* are not given explicitly.
+        theta, phi:
+            Explicit axes (override *sensor*-derived ones).
+        """
+        cls = processed.__class__.__name__
 
-                try:
-                    if len(seq) == 0:
-                        _write_attr(g_meta, f"skipped:{name_}", "empty (bins not set?)")
-                        continue
-                except Exception:
-                    pass
+        if cls == "FarFieldCBSProcessed":
+            coh, inc = processed.coherent, processed.incoherent
+            for comp, items in (("coherent", coh), ("incoherent", inc)):
+                for s in ("S0", "S1", "S2", "S3"):
+                    stack = np.stack([_to_numpy(getattr(it, s)) for it in items], axis=0)
+                    self.save_derived(f"{name}/{comp}/{s.lower()}", stack)
 
-                arr = np.asarray(list(seq), dtype=np.int64)
-                _write_dataset(g_data, name_, arr)
+            if theta is None and sensor is not None:
+                theta = np.linspace(0.0, sensor.theta_max, sensor.N_theta)
+            if phi is None and sensor is not None:
+                phi = np.linspace(0.0, sensor.phi_max, sensor.N_phi)
+            if theta is not None:
+                self.save_derived(f"{name}/axes/theta", np.asarray(theta))
+            if phi is not None:
+                self.save_derived(f"{name}/axes/phi", np.asarray(phi))
+
+        elif cls == "PlanarFluenceProcessed":
+            for s in ("S0", "S1", "S2", "S3"):
+                stack = np.stack([_to_numpy(m) for m in getattr(processed, s)], axis=0)
+                self.save_derived(f"{name}/{s.lower()}", stack)
+
+        elif cls == "PlanarFieldProcessed":
+            self.save_derived(f"{name}/Ex", _to_numpy(processed.Ex))
+            self.save_derived(f"{name}/Ey", _to_numpy(processed.Ey))
 
         else:
             raise TypeError(
-                f"Unsupported sensor type: '{t}'. "
-                "Add a corresponding elif block in Experiment.save_sensor()."
+                f"save_processed: unsupported processed type '{cls}'. "
+                "Supported: FarFieldCBSProcessed, PlanarFluenceProcessed, PlanarFieldProcessed."
             )
-
-        self.h5.flush()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -687,16 +868,23 @@ class ResultsLoader:
             raise FileNotFoundError(f"HDF5 file not found: {self.h5_path}")
         self.h5 = h5py.File(self.h5_path, "r")
 
-        # Pre-load all scalar attrs and array datasets from /params
-        self.params: Dict[str, Any] = {}
+        # Flat projection of /params (scalars + array datasets). The typed
+        # snapshot is available via the `params` property.
+        self.params_flat: Dict[str, Any] = {}
+        self._params_json: Optional[str] = None
         g = self.h5.get("params", None)
         if g is not None:
             for k, v in g.attrs.items():
-                self.params[k] = v
+                if k == "params_json":
+                    self._params_json = _py(v)
+                    continue
+                self.params_flat[k] = _py(v)
             for k in g.keys():
                 obj = g[k]
                 if isinstance(obj, h5py.Dataset):
-                    self.params[k] = np.asarray(obj)
+                    self.params_flat[k] = np.asarray(obj)
+
+        self._params_cache: Optional[SimParams] = None
 
     def close(self) -> None:
         """Close the underlying HDF5 file."""
@@ -755,7 +943,152 @@ class ResultsLoader:
         """
         return np.asarray(self.h5[f"derived/{key}"])
 
-    # ── Absorption accessors ───────────────────────────────────────────────────
+    # ── Typed parameters ───────────────────────────────────────────────────────
+
+    @property
+    def params(self) -> SimParams:
+        """
+        The typed :class:`SimParams` snapshot reconstructed from ``params_json``.
+
+        Raises
+        ------
+        KeyError:
+            If the file has no ``params_json`` (e.g. params saved only via the
+            legacy flat :py:meth:`Experiment.log_params`).  Use
+            :py:attr:`params_flat` for that case.
+        """
+        if self._params_cache is None:
+            if self._params_json is None:
+                raise KeyError(
+                    "No typed params found (params_json missing). "
+                    "Use `.params_flat` for the flat scalar dict."
+                )
+            self._params_cache = SimParams.from_json(self._params_json)
+        return self._params_cache
+
+    # ── Typed sensor accessors ──────────────────────────────────────────────────
+
+    def sensor_names(self) -> List[str]:
+        """Return the names of all saved sensors."""
+        g = self.h5.get("sensors", None)
+        return list(g.keys()) if g is not None else []
+
+    def _read_meta(self, name: str) -> Dict[str, Any]:
+        g = self.h5[f"sensors/{name}/meta"]
+        return {k: _py(v) for k, v in g.attrs.items()}
+
+    def _read_data(self, name: str) -> Dict[str, np.ndarray]:
+        g = self.h5.get(f"sensors/{name}/data", None)
+        if g is None:
+            return {}
+        return {k: np.asarray(g[k]) for k in g.keys()}
+
+    def _read_group_arrays(self, path: str) -> Dict[str, np.ndarray]:
+        g = self.h5.get(path, None)
+        if g is None:
+            return {}
+        return {k: np.asarray(g[k]) for k in g.keys()}
+
+    def _check_type(self, name: str, expected: str) -> Dict[str, Any]:
+        meta = self._read_meta(name)
+        actual = meta.get("type")
+        if actual != expected:
+            raise TypeError(
+                f"Sensor '{name}' has type '{actual}', expected '{expected}'."
+            )
+        return meta
+
+    def sensor(self, name: str) -> Any:
+        """
+        Load a sensor by name, returning the typed result for its saved type.
+
+        The concrete return type is one of ``FarFieldCBSResult``,
+        ``PlanarFluenceResult``, ``PlanarFieldResult``, ``StatisticsResult`` or
+        ``PhotonRecordsResult``.  For static typing, prefer the type-specific
+        accessors (:py:meth:`far_field_cbs`, etc.).
+        """
+        meta = self._read_meta(name)
+        t = meta.get("type")
+        builder = RESULT_BUILDERS.get(t)
+        if builder is None:
+            raise TypeError(f"Sensor '{name}' has unsupported type '{t}'.")
+        if t == "PhotonRecordSensor":
+            return builder(meta, self._read_group_arrays(f"sensors/{name}/records"))
+        return builder(meta, self._read_data(name))
+
+    def far_field_cbs(self, name: str = "farfield_cbs") -> FarFieldCBSResult:
+        """Load a ``FarFieldCBSSensor`` result."""
+        meta = self._check_type(name, "FarFieldCBSSensor")
+        return FarFieldCBSResult.from_h5(meta, self._read_data(name))
+
+    def planar_fluence(self, name: str = "planar_fluence") -> PlanarFluenceResult:
+        """Load a ``PlanarFluenceSensor`` result."""
+        meta = self._check_type(name, "PlanarFluenceSensor")
+        return PlanarFluenceResult.from_h5(meta, self._read_data(name))
+
+    def planar_field(self, name: str = "planar_field") -> PlanarFieldResult:
+        """Load a ``PlanarFieldSensor`` result."""
+        meta = self._check_type(name, "PlanarFieldSensor")
+        return PlanarFieldResult.from_h5(meta, self._read_data(name))
+
+    def statistics(self, name: str = "statistics") -> StatisticsResult:
+        """Load a ``StatisticsSensor`` result."""
+        meta = self._check_type(name, "StatisticsSensor")
+        return StatisticsResult.from_h5(meta, self._read_data(name))
+
+    def photon_records(self, name: str = "photon_records") -> PhotonRecordsResult:
+        """Load a ``PhotonRecordSensor`` result."""
+        meta = self._check_type(name, "PhotonRecordSensor")
+        return PhotonRecordsResult.from_h5(meta, self._read_group_arrays(f"sensors/{name}/records"))
+
+    # ── Typed post-processed accessors ──────────────────────────────────────────
+
+    def processed_cbs(self, name: str = "farfield_cbs") -> FarFieldCBSProcessedResult:
+        """Load a post-processed CBS result saved with :py:meth:`Experiment.save_processed`."""
+        base = f"derived/{name}"
+        coh = self._read_group_arrays(f"{base}/coherent")
+        inc = self._read_group_arrays(f"{base}/incoherent")
+        axes = self._read_group_arrays(f"{base}/axes")
+        return FarFieldCBSProcessedResult(
+            theta=axes.get("theta", np.empty(0)),
+            phi=axes.get("phi", np.empty(0)),
+            coh_s0=coh["s0"], coh_s1=coh["s1"], coh_s2=coh["s2"], coh_s3=coh["s3"],
+            inc_s0=inc["s0"], inc_s1=inc["s1"], inc_s2=inc["s2"], inc_s3=inc["s3"],
+        )
+
+    def processed_fluence(self, name: str) -> PlanarFluenceProcessedResult:
+        """Load a post-processed planar-fluence result."""
+        d = self._read_group_arrays(f"derived/{name}")
+        return PlanarFluenceProcessedResult(S0=d["s0"], S1=d["s1"], S2=d["s2"], S3=d["s3"])
+
+    def processed_field(self, name: str) -> PlanarFieldProcessedResult:
+        """Load a post-processed planar-field result."""
+        d = self._read_group_arrays(f"derived/{name}")
+        return PlanarFieldProcessedResult(Ex=d["Ex"], Ey=d["Ey"])
+
+    # ── Typed absorption accessor ───────────────────────────────────────────────
+
+    def absorption(self, name: str = "absorption") -> AbsorptionResult:
+        """
+        Load an absorption recorder as a typed :class:`AbsorptionResult`.
+
+        Raw grids and display images are stacked over time bins; slice 0 is the
+        time-integrated result (see :py:attr:`AbsorptionResult.total`).
+        """
+        meta = self.absorption_meta(name)
+        g = self.h5.get(f"absorption/{name}/data", None)
+        slices: List[np.ndarray] = []
+        images: List[np.ndarray] = []
+        if g is not None:
+            i = 0
+            while f"time_slice_{i}" in g:
+                slices.append(np.asarray(g[f"time_slice_{i}"]))
+                if f"time_slice_{i}_image" in g:
+                    images.append(np.asarray(g[f"time_slice_{i}_image"]))
+                i += 1
+        return AbsorptionResult.from_h5(meta, slices, images)
+
+    # ── Absorption accessors (raw) ──────────────────────────────────────────────
 
     def absorption_meta(self, name: str = "absorption") -> Dict[str, Any]:
         """

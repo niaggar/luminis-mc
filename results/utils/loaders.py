@@ -1,16 +1,17 @@
 # plots/loaders.py
 from pathlib import Path
-from luminis_mc import ResultsLoader 
+from typing import Dict
+from luminis_mc import ResultsLoader
 import os
 
 BASE_RESULTS = Path("/home/niaggar/Developer/luminis-mc/temporal_results")   # or read from env var / config file
 
 
-def load_run(run_dir: str | Path):
+def load_run(run_dir: str | Path) -> ResultsLoader:
     """Return an open ResultsLoader for a single experiment run."""
     return ResultsLoader(BASE_RESULTS / run_dir)
 
-def load_sweep(folder_path: str) -> dict:
+def load_sweep(folder_path: str) -> Dict[str, ResultsLoader]:
     """
     Load all runs from a sweep directory into a dict of ResultsLoader instances.
     """
