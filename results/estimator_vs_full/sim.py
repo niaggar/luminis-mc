@@ -32,7 +32,7 @@ set_log_level(LogLevel.info)
 # Salida
 # ---------------------------------------------------------------------------
 exp_name = "estimator_vs_full"
-base_dir = "/home/niaggar/Developer/luminis-mc/temporal_results"
+base_dir = "/Users/niaggar/Documents/Thesis/tests"
 
 sweep = SweepManager(exp_name, base_dir, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
@@ -136,7 +136,7 @@ def run_cbs(exp: Experiment, *, radius, volume_fraction, n_photons, estimator):
     config.laser = laser
     config.track_reverse_paths = True          # <-- imprescindible para CBS
     config.pin_threads_to_cores = True
-    config.n_threads = 15
+    config.n_threads = 5
     config.show_progress = True
 
     # --- params (auto-capturados de los objetos + derivados) ---
