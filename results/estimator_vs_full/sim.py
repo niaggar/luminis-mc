@@ -136,7 +136,7 @@ def run_cbs(exp: Experiment, *, radius, volume_fraction, n_photons, estimator):
     config.laser = laser
     config.track_reverse_paths = True          # <-- imprescindible para CBS
     config.pin_threads_to_cores = True
-    config.n_threads = 5
+    config.n_threads = 8
     config.show_progress = True
 
     # --- params (auto-capturados de los objetos + derivados) ---
