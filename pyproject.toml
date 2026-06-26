@@ -19,3 +19,13 @@ dev = [
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"
+
+# Optimized build by default: the per-photon transport kernel is hot.
+# Release (-O3 -DNDEBUG) is already scikit-build-core's default, stated here
+# explicitly. NATIVE (-march=native) + LTO are enabled because the library is
+# compiled and run on the same machine (no portability needed).
+cmake.build-type = "Release"
+
+[tool.scikit-build.cmake.define]
+LUMINIS_NATIVE = "ON"
+LUMINIS_LTO = "ON"
