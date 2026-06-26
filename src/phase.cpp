@@ -273,8 +273,6 @@ double MiePhaseFunction::scattering_efficiency() const
   double qext, qsca, g;
   mievinfo(x, m, &qext, &qsca, &g);
 
-  LLOG_INFO("MiePhaseFunction::scattering_efficiency: x = {}, Q_ext = {}, Q_sca = {}, g = {}", x, qext, qsca, g);
-
   return qsca;
 }
 
