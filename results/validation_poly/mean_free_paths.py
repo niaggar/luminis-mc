@@ -44,7 +44,7 @@ def print_info_particle(radius, volume_fraction, n_particle):
     print(f"Scattering efficiency: {scattering_efficiency:.3f}")
     print(f"Mean free path: {mean_free_path:.3f} µm")
     print(f"Transport mean free path: {transport_mean_free_path:.3f} µm")
-    print(f"Max CBS angle: {theta_max_cbs:.4f} radians ({np.degrees(theta_max_cbs):.4f} degrees)")
+    print(f"Max CBS angle: {theta_max_cbs * 1e3:.4f} radians ({np.rad2deg(theta_max_cbs):.4f} degrees)")
     print(f"Condition 1 (|m-1|): {condition_1:.3f}")
     print(f"Condition 2 (size parameter * |m-1|): {condition_2:.3f}")
     print("-" * 30)
