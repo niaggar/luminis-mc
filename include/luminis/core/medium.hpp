@@ -175,6 +175,17 @@ struct ScatteringMedium {
 
   /// @brief Set μ_a and refresh μ_t = μ_a + μ_s.
   void set_absorption_coefficient(double mu_a);
+
+  /**
+   * @brief Single-particle scattering cross-section σ_s [mm²].
+   *
+   * Delegates to the phase function (EMC/Mie compute a real value; other phase
+   * functions return 0). Used by `MixtureLayer` to derive each species'
+   * contribution μ_s^(i) = n_i · σ_s^(i) from its number density.
+   */
+  double scattering_cross_section() const {
+    return phase_function ? phase_function->scattering_cross_section() : 0.0;
+  }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════

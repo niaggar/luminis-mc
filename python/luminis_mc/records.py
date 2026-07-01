@@ -87,10 +87,28 @@ class MediumParams:
 
 @dataclass
 class LayerParams:
-    """A single sample layer (z-range + its medium)."""
+    """
+    A single sample layer (z-range + its scattering content).
+
+    Two kinds, discriminated by :attr:`kind`:
+
+    - ``"homogeneous"`` — one medium, stored in :attr:`medium`.
+    - ``"mixture"`` — several co-located species, stored in :attr:`species`
+      together with their :attr:`number_densities` and the layer's aggregate
+      coefficients (``mu_*_total`` / ``mfp_total``).
+    """
     z_min: float
     z_max: float
-    medium: MediumParams
+    kind: str = "homogeneous"
+    # Homogeneous layer.
+    medium: Optional[MediumParams] = None
+    # Mixture layer.
+    species: Optional[List[MediumParams]] = None
+    number_densities: Optional[List[float]] = None
+    mu_s_total: Optional[float] = None
+    mu_a_total: Optional[float] = None
+    mu_t_total: Optional[float] = None
+    mfp_total: Optional[float] = None
 
 
 @dataclass
@@ -111,6 +129,41 @@ class RunParams:
     seed: int
     max_events: int
     track_reverse_paths: bool
+
+
+def _layer_to_dict(L: "LayerParams") -> Dict[str, Any]:
+    """Serialise a LayerParams (homogeneous or mixture) to a plain dict."""
+    d: Dict[str, Any] = {"z_min": L.z_min, "z_max": L.z_max, "kind": L.kind}
+    if L.kind == "mixture":
+        d["species"] = [vars(s).copy() for s in (L.species or [])]
+        d["number_densities"] = list(L.number_densities or [])
+        d["mu_s_total"] = L.mu_s_total
+        d["mu_a_total"] = L.mu_a_total
+        d["mu_t_total"] = L.mu_t_total
+        d["mfp_total"] = L.mfp_total
+    else:
+        d["medium"] = vars(L.medium).copy() if L.medium is not None else None
+    return d
+
+
+def _layer_from_dict(L: Dict[str, Any]) -> "LayerParams":
+    """Rebuild a LayerParams from a dict. Defaults to homogeneous for old files."""
+    kind = L.get("kind", "homogeneous")
+    if kind == "mixture":
+        return LayerParams(
+            z_min=L["z_min"], z_max=L["z_max"], kind="mixture",
+            species=[MediumParams(**s) for s in L.get("species", [])],
+            number_densities=list(L.get("number_densities", [])),
+            mu_s_total=L.get("mu_s_total"),
+            mu_a_total=L.get("mu_a_total"),
+            mu_t_total=L.get("mu_t_total"),
+            mfp_total=L.get("mfp_total"),
+        )
+    medium = L.get("medium")
+    return LayerParams(
+        z_min=L["z_min"], z_max=L["z_max"], kind="homogeneous",
+        medium=MediumParams(**medium) if medium is not None else None,
+    )
 
 
 @dataclass
@@ -140,10 +193,7 @@ class SimParams:
                 "n_state": [self.laser.n_state.real, self.laser.n_state.imag],
             },
             "sample_n_medium": self.sample_n_medium,
-            "layers": [
-                {"z_min": L.z_min, "z_max": L.z_max, "medium": vars(L.medium).copy()}
-                for L in self.layers
-            ],
+            "layers": [_layer_to_dict(L) for L in self.layers],
             "extra": self.extra,
         }
 
@@ -165,11 +215,7 @@ class SimParams:
                 n_state=complex(n[0], n[1]),
             ),
             sample_n_medium=d["sample_n_medium"],
-            layers=[
-                LayerParams(z_min=L["z_min"], z_max=L["z_max"],
-                            medium=MediumParams(**L["medium"]))
-                for L in d["layers"]
-            ],
+            layers=[_layer_from_dict(L) for L in d["layers"]],
             extra=d.get("extra", {}),
         )
 

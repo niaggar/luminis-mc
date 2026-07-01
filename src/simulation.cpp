@@ -276,6 +276,11 @@ namespace luminis::core
 
     photon.coherent_path_calculated = false;
 
+    // Per-event / per-vertex species pointers, reset for the reused photon.
+    photon.active_medium = nullptr;
+    photon.first_scatter_medium = nullptr;
+    photon.last_scatter_medium = nullptr;
+
     // --- Reusable per-event scratch matrices ---
     // Allocated once per photon and overwritten in place each scattering event.
     // This keeps the hot loop free of heap allocations (the matrices are tiny
@@ -292,12 +297,12 @@ namespace luminis::core
     while (photon.alive)
     {
       // --- Resolve current layer ---
-      const SampleLayer &current_layer = sample.get_layer(photon.current_layer);
-      const ScatteringMedium &medium = *current_layer.medium;
+      const Layer &current_layer = sample.get_layer(photon.current_layer);
 
       // --- Step 1: Free-path sampling ---
-      // Sample a free-path length from the current layer's medium.
-      double step = medium.sample_free_path(rng);
+      // Sample a free-path length from the current layer (uses the layer's
+      // aggregate mean free path; a HomogeneousLayer delegates to its medium).
+      double step = current_layer.sample_free_path(rng);
 
       // Compute candidate new position.
       const double dir_x = photon.P_local(2, 0);
@@ -328,7 +333,7 @@ namespace luminis::core
           const double step_to_iface = step * t;
 
           // Remaining optical distance (in the current layer's extinction units).
-          const double remaining_optical = (step - step_to_iface) * sample.get_layer(photon.current_layer).medium->mu_attenuation;
+          const double remaining_optical = (step - step_to_iface) * sample.get_layer(photon.current_layer).mu_attenuation();
 
           // Move photon exactly to the interface.
           // opticalpath: geometric distance (for time). optical_path: Σ nᵢ·dᵢ
@@ -365,9 +370,9 @@ namespace luminis::core
           photon.current_layer = new_layer_idx;
 
           // Convert remaining optical distance to physical distance in the new layer.
-          const ScatteringMedium &new_medium = *sample.get_layer(photon.current_layer).medium;
-          if (new_medium.mu_attenuation > 0)
-            step = remaining_optical / new_medium.mu_attenuation;
+          const double new_mu_t = sample.get_layer(photon.current_layer).mu_attenuation();
+          if (new_mu_t > 0)
+            step = remaining_optical / new_mu_t;
           else
             step = remaining_optical; // Fallback for non-attenuating layer.
 
@@ -411,8 +416,13 @@ namespace luminis::core
       }
       photon.current_layer = sample.get_layer_index_at(photon.pos.z);
 
-      // --- Step 4: Next-event estimation ---
-      const ScatteringMedium &scatter_medium = *sample.get_layer(photon.current_layer).medium;
+      // --- Step 4: Select the scattering species, then run estimators ---
+      // Resolve the species for THIS vertex first and store it on the photon so
+      // the estimator and the real scatter below operate on the same species.
+      // HomogeneousLayer::select_scatter_medium draws nothing from rng.
+      const Layer &scatter_layer = sample.get_layer(photon.current_layer);
+      photon.active_medium = scatter_layer.select_scatter_medium(rng);
+      const ScatteringMedium &scatter_medium = *photon.active_medium;
       detector.run_estimators(photon, sample);
 
       // --- Step 5: Sample scattering angles ---
@@ -497,14 +507,17 @@ namespace luminis::core
           // --- Update spatial positions and frame snapshots ---
           if (evt == 1)
           {
-            // First scattering event: record the first-scatter position and frame.
+            // First scattering event: record the first-scatter position, frame
+            // and species (used by CBS Stage C / suffix).
             photon.r_1 = photon.pos;
             photon.first_scatter_layer = photon.current_layer;
+            photon.first_scatter_medium = photon.active_medium;
             photon.P1 = photon.P_local;
           }
 
           photon.r_n = photon.pos; // Always update to the most recent scatter site.
           photon.last_scatter_layer = photon.current_layer;
+          photon.last_scatter_medium = photon.active_medium; // species at the last vertex (CBS Stage A).
           photon.Pn2 = photon.Pn1;
           photon.Pn1 = photon.Pn;
           photon.Pn = photon.P_local;
@@ -559,12 +572,16 @@ namespace luminis::core
       // Implicit absorption: fraction mu_a/mu_t is deposited, surviving weight
       // is rescaled by mu_s/mu_t so the photon continues with reduced weight.
       // Uses the medium of the layer where scattering occurred.
+      // The absorption split uses the LAYER's aggregate coefficients (the albedo
+      // of the mixture), not the single selected species. For a HomogeneousLayer
+      // these coincide with the wrapped medium's coefficients.
       photon.events++;
       double d_weight = 1.0;
-      if (scatter_medium.mu_attenuation > 0)
+      const double layer_mu_t = scatter_layer.mu_attenuation();
+      if (layer_mu_t > 0)
       {
-        const double absorption_prob = scatter_medium.mu_absorption / scatter_medium.mu_attenuation;
-        const double scattering_prob = scatter_medium.mu_scattering / scatter_medium.mu_attenuation;
+        const double absorption_prob = scatter_layer.mu_absorption() / layer_mu_t;
+        const double scattering_prob = scatter_layer.mu_scattering() / layer_mu_t;
         d_weight = photon.weight * absorption_prob;
         photon.weight *= scattering_prob;
       }

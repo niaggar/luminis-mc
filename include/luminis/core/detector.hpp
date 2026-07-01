@@ -34,6 +34,7 @@
 #include <functional>
 #include <memory>
 #include <map>
+#include <unordered_map>
 
 using namespace luminis::math;
 
@@ -470,11 +471,14 @@ namespace luminis::core
     /// @}
 
     /// @name Angular normalization cache
-    /// @brief Caches the estimator's angular normalization, which depends on k and the medium.
+    /// @brief Caches the estimator's angular normalization I_norm(medium), which
+    ///        depends on k and the species. With mixtures the active species
+    ///        changes every event, so a single slot would recompute the 2048-pt
+    ///        integral on each event; cache one value per species pointer instead.
+    ///        k is fixed within a run, so it is kept only as an invalidation guard.
     /// @{
-    mutable double _I_norm{-1.0};  ///< Cached normalization value (-1 = not yet computed).
-    mutable double _I_norm_k{0.0}; ///< Wave number k for which `_I_norm` was computed.
-    mutable const ScatteringMedium *_I_norm_medium{nullptr}; ///< Medium for which `_I_norm` was computed (cache key).
+    mutable double _I_norm_k{0.0}; ///< Wave number k the cached values were computed for.
+    mutable std::unordered_map<const ScatteringMedium *, double> _I_norm_by_medium; ///< I_norm per species.
     /// @}
 
     /// @name Coherent Stokes grids

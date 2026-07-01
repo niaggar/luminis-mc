@@ -56,7 +56,9 @@ from ._core import (
     ScatteringMedium,
     RGDMedium,
     MieMedium,
+    Layer,
     SampleLayer,
+    MixtureLayer,
     Sample,
     # Absorption
     Absorption,
@@ -75,6 +77,7 @@ from ._core import (
 
 from .manager import (
     Experiment, ResultsLoader, capture_params, derived_quantities,
+    derived_quantities_mixture,
 )
 from .sweepmanager import SweepManager
 from .records import (
@@ -92,6 +95,7 @@ __all__ = [
     "SweepManager",
     "capture_params",
     "derived_quantities",
+    "derived_quantities_mixture",
     # Typed params
     "SimParams",
     "RunParams",
@@ -169,7 +173,9 @@ __all__ = [
     "ScatteringMedium",
     "RGDMedium",
     "MieMedium",
+    "Layer",
     "SampleLayer",
+    "MixtureLayer",
     "Sample",
     # Absorption
     "Absorption",

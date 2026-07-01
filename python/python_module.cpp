@@ -263,16 +263,6 @@ PYBIND11_MODULE(_core, m)
       .def("emit_photon", &Laser::emit_photon, py::arg("rng"),
            "Emit a photon from the laser source");
 
-  // SensorsGroup bindings
-  py::class_<SensorsGroup>(m, "SensorsGroup")
-      .def(py::init<>())
-      .def_readonly("detectors", &SensorsGroup::detectors)
-      .def("add_detector", [](SensorsGroup &self, const Sensor &det) -> Sensor *
-           {
-          auto cloned_det = det.clone();
-          self.add_detector(std::move(cloned_det));
-          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Add a (cloned) detector to the group and return a reference to the internal copy");
-
   // CrossingDirection enum
   py::enum_<CrossingDirection>(m, "CrossingDirection")
       .value("Forward", CrossingDirection::Forward, "Photon traveling toward z+ (increasing z)")
@@ -320,6 +310,16 @@ PYBIND11_MODULE(_core, m)
            py::arg("min_events"), py::arg("max_events"),
            "Set the limits for the number of scattering events (inclusive)");
   ;
+
+  // SensorsGroup bindings
+  py::class_<SensorsGroup>(m, "SensorsGroup")
+      .def(py::init<>())
+      .def_readonly("detectors", &SensorsGroup::detectors)
+      .def("add_detector", [](SensorsGroup &self, const Sensor &det) -> Sensor *
+           {
+          auto cloned_det = det.clone();
+          self.add_detector(std::move(cloned_det));
+          return self.detectors.back().get(); }, py::arg("detector"), py::return_value_policy::reference_internal, "Add a (cloned) detector to the group and return a reference to the internal copy");
 
   py::class_<PhotonRecordSensor, Sensor>(m, "PhotonRecordSensor")
       .def(py::init<double, bool>(),
@@ -501,6 +501,8 @@ PYBIND11_MODULE(_core, m)
            static_cast<CMatrix (ScatteringMedium::*)(const double, const double) const>(&ScatteringMedium::scattering_matrix),
            py::arg("theta"), py::arg("phi"),
            "Get the scattering matrix for given angles and wavenumber")
+      .def("scattering_cross_section", &ScatteringMedium::scattering_cross_section,
+           "Single-particle scattering cross-section sigma_s [mm^2] (from the phase function)")
       .def("set_scattering_coefficient", &ScatteringMedium::set_scattering_coefficient, py::arg("mu_s"),
            "Set the scattering coefficient mu_s for the medium")
       .def("set_absorption_coefficient", &ScatteringMedium::set_absorption_coefficient, py::arg("mu_a"),
@@ -508,7 +510,11 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<RGDMedium, ScatteringMedium>(m, "RGDMedium")
       .def(py::init<PhaseFunction *, double, double, double, double>(),
-           py::arg("phase_func"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
+           py::arg("phase_func"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"),
+           // Keep the phase function (arg 2) alive for the medium's lifetime — it
+           // is stored as a raw pointer and dereferenced during transport (and at
+           // construction when a MixtureLayer reads its scattering cross-section).
+           py::keep_alive<1, 2>())
       .def_readonly("mean_free_path", &RGDMedium::mean_free_path)
       .def_readonly("radius", &RGDMedium::radius)
       .def("set_mean_free_path", &RGDMedium::set_mean_free_path, py::arg("mfp"),
@@ -516,7 +522,9 @@ PYBIND11_MODULE(_core, m)
 
   py::class_<MieMedium, ScatteringMedium>(m, "MieMedium")
       .def(py::init<PhaseFunction *, double, double, double, double>(),
-           py::arg("phase_func"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"))
+           py::arg("phase_func"), py::arg("radius"), py::arg("n_particle"), py::arg("n_medium"), py::arg("wavelength"),
+           // Keep the phase function (arg 2) alive for the medium's lifetime.
+           py::keep_alive<1, 2>())
       .def_readonly("mean_free_path", &MieMedium::mean_free_path)
       .def_readonly("radius", &MieMedium::radius)
       .def_readonly("m", &MieMedium::m)
@@ -524,21 +532,56 @@ PYBIND11_MODULE(_core, m)
            "Set the mean free path used for free-path sampling (does NOT update mu_s/mu_t)");
 
   // Sample bindings
-  py::class_<SampleLayer>(m, "SampleLayer")
-      .def(py::init<const ScatteringMedium *, double, double>(), py::arg("medium"), py::arg("z_min"), py::arg("z_max"))
-      .def_readonly("medium", &SampleLayer::medium)
-      .def_readonly("z_min", &SampleLayer::z_min)
-      .def_readonly("z_max", &SampleLayer::z_max)
-      .def("contains", &SampleLayer::contains, py::arg("z"),
+  // Abstract polymorphic layer base: z-geometry + aggregate transport accessors.
+  py::class_<Layer>(m, "Layer")
+      .def_readonly("z_min", &Layer::z_min)
+      .def_readonly("z_max", &Layer::z_max)
+      .def("contains", &Layer::contains, py::arg("z"),
            "Check if a z-coordinate lies within this layer")
-      .def("thickness", &SampleLayer::thickness,
-           "Return the thickness of the layer");
+      .def("thickness", &Layer::thickness,
+           "Return the thickness of the layer")
+      .def("mu_attenuation", &Layer::mu_attenuation,
+           "Aggregate extinction coefficient mu_t of the layer")
+      .def("mu_scattering", &Layer::mu_scattering,
+           "Aggregate scattering coefficient mu_s of the layer")
+      .def("mu_absorption", &Layer::mu_absorption,
+           "Aggregate absorption coefficient mu_a of the layer");
+
+  // Single-species layer. Bound under the historical name "SampleLayer" so the
+  // existing Python surface (L.medium / L.z_min / L.z_max) is preserved.
+  py::class_<HomogeneousLayer, Layer>(m, "SampleLayer")
+      .def(py::init<const ScatteringMedium *, double, double>(), py::arg("medium"), py::arg("z_min"), py::arg("z_max"))
+      .def_readonly("medium", &HomogeneousLayer::medium);
+
+  // Multi-species (mixture) layer.
+  py::class_<MixtureLayer, Layer>(m, "MixtureLayer")
+      .def(py::init<const std::vector<const ScatteringMedium *> &, const std::vector<double> &, double, double>(),
+           py::arg("species"), py::arg("number_densities"), py::arg("z_min"), py::arg("z_max"),
+           py::keep_alive<1, 2>())
+      .def_property_readonly(
+          "species",
+          [](const MixtureLayer &l) { return l.species; },
+          py::return_value_policy::reference_internal,
+          "Co-located scattering species.")
+      .def_readonly("number_densities", &MixtureLayer::number_densities)
+      .def_readonly("mu_s_i", &MixtureLayer::mu_s_i)
+      .def_readonly("selection_cdf", &MixtureLayer::selection_cdf)
+      .def_readonly("mu_s_total", &MixtureLayer::mu_s_total)
+      .def_readonly("mu_a_total", &MixtureLayer::mu_a_total)
+      .def_readonly("mu_t_total", &MixtureLayer::mu_t_total)
+      .def_readonly("mfp_total", &MixtureLayer::mfp_total);
 
   py::class_<Sample>(m, "Sample")
       .def(py::init<double>(), py::arg("n_medium") = 1.0,
            "Construct a Sample with the given host medium refractive index")
       .def("add_layer", &Sample::add_layer, py::arg("medium"), py::arg("z_min"), py::arg("z_max"),
            "Add a new layer to the top of the sample")
+      .def("add_mixture_layer", &Sample::add_mixture_layer,
+           py::arg("species"), py::arg("number_densities"), py::arg("z_min"), py::arg("z_max"),
+           // Keep the species list (arg 2, and thus every medium it holds) alive
+           // for the lifetime of the Sample (arg 1) — they are stored as raw pointers.
+           py::keep_alive<1, 2>(),
+           "Add a mixture layer (several co-located species) to the top of the sample")
       .def("size", &Sample::size,
            "Return the number of layers")
       .def("get_layer", &Sample::get_layer, py::arg("index"),
@@ -552,7 +595,17 @@ PYBIND11_MODULE(_core, m)
            "Return the phase speed of light in the host medium")
       .def_readonly("refractive_index", &Sample::refractive_index)
       .def_readonly("light_speed", &Sample::light_speed)
-      .def_readonly("layers", &Sample::layers)
+      .def_property_readonly(
+          "layers",
+          [](const Sample &s) {
+            std::vector<const Layer *> out;
+            out.reserve(s.layers.size());
+            for (const auto &l : s.layers)
+              out.push_back(l.get());
+            return out;
+          },
+          py::return_value_policy::reference_internal,
+          "List of the sample's layers (polymorphic).")
       .def_readonly("interfaces", &Sample::interfaces);
 
   // Absorption bindings (unified: time-integrated when d_t == 0, time-resolved when d_t > 0)
