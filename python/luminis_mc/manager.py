@@ -42,10 +42,15 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING, Union
 
 import numpy as np
 import h5py
+
+if TYPE_CHECKING:
+    # For static typing only — avoids a hard runtime dependency on the compiled
+    # extension in this pure-Python persistence module.
+    from ._core import ScatteringMedium
 
 from . import schema
 from .records import (
@@ -244,6 +249,30 @@ def _medium_params(medium) -> MediumParams:
     )
 
 
+def _layer_params(L) -> LayerParams:
+    """
+    Build a :class:`LayerParams` from a bound layer.
+
+    A ``MixtureLayer`` exposes ``species`` / ``number_densities`` and aggregate
+    totals; a homogeneous ``SampleLayer`` exposes a single ``medium``.
+    """
+    if hasattr(L, "species") and not hasattr(L, "medium"):
+        species = list(L.species)
+        return LayerParams(
+            z_min=float(L.z_min), z_max=float(L.z_max), kind="mixture",
+            species=[_medium_params(s) for s in species],
+            number_densities=[float(n) for n in L.number_densities],
+            mu_s_total=float(L.mu_s_total),
+            mu_a_total=float(L.mu_a_total),
+            mu_t_total=float(L.mu_t_total),
+            mfp_total=float(L.mfp_total),
+        )
+    return LayerParams(
+        z_min=float(L.z_min), z_max=float(L.z_max), kind="homogeneous",
+        medium=_medium_params(L.medium),
+    )
+
+
 def capture_params(config, extra: Optional[Dict[str, Any]] = None) -> SimParams:
     """
     Auto-capture a typed :class:`SimParams` snapshot from a ``SimConfig``.
@@ -289,11 +318,7 @@ def capture_params(config, extra: Optional[Dict[str, Any]] = None) -> SimParams:
         m_state=complex(pol.m),
         n_state=complex(pol.n),
     )
-    layers = [
-        LayerParams(z_min=float(L.z_min), z_max=float(L.z_max),
-                    medium=_medium_params(L.medium))
-        for L in sample.layers
-    ]
+    layers = [_layer_params(L) for L in sample.layers]
     return SimParams(
         run=run,
         laser=laser_p,
@@ -342,6 +367,76 @@ def derived_quantities(medium, volume_fraction: float) -> Dict[str, Any]:
         "theta_coherent": 1.0 / (k_medium * transport_mean_free_path),
         "size_parameter": 2.0 * np.pi * radius * n_medium / wavelength,
         "m_relative": n_particle / n_medium,
+    }
+
+
+def derived_quantities_mixture(
+    species: Sequence["ScatteringMedium"],
+    number_densities: Sequence[float],
+) -> Dict[str, Any]:
+    """
+    Derived physical quantities for a multi-species (mixture) layer.
+
+    Computes per-species ``μ_s^(i) = n_i · σ_s^(i)`` (from each species' phase
+    function cross-section) and the mixture aggregates used to interpret the CBS
+    cone:
+
+    - effective anisotropy  ``g_eff = Σ μ_s^(i) g_i / Σ μ_s^(i)``
+    - scattering mean free path  ``l_s = 1 / Σ μ_s^(i)``
+    - transport mean free path   ``l* = 1 / Σ μ_s^(i) (1 − g_i)``
+    - CBS cone width             ``theta_coherent = 1 / (k · l*)``
+
+    Returned dict is meant to be passed as ``extra=`` to
+    :func:`capture_params` / :py:meth:`Experiment.save_params`.
+
+    Parameters
+    ----------
+    species:
+        Iterable of scattering media (each must expose ``phase_function``,
+        ``n_medium`` and ``wavelength``).
+    number_densities:
+        Number density ``n_i`` [1/mm³] for each species (same order/length).
+    """
+    species = list(species)
+    number_densities = [float(n) for n in number_densities]
+    if not species:
+        raise ValueError("derived_quantities_mixture: species list is empty.")
+    if len(species) != len(number_densities):
+        raise ValueError("derived_quantities_mixture: species and number_densities differ in length.")
+
+    # Wave number in the host medium. Use the medium's own ``k`` (= 2π·n_medium/λ),
+    # which the C++ ctor sets on the base object; the bound ``wavelength`` field is
+    # shadowed by the concrete media and is not reliable here.
+    k_medium = float(species[0].k)
+
+    mu_s_i: List[float] = []
+    g_i: List[float] = []
+    for sp, n in zip(species, number_densities):
+        sigma = float(sp.phase_function.scattering_cross_section())
+        mu_s_i.append(n * sigma)
+        g_i.append(float(sp.phase_function.get_anisotropy_factor()[0]))
+
+    mu_s_total = float(sum(mu_s_i))
+    if mu_s_total <= 0.0:
+        raise ValueError("derived_quantities_mixture: total mu_s is not positive "
+                         "(check number densities and phase-function cross-sections).")
+
+    mu_s_reduced = float(sum(ms * (1.0 - g) for ms, g in zip(mu_s_i, g_i)))
+    g_eff = float(sum(ms * g for ms, g in zip(mu_s_i, g_i)) / mu_s_total)
+    l_s = 1.0 / mu_s_total
+    l_star = (1.0 / mu_s_reduced) if mu_s_reduced > 0.0 else float("inf")
+
+    return {
+        "mixture": True,
+        "n_species": len(species),
+        "number_densities": number_densities,
+        "mu_s_per_species": mu_s_i,
+        "anisotropy_g_per_species": g_i,
+        "mu_s_total": mu_s_total,
+        "anisotropy_g_eff": g_eff,
+        "scattering_mean_free_path": l_s,
+        "transport_mean_free_path": l_star,
+        "theta_coherent": (1.0 / (k_medium * l_star)) if np.isfinite(l_star) else 0.0,
     }
 
 
@@ -555,19 +650,35 @@ class Experiment:
             "n_layers": len(params.layers),
         }
         if params.layers:
-            top = params.layers[0].medium
-            flat.update({
-                "medium_kind": top.kind,
-                "mu_s": top.mu_s,
-                "mu_a": top.mu_a,
-                "mu_t": top.mu_t,
-                "n_particle": top.n_particle,
-                "n_medium": top.n_medium,
-            })
-            if top.radius is not None:
-                flat["radius"] = top.radius
-            if top.mean_free_path is not None:
-                flat["mean_free_path"] = top.mean_free_path
+            top_layer = params.layers[0]
+            flat["layer_kind"] = top_layer.kind
+            if top_layer.kind == "mixture":
+                # Aggregate coefficients for the mixture; the per-species detail
+                # lives in params_json (and the *species* list on the layer).
+                flat.update({
+                    "medium_kind": "mixture",
+                    "n_species": len(top_layer.species or []),
+                    "mu_s": top_layer.mu_s_total,
+                    "mu_a": top_layer.mu_a_total,
+                    "mu_t": top_layer.mu_t_total,
+                    "mfp_total": top_layer.mfp_total,
+                })
+                if top_layer.species:
+                    flat["n_medium"] = top_layer.species[0].n_medium
+            else:
+                top = top_layer.medium
+                flat.update({
+                    "medium_kind": top.kind,
+                    "mu_s": top.mu_s,
+                    "mu_a": top.mu_a,
+                    "mu_t": top.mu_t,
+                    "n_particle": top.n_particle,
+                    "n_medium": top.n_medium,
+                })
+                if top.radius is not None:
+                    flat["radius"] = top.radius
+                if top.mean_free_path is not None:
+                    flat["mean_free_path"] = top.mean_free_path
         for k, v in params.extra.items():
             if _is_scalar(v):
                 flat[k] = v

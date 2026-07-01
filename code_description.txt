@@ -1,5 +1,5 @@
 LUMINIS-MC CODEBASE AND PHYSICS GUIDE
-Updated: 2026-06-29
+Updated: 2026-07-01
 
 Purpose of this file
 ====================
@@ -34,7 +34,9 @@ Primary scientific goal:
 
 Secondary capabilities:
   - Time-resolved detection (photon time-of-flight gating).
-  - Layered (stratified) samples sharing one host refractive index.
+  - Layered (stratified) samples sharing one host refractive index, where each
+    layer is either a single species (HomogeneousLayer) or a mixture of several
+    co-located species chosen per scattering event (MixtureLayer, §4.9b).
   - Absorption deposition maps on a cylindrical (r,z) grid.
   - Statistics histograms (events / theta / phi / depth / time / weight).
   - Speckle / near-field complex-field accumulation.
@@ -234,19 +236,62 @@ with a coherent pair-interference layer added on top for CBS observables.
   consistent (same wavelength/radius/indices).
 
 4.9 Layered sample and interface crossing
-  A Sample is an ordered, contiguous stack of SampleLayer slabs along z, sharing
+  A Sample is an ordered, contiguous stack of `Layer` slabs along z, sharing
   ONE host refractive index n_medium (Sample.refractive_index) and the derived
-  light_speed = 1/n_medium (natural units). Consequences:
+  light_speed = 1/n_medium (natural units). `Layer` is an ABSTRACT base holding
+  only the z-geometry ([z_min, z_max), contains, thickness) plus the aggregate
+  transport interface the kernel consumes (sample_free_path, mu_attenuation,
+  mu_scattering, mu_absorption, select_scatter_medium). Two concrete types:
+    - HomogeneousLayer: one co-located ScatteringMedium (the historical
+      one-species-per-depth behaviour). Every transport accessor delegates to the
+      wrapped medium, and select_scatter_medium returns it WITHOUT drawing from
+      the RNG — so single-species runs stay bit-for-bit reproducible.
+    - MixtureLayer: several co-located species, one chosen per event (§4.9b).
+  Sample owns its layers polymorphically as `std::vector<unique_ptr<Layer>>`, so
+  Sample is MOVE-ONLY (copy is explicitly deleted; see the sample.hpp comment on
+  why libc++ would otherwise let pybind11 pick an ill-formed copy path).
+  Consequences of the shared host index:
     - Internal interfaces change only (mu_a, mu_s, phase model / amplitude
       matrix); the refractive index is uniform, so there is NO internal Fresnel
       reflection/refraction.
     - When a sampled step crosses an interface after a sub-length l1, the
       remaining OPTICAL depth is preserved:
         tau_remaining = (l - l1) * mu_t(old);  l_new = tau_remaining / mu_t(new).
+      mu_t here is the LAYER'S aggregate mu_attenuation() (for a mixture, the sum
+      over species — not any single one).
     - After each crossing, photon.z is nudged by ±1e-12 so the layer lookup is
       robust against floating-point boundary ambiguity.
     - Sensor crossings are tested on every sub-step (so a detector between the
       start and the interface still fires).
+
+4.9b Mixture layers (several co-located species)
+  A MixtureLayer models a slab in which several particle species coexist over the
+  SAME z-range. It assumes the dilute / independent-scattering regime: no
+  structure factor, the species simply ADD their scattering coefficients. Each
+  species i contributes
+      mu_s^(i) = n_i · sigma_s^(i),
+  the product of its number density n_i [1/mm³] and its single-particle
+  scattering cross-section sigma_s^(i) [mm²]. sigma_s^(i) comes from the species'
+  phase function (ScatteringMedium::scattering_cross_section() delegates to it;
+  EMC/Mie return a real value, other phase functions return 0). All aggregates are
+  precomputed once in the ctor:
+      mu_s_total = Σ mu_s^(i),
+      mu_a_total = Σ mu_s^(i)·(mu_a/mu_s)_i    (preserves each species' single-
+                                               scattering albedo; 0 if mu_s^(i)=0),
+      mu_t_total = mu_s_total + mu_a_total,
+      mfp_total  = 1 / mu_s_total.
+  Two independent random decisions per vertex, in this order:
+    1. FREE PATH: sample_free_path draws an exponential with mfp_total (the
+       aggregate mean free path of the whole mixture).
+    2. SPECIES: select_scatter_medium draws ONE species j with probability
+       p_j = mu_s^(j) / mu_s_total via a lower_bound on a normalized selection CDF
+       (the CDF's last entry is pinned to 1 to guard round-off).
+  The chosen species drives S(θ), F and the angular normalization at that vertex;
+  the LAYER's aggregate albedo (mu_s_total/mu_t_total) drives the absorption split.
+  For a HomogeneousLayer the two coincide, so the single-species path is
+  unchanged. The MixtureLayer ctor validates its inputs and throws
+  std::invalid_argument on empty/mismatched lists, a null species, or
+  mu_s_total ≤ 0 (e.g. every species' phase function reports a zero cross-section).
 
 4.10 Absorption split and Russian roulette
   At each scattering event, with the layer where the scatter occurred:
@@ -274,7 +319,10 @@ with a coherent pair-interference layer added on top for CBS observables.
   In diffusion-like analysis, the reduced variable q = k l* θ gives a cone of
   FWHM Δq ≈ 0.73, i.e. θ_FWHM ≈ 0.73/(k l*), with l* the transport mean free
   path. derived_quantities() in manager.py centralizes l_s, l* = l_s/(1-g) and
-  theta_coherent = 1/(k l*). This is an interpretation model, not a constraint
+  theta_coherent = 1/(k l*). For a mixture, derived_quantities_mixture(species,
+  number_densities) does the same from the per-species mu_s^(i) and g_i:
+  effective anisotropy g_eff = Σ mu_s^(i) g_i / Σ mu_s^(i), l_s = 1/Σ mu_s^(i),
+  and l* = 1/Σ mu_s^(i)(1-g_i). This is an interpretation model, not a constraint
   inside the engine.
 
 
@@ -289,14 +337,24 @@ Photon (photon.hpp): the live packet. Position, P_local frame, Jones vector
   matrix_T accumulates ONLY the interior normalized Jones products J_2..J_{n-1}
   (the first and last events are applied separately in reverse_field), not "all"
   matrices.
+  Per-vertex species pointers (non-owning, for mixtures): active_medium is the
+  species selected for the CURRENT event; first_scatter_medium and
+  last_scatter_medium record the species at the first (r_1) and last (r_n) vertex
+  for CBS Stages C and A. All three are reset to nullptr when a photon is reused.
+  For a HomogeneousLayer they always equal that layer's single medium.
 
 PhotonRecord (photon.hpp): immutable detection snapshot written by
   PhotonRecordSensor (events, depth, times, optical path, weight, k, first/last
   scatter positions, detector position, direction + (m,n) frame, forward and
   reverse Jones vectors).
 
-Sample / SampleLayer (sample.hpp): see §4.9. add_layer enforces contiguity
-  (each layer starts where the last ended; first at z=0; top may be +∞).
+Sample / Layer / HomogeneousLayer / MixtureLayer (sample.hpp): see §4.9–4.9b.
+  `Layer` is the abstract base (z-geometry + aggregate transport interface);
+  HomogeneousLayer wraps one medium, MixtureLayer holds several species.
+  add_layer(medium, ...) and add_mixture_layer(species, number_densities, ...)
+  both enforce contiguity (each layer starts where the last ended; first at z=0;
+  top may be +∞) via the shared validate_contiguous helper. Layers are owned as
+  unique_ptr<Layer>, so Sample is move-only. get_layer returns `const Layer&`;
   get_layer_at / get_layer_index_at (O(log N) binary search on interfaces),
   find_next_interface, is_inside, z_top, light_speed_in_medium.
 
@@ -332,8 +390,13 @@ Per-photon loop (while alive):
      penetration_depth.
   4. Test detector crossings (record_hit); kill if absorbed.
   5. Boundary check (is_inside); kill if escaped.
-  6. Next-event estimators: detector.run_estimators(photon, sample).
-  7. Sample θ (phase function), evaluate S(θ), then sample φ conditionally.
+  6. Select the scattering species for this vertex: photon.active_medium =
+     layer.select_scatter_medium(rng) (a HomogeneousLayer draws nothing; a
+     MixtureLayer draws one species ∝ mu_s^(i)). Store it on the photon FIRST so
+     the estimator and the real scatter below use the SAME species at this vertex,
+     then run detector.run_estimators(photon, sample).
+  7. Sample θ (from active_medium's phase function), evaluate S(θ), then sample φ
+     conditionally.
   8. Update P_local via A(θ,φ).
   9. If polarized: build T=S·R, compute F, update the Jones vector by T/√F.
  10. If track_reverse_paths: update the CBS frame snapshots and the interior
@@ -424,9 +487,12 @@ which is a stale name; and NOT src/cbs.cpp, which is DEAD CODE — see §14).
   incoherent channels, i.e. they form a flat background).
 
 8.2 Reverse-field reconstruction (reverse_field, Xu 2008 Eq. 3)
-  Using the stored frame snapshots (P0,P1,Pn1,Pn), the first/last scatter
-  layers, the RAW interior product matrix_T_raw, and the launch polarization,
-  the reverse Jones vector is built in three stages:
+  Using the stored frame snapshots (P0,P1,Pn1,Pn), the first/last scatter SPECIES
+  (photon.first_scatter_medium / last_scatter_medium — the amplitude matrices for
+  Stages C and A are taken from the species the photon actually scattered against,
+  NOT from the layer index, so mixtures are correct), the RAW interior product
+  matrix_T_raw, and the launch polarization, the reverse Jones vector is built in
+  three stages:
       E_rev = S^(1) R(φ1') · T^rev · R(φn') S^(n) R(φn) · E0,   T^rev = Q T^T Q,
       Q = diag(1,-1).
     Stage A: first reverse scatter at r_n, s0 -> -s_{n-1}.
@@ -464,8 +530,14 @@ which is a stale name; and NOT src/cbs.cpp, which is DEAD CODE — see §14).
 
 8.6 Estimator (FarFieldCBSSensor::process_estimation)
   Forced detection over every (theta,phi) bin after each event:
-    - I_norm = ∫(|s1|²+|s2|²) sinθ dθ is cached, keyed on BOTH the medium
-      pointer AND k (critical for layered samples).
+    - The estimator uses photon.active_medium (the species selected for this
+      vertex) for S(θ), F and the angular normalization, but the LAYER's aggregate
+      albedo (mu_scattering/mu_attenuation) for the scatter weight w_scatter.
+    - I_norm = ∫(|s1|²+|s2|²) sinθ dθ is cached in a per-species map
+      (_I_norm_by_medium), keyed on the medium pointer; k acts only as an
+      invalidation guard (the whole map is cleared if k changes). A single-slot
+      cache would recompute the integral every event in a mixture, since
+      active_medium changes vertex to vertex.
     - For each bin: build s_out, intersect the z=0 plane (distance L), compute
       the layer-by-layer transmittance Tr = exp(-Σ μ_{t,i} L_i)
       (optical_depth_to_detector; fast path μ_t·L for single-layer samples),
@@ -549,9 +621,24 @@ Media (constructors do NOT set transport; configure explicitly):
   medium.set_mean_free_path(mfp)              # drives free-path sampling
   medium.set_scattering_coefficient(mu_s)     # drives absorption split + estimator
   medium.set_absorption_coefficient(mu_a)
+  medium.scattering_cross_section()           # sigma_s [mm²] from the phase function
+        (0 unless the phase function is EMC/Mie; used by MixtureLayer to derive
+         mu_s^(i) = n_i · sigma_s^(i)). The RGDMedium/MieMedium ctors keep the
+         phase function alive (py::keep_alive) since it is stored as a raw pointer.
 
-Sample:
-  Sample(n_medium=1.0); sample.add_layer(medium, z_min, z_max)  # use float('inf') for top
+Sample and layers:
+  Sample(n_medium=1.0)
+  sample.add_layer(medium, z_min, z_max)               # HomogeneousLayer (1 species)
+  sample.add_mixture_layer(species, number_densities,  # MixtureLayer (N species)
+                           z_min, z_max)
+        # species: list of ScatteringMedium; number_densities: list of n_i [1/mm³];
+        # both contiguous with the current top; use float('inf') for the top z_max.
+        # The species list is kept alive for the Sample's lifetime (keep_alive).
+  Layer types are exposed as Layer (abstract base: z_min, z_max, contains,
+  thickness, mu_attenuation/mu_scattering/mu_absorption), SampleLayer(Layer)
+  (single-species; .medium), and MixtureLayer(Layer) (.species, .number_densities,
+  .mu_s_i, .selection_cdf, .mu_s_total, .mu_a_total, .mu_t_total, .mfp_total).
+  sample.layers / sample.get_layer(i) return the polymorphic `Layer` base.
 
 Laser:
   Laser(m_state, n_state, wavelength, sigma, source_type)        # source_type: LaserSource.{Point,Uniform,Gaussian}
@@ -620,6 +707,11 @@ gone):
     PlanarFluenceResult, PlanarFieldResult, StatisticsResult,
     PhotonRecordsResult, AbsorptionResult, and the *ProcessedResult variants),
     plus RESULT_BUILDERS used by the loader.
+    LayerParams is discriminated by a `kind` field: "homogeneous" stores a single
+    `medium: MediumParams`; "mixture" stores `species: List[MediumParams]`,
+    `number_densities` and the aggregate mu_*_total / mfp_total. Its JSON
+    round-trip goes through _layer_to_dict/_layer_from_dict, and old files without
+    a `kind` load as homogeneous.
   - manager.py:
       Experiment(name, base_dir="sim_results", h5_name="results.h5",
                  timestamped=True) — creates a (timestamped) dir + results.h5
@@ -635,8 +727,16 @@ gone):
         far_field_cbs / planar_fluence / planar_field / statistics /
         photon_records, processed_cbs / processed_fluence / processed_field,
         absorption(...), plus raw sensor_data / derived / [path] indexing.
-      capture_params, derived_quantities(medium, volume_fraction) — central
-        g / l_s / l* / theta_coherent / size_parameter / m_relative.
+      capture_params — auto-captures every layer (homogeneous or mixture) via the
+        _layer_params helper; save_params' flat scalar projection reports the top
+        layer's `layer_kind` and, for a mixture, medium_kind="mixture" + n_species
+        + the aggregate mu_s/mu_a/mu_t/mfp_total.
+      derived_quantities(medium, volume_fraction) — central g / l_s / l* /
+        theta_coherent / size_parameter / m_relative for a single species.
+      derived_quantities_mixture(species, number_densities) — the mixture analogue
+        (typed: Sequence[ScatteringMedium], Sequence[float] -> Dict[str, Any]);
+        returns per-species mu_s^(i)/g_i plus mu_s_total, g_eff, l_s, l* and
+        theta_coherent. Both are meant to be passed as extra= to save_params.
   - sweepmanager.py: SweepManager for parameter sweeps.
   To add a sensor to persistence: one SENSOR_SCHEMAS entry + a *Result dataclass
   + a RESULT_BUILDERS builder. Nothing in manager.py changes.
@@ -670,6 +770,18 @@ with PYTHONPATH=python; or reinstall.
      (old positional MieMedium/RGDMedium/SimConfig args, bin counts instead of
      widths, removed sensor types). Prefer results/ for current patterns and
      validate every signature against python/python_module.cpp.
+ 13. MixtureLayer needs a NON-ZERO scattering_cross_section() per species, which
+     only EMC/Mie phase functions provide — other phase functions return 0 and
+     the ctor throws (mu_s_total ≤ 0). The mixture's mu_s comes from
+     n_i · sigma_s^(i), NOT from set_scattering_coefficient; but each species'
+     set_scattering_coefficient/set_absorption_coefficient still set the per-
+     species albedo used for the aggregate mu_a. As always, set_mean_free_path on
+     each species is irrelevant to the mixture (the layer samples from mfp_total).
+ 14. Sample is MOVE-ONLY (owns unique_ptr<Layer>). Its Python `layers` /
+     get_layer return the abstract `Layer`; downcast via isinstance to MixtureLayer
+     / SampleLayer to read species vs medium. The species list passed to
+     add_mixture_layer (and each phase function passed to a medium ctor) is stored
+     as raw pointers — keep the Python objects alive for the whole run.
 
 
 16) Where to look before changing behavior

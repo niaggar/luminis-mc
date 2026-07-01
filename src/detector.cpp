@@ -61,13 +61,13 @@ namespace luminis::core
     // the optical depth is simply μ_t · L over the whole ray. This is the common
     // case and is hit once per angular bin by the CBS estimator.
     if (medium.size() == 1)
-      return medium.get_layer(layer).medium->mu_attenuation * L_total;
+      return medium.get_layer(layer).mu_attenuation() * L_total;
     const double dz = dir.z;
 
     while (traveled < L_total - 1e-15)
     {
       const double remaining = L_total - traveled;
-      const double mu = medium.get_layer(layer).medium->mu_attenuation;
+      const double mu = medium.get_layer(layer).mu_attenuation();
 
       double seg = remaining;
       if (std::abs(dz) > 1e-15)
@@ -1029,10 +1029,12 @@ namespace luminis::core
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Stages A + B. Returns the Jones vector right before the last reverse scatter.
-  static CVec2 reverse_field_prefix(const Sample &medium,
-                                    const Matrix &P0, const Matrix &P_nm1,
+  // `med_n` is the species at the LAST scattering vertex (r_n) — the amplitude
+  // matrix for Stage A is taken from it, not from the layer index, so mixtures
+  // use the species the photon actually scattered against.
+  static CVec2 reverse_field_prefix(const Matrix &P0, const Matrix &P_nm1,
                                     const CMatrix &T_interior_raw,
-                                    int layer_n, const CVec2 &E_in)
+                                    const ScatteringMedium *med_n, const CVec2 &E_in)
   {
     const Vec3 s0 = row_vec3(P0, 2);
     const Vec3 snm1 = row_vec3(P_nm1, 2);
@@ -1049,7 +1051,7 @@ namespace luminis::core
     const Vec3 s_in_a = s0;
     const Vec3 s_out_a = snm1 * (-1.0);
     const double th_a = std::acos(clamp_pm1(dot(s_in_a, s_out_a)));
-    const CMatrix S_a = medium.get_layer(layer_n).medium->scattering_matrix(th_a, 0.0);
+    const CMatrix S_a = med_n->scattering_matrix(th_a, 0.0);
 
     const Vec3 nprime = safe_unit(cross(s_in_a, s_out_a), n0);
     const Vec3 mprime_in = safe_unit(cross(nprime, s_in_a), m0);
@@ -1074,9 +1076,9 @@ namespace luminis::core
   }
 
   // Stage C + final normalization. `E_prefix` is the output of reverse_field_prefix.
-  static CVec2 reverse_field_suffix(const Sample &medium,
-                                    const Matrix &P1, const Matrix &P_n,
-                                    int layer_1, const CVec2 &E_prefix)
+  // `med_1` is the species at the FIRST scattering vertex (r_1).
+  static CVec2 reverse_field_suffix(const Matrix &P1, const Matrix &P_n,
+                                    const ScatteringMedium *med_1, const CVec2 &E_prefix)
   {
     const Vec3 s1 = row_vec3(P1, 2);
     const Vec3 sn = row_vec3(P_n, 2);
@@ -1087,7 +1089,7 @@ namespace luminis::core
     const Vec3 s_in_c = s1 * (-1.0);
     const Vec3 s_out_c = sn;
     const double th_c = std::acos(clamp_pm1(dot(s_in_c, s_out_c)));
-    const CMatrix S_c = medium.get_layer(layer_1).medium->scattering_matrix(th_c, 0.0);
+    const CMatrix S_c = med_1->scattering_matrix(th_c, 0.0);
 
     const Vec3 npp = safe_unit(cross(s_in_c, s_out_c), n1 * (-1.0));
     const Vec3 mpp_in = safe_unit(cross(npp, s_in_c), m1);
@@ -1115,15 +1117,14 @@ namespace luminis::core
 
   // Convenience wrapper: full prefix∘suffix. Used by the direct detector
   // (process_hit), which evaluates one exit frame per photon.
-  static CVec2 reverse_field(const Sample &medium,
-                             const Matrix &P0, const Matrix &P1,
+  static CVec2 reverse_field(const Matrix &P0, const Matrix &P1,
                              const Matrix &P_nm1, const Matrix &P_n,
                              const CMatrix &T_interior_raw,
-                             int layer_n, int layer_1,
+                             const ScatteringMedium *med_n, const ScatteringMedium *med_1,
                              const CVec2 &E_in)
   {
-    const CVec2 prefix = reverse_field_prefix(medium, P0, P_nm1, T_interior_raw, layer_n, E_in);
-    return reverse_field_suffix(medium, P1, P_n, layer_1, prefix);
+    const CVec2 prefix = reverse_field_prefix(P0, P_nm1, T_interior_raw, med_n, E_in);
+    return reverse_field_suffix(P1, P_n, med_1, prefix);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1236,8 +1237,8 @@ namespace luminis::core
 
     // Reverse-path Jones vector in the exit basis (m_n, n_n).
     const CVec2 Er_loc = reverse_field(
-        medium, photon.P0, photon.P1, photon.Pn1, photon.Pn,
-        photon.matrix_T_raw, photon.last_scatter_layer, photon.first_scatter_layer,
+        photon.P0, photon.P1, photon.Pn1, photon.Pn,
+        photon.matrix_T_raw, photon.last_scatter_medium, photon.first_scatter_medium,
         photon.initial_polarization);
     photon.polarization_reverse = Er_loc;
 
@@ -1278,14 +1279,33 @@ namespace luminis::core
          static_cast<int>(photon.events) > filter_events_max))
       return;
 
-    const ScatteringMedium *med = medium.get_layer(photon.current_layer).medium;
+    // Two distinct roles at this vertex:
+    //   - `med` is the SPECIES selected for this scatter (active_medium): it
+    //     drives S(θ), F, and the I_norm angular normalization.
+    //   - `scatter_layer` provides the layer's AGGREGATE albedo (μ_s/μ_t) for
+    //     the weight. For a HomogeneousLayer the two coincide.
+    const ScatteringMedium *med = photon.active_medium;
+    const Layer &scatter_layer = medium.get_layer(photon.current_layer);
 
-    // I_norm cache: keyed on BOTH medium and k (critical for layered samples).
-    if (_I_norm < 0.0 || _I_norm_medium != med || std::abs(_I_norm_k - photon.k) > 1e-12)
+    // I_norm cache, one slot per species pointer (keyed implicitly on the medium;
+    // k is fixed within a run and acts only as an invalidation guard). With a
+    // mixture `med` changes every event, so a single slot would recompute the
+    // 2048-point integral each time.
+    if (std::abs(_I_norm_k - photon.k) > 1e-12)
     {
-      _I_norm = compute_I_norm(*med, photon.k);
+      _I_norm_by_medium.clear(); // k changed: every cached value is stale.
       _I_norm_k = photon.k;
-      _I_norm_medium = med;
+    }
+    double _I_norm;
+    {
+      auto it = _I_norm_by_medium.find(med);
+      if (it != _I_norm_by_medium.end())
+        _I_norm = it->second;
+      else
+      {
+        _I_norm = compute_I_norm(*med, photon.k);
+        _I_norm_by_medium.emplace(med, _I_norm);
+      }
     }
     if (_I_norm < 1e-300)
       return;
@@ -1310,7 +1330,7 @@ namespace luminis::core
       const Vec3 n_cur = row_vec3(Pcur, 1);
       const Vec3 s_cur = row_vec3(Pcur, 2); // == s_in
 
-      const double w_scatter = photon.weight * (med->mu_scattering / med->mu_attenuation);
+      const double w_scatter = photon.weight * (scatter_layer.mu_scattering() / scatter_layer.mu_attenuation());
       if (w_scatter < 1e-300)
         return;
 
@@ -1416,7 +1436,7 @@ namespace luminis::core
     // interior product Tmid_raw and the input polarization — none of which vary
     // across bins. Compute it once here; the per-bin loop only runs Stage C.
     const CVec2 rev_prefix = reverse_field_prefix(
-        medium, photon.P0, Pcur, Tmid_raw, photon.current_layer, photon.initial_polarization);
+        photon.P0, Pcur, Tmid_raw, photon.active_medium, photon.initial_polarization);
 
     for (int it = 0; it < i_max; ++it)
     {
@@ -1475,7 +1495,7 @@ namespace luminis::core
         // bin-dependent Stage C (suffix) runs here.
         const CVec2 Ef_loc = apply_scatter_normalized(S, cos_phi, sin_phi, photon.polarization);
         const CVec2 Er_loc = reverse_field_suffix(
-            medium, photon.P1, P_exit, photon.first_scatter_layer, rev_prefix);
+            photon.P1, P_exit, photon.first_scatter_medium, rev_prefix);
 
         // CBS geometric phase (estimated r_n = current position).
         const Vec3 qb = (s_out + s_in) * photon.k;

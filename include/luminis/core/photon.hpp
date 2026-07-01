@@ -34,6 +34,7 @@
 #pragma once
 #include <complex>
 #include <luminis/math/vec.hpp>
+#include <luminis/core/medium.hpp>
 #include <sys/types.h>
 #include <array>
 
@@ -85,6 +86,18 @@ namespace luminis::core
     // ─── Layer tracking ──────────────────────────────────────────────────────
 
     std::size_t current_layer{0};  ///< Index of the current Sample layer the photon is in.
+
+    /// @brief Species selected for the CURRENT scattering event (not owned).
+    /// Resolved from the layer via `select_scatter_medium()` before the
+    /// estimator runs, so the estimator and the real scatter use the same
+    /// species at a given vertex. For a HomogeneousLayer this is the layer's
+    /// only medium.
+    const ScatteringMedium* active_medium = nullptr;
+
+    /// @brief Species of the FIRST scattering vertex (CBS Stage C); not owned.
+    const ScatteringMedium* first_scatter_medium = nullptr;
+    /// @brief Species of the LAST scattering vertex (CBS Stage A); not owned.
+    const ScatteringMedium* last_scatter_medium = nullptr;
 
     // ─── Polarization state ──────────────────────────────────────────────────
 

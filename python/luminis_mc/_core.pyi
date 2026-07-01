@@ -2,10 +2,11 @@
 Python bindings for the luminis-mc Monte Carlo core
 """
 from __future__ import annotations
+import collections.abc
 import numpy
 import numpy.typing
 import typing
-__all__: list[str] = ['Absorption', 'Backward', 'Both', 'CMatrix', 'CVec2', 'CW', 'CrossingDirection', 'Delta', 'DrainePhaseFunction', 'Exponential', 'ExponentialTime', 'FarFieldCBSProcessed', 'FarFieldCBSRadialProcessed', 'FarFieldCBSSensor', 'Forward', 'Gaussian', 'HardSpheres', 'HenyeyGreensteinPhaseFunction', 'Laser', 'LaserSource', 'LogLevel', 'Matrix', 'MetropolisHastings', 'MieMedium', 'MiePhaseFunction', 'PhaseFunction', 'Photon', 'PhotonRecord', 'PhotonRecordSensor', 'PlanarFieldProcessed', 'PlanarFieldSensor', 'PlanarFluenceProcessed', 'PlanarFluenceSensor', 'Point', 'PulseTrain', 'RGDMedium', 'RayleighDebyeEMCPhaseFunction', 'RayleighDebyePhaseFunction', 'RayleighPhaseFunction', 'Rng', 'Sample', 'SampleLayer', 'ScatteringMedium', 'Sensor', 'SensorsGroup', 'SimConfig', 'StatisticsSensor', 'StokesMatrixProcessed', 'StokesRadialProcessed', 'TargetDistribution', 'TemporalProfile', 'TopHat', 'Uniform', 'UniformPhaseFunction', 'Vec2', 'Vec3', 'calculate_rotation_angle', 'cross', 'debug', 'dot', 'error', 'form_factor', 'gaussian_distribution', 'info', 'matcmul', 'matcmulscalar', 'norm', 'off', 'postprocess_farfield_cbs', 'postprocess_planar_field', 'postprocess_planar_fluence', 'run_simulation_parallel', 'set_log_level', 'uniform_distribution', 'warn']
+__all__: list[str] = ['Absorption', 'Backward', 'Both', 'CMatrix', 'CVec2', 'CW', 'CrossingDirection', 'Delta', 'DrainePhaseFunction', 'Exponential', 'ExponentialTime', 'FarFieldCBSProcessed', 'FarFieldCBSRadialProcessed', 'FarFieldCBSSensor', 'Forward', 'Gaussian', 'HardSpheres', 'HenyeyGreensteinPhaseFunction', 'Laser', 'LaserSource', 'Layer', 'LogLevel', 'Matrix', 'MetropolisHastings', 'MieMedium', 'MiePhaseFunction', 'MixtureLayer', 'PhaseFunction', 'Photon', 'PhotonRecord', 'PhotonRecordSensor', 'PlanarFieldProcessed', 'PlanarFieldSensor', 'PlanarFluenceProcessed', 'PlanarFluenceSensor', 'Point', 'PulseTrain', 'RGDMedium', 'RayleighDebyeEMCPhaseFunction', 'RayleighDebyePhaseFunction', 'RayleighPhaseFunction', 'Rng', 'Sample', 'SampleLayer', 'ScatteringMedium', 'Sensor', 'SensorsGroup', 'SimConfig', 'StatisticsSensor', 'StokesMatrixProcessed', 'StokesRadialProcessed', 'TargetDistribution', 'TemporalProfile', 'TopHat', 'Uniform', 'UniformPhaseFunction', 'Vec2', 'Vec3', 'calculate_rotation_angle', 'cross', 'debug', 'dot', 'error', 'form_factor', 'gaussian_distribution', 'info', 'matcmul', 'matcmulscalar', 'norm', 'off', 'postprocess_farfield_cbs', 'postprocess_planar_field', 'postprocess_planar_fluence', 'run_simulation_parallel', 'set_log_level', 'uniform_distribution', 'warn']
 class Absorption:
     def __init__(self, radius: typing.SupportsFloat | typing.SupportsIndex, depth: typing.SupportsFloat | typing.SupportsIndex, d_r: typing.SupportsFloat | typing.SupportsIndex, d_z: typing.SupportsFloat | typing.SupportsIndex, d_t: typing.SupportsFloat | typing.SupportsIndex = 0.0, t_max: typing.SupportsFloat | typing.SupportsIndex = 0.0) -> None:
         """
@@ -359,6 +360,33 @@ class LaserSource:
     @property
     def value(self) -> int:
         ...
+class Layer:
+    def contains(self, z: typing.SupportsFloat | typing.SupportsIndex) -> bool:
+        """
+        Check if a z-coordinate lies within this layer
+        """
+    def mu_absorption(self) -> float:
+        """
+        Aggregate absorption coefficient mu_a of the layer
+        """
+    def mu_attenuation(self) -> float:
+        """
+        Aggregate extinction coefficient mu_t of the layer
+        """
+    def mu_scattering(self) -> float:
+        """
+        Aggregate scattering coefficient mu_s of the layer
+        """
+    def thickness(self) -> float:
+        """
+        Return the thickness of the layer
+        """
+    @property
+    def z_max(self) -> float:
+        ...
+    @property
+    def z_min(self) -> float:
+        ...
 class LogLevel:
     """
     Members:
@@ -481,6 +509,35 @@ class MiePhaseFunction(PhaseFunction):
         ...
     def rho_phase_function(self, x: typing.SupportsFloat | typing.SupportsIndex) -> float:
         ...
+class MixtureLayer(Layer):
+    def __init__(self, species: collections.abc.Sequence[ScatteringMedium], number_densities: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], z_min: typing.SupportsFloat | typing.SupportsIndex, z_max: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def mfp_total(self) -> float:
+        ...
+    @property
+    def mu_a_total(self) -> float:
+        ...
+    @property
+    def mu_s_i(self) -> list[float]:
+        ...
+    @property
+    def mu_s_total(self) -> float:
+        ...
+    @property
+    def mu_t_total(self) -> float:
+        ...
+    @property
+    def number_densities(self) -> list[float]:
+        ...
+    @property
+    def selection_cdf(self) -> list[float]:
+        ...
+    @property
+    def species(self) -> list[ScatteringMedium]:
+        """
+        Co-located scattering species.
+        """
 class PhaseFunction:
     def get_anisotropy_factor(self, n_samples: typing.SupportsInt | typing.SupportsIndex = 200000) -> typing.Annotated[list[float], "FixedSize(2)"]:
         """
@@ -790,7 +847,7 @@ class RayleighPhaseFunction(PhaseFunction):
     def pdf(self, x: typing.SupportsFloat | typing.SupportsIndex) -> float:
         ...
 class Rng:
-    def __init__(self, seed: typing.SupportsInt | typing.SupportsIndex = 2199147139) -> None:
+    def __init__(self, seed: typing.SupportsInt | typing.SupportsIndex = 3820158083) -> None:
         """
         Initialize the RNG with an optional seed
         """
@@ -811,7 +868,11 @@ class Sample:
         """
         Add a new layer to the top of the sample
         """
-    def get_layer(self, index: typing.SupportsInt | typing.SupportsIndex) -> SampleLayer:
+    def add_mixture_layer(self, species: collections.abc.Sequence[ScatteringMedium], number_densities: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], z_min: typing.SupportsFloat | typing.SupportsIndex, z_max: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        """
+        Add a mixture layer (several co-located species) to the top of the sample
+        """
+    def get_layer(self, index: typing.SupportsInt | typing.SupportsIndex) -> Layer:
         """
         Access a layer by index
         """
@@ -835,33 +896,21 @@ class Sample:
     def interfaces(self) -> list[float]:
         ...
     @property
-    def layers(self) -> list[SampleLayer]:
-        ...
+    def layers(self) -> list[Layer]:
+        """
+        List of the sample's layers (polymorphic).
+        """
     @property
     def light_speed(self) -> float:
         ...
     @property
     def refractive_index(self) -> float:
         ...
-class SampleLayer:
+class SampleLayer(Layer):
     def __init__(self, medium: ScatteringMedium, z_min: typing.SupportsFloat | typing.SupportsIndex, z_max: typing.SupportsFloat | typing.SupportsIndex) -> None:
         ...
-    def contains(self, z: typing.SupportsFloat | typing.SupportsIndex) -> bool:
-        """
-        Check if a z-coordinate lies within this layer
-        """
-    def thickness(self) -> float:
-        """
-        Return the thickness of the layer
-        """
     @property
     def medium(self) -> ScatteringMedium:
-        ...
-    @property
-    def z_max(self) -> float:
-        ...
-    @property
-    def z_min(self) -> float:
         ...
 class ScatteringMedium:
     def sample_azimuthal_angle(self, rng: Rng) -> float:
@@ -879,6 +928,10 @@ class ScatteringMedium:
     def sample_scattering_angle(self, rng: Rng) -> float:
         """
         Sample the scattering angle in the medium
+        """
+    def scattering_cross_section(self) -> float:
+        """
+        Single-particle scattering cross-section sigma_s [mm^2] (from the phase function)
         """
     def scattering_matrix(self, theta: typing.SupportsFloat | typing.SupportsIndex, phi: typing.SupportsFloat | typing.SupportsIndex) -> CMatrix:
         """
@@ -1006,12 +1059,12 @@ class Sensor:
 class SensorsGroup:
     def __init__(self) -> None:
         ...
-    def add_detector(self, detector: ...) -> ...:
+    def add_detector(self, detector: Sensor) -> Sensor:
         """
         Add a (cloned) detector to the group and return a reference to the internal copy
         """
     @property
-    def detectors(self) -> list[...]:
+    def detectors(self) -> list[Sensor]:
         ...
 class SimConfig:
     absorption: Absorption
