@@ -271,6 +271,8 @@ class FarFieldCBSResult:
     N_t: int
     theta_max: float
     phi_max: float
+    phi_explicit: bool = False
+    phi_values: Optional[np.ndarray] = None
 
     @property
     def theta(self) -> np.ndarray:
@@ -278,10 +280,15 @@ class FarFieldCBSResult:
 
     @property
     def phi(self) -> np.ndarray:
+        # Explicit-slice runs store the exact per-column angles; the uniform grid
+        # (and old files) fall back to the evenly spaced convention.
+        if self.phi_explicit and self.phi_values is not None:
+            return np.asarray(self.phi_values, dtype=float)
         return np.linspace(0.0, self.phi_max, self.N_phi)
 
     @classmethod
     def from_h5(cls, meta: Dict[str, Any], data: Dict[str, np.ndarray]) -> "FarFieldCBSResult":
+        phi_values = meta.get("phi_values", None)
         return cls(
             meta=SensorMeta.from_raw(meta),
             S0_coh=data["S0_coh"], S1_coh=data["S1_coh"], S2_coh=data["S2_coh"], S3_coh=data["S3_coh"],
@@ -292,6 +299,8 @@ class FarFieldCBSResult:
             N_t=int(_py(meta.get("N_t", 0))),
             theta_max=float(_py(meta.get("theta_max", 0.0))),
             phi_max=float(_py(meta.get("phi_max", 0.0))),
+            phi_explicit=bool(_py(meta.get("phi_explicit", False))),
+            phi_values=None if phi_values is None else np.asarray(phi_values, dtype=float),
         )
 
 

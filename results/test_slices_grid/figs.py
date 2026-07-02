@@ -1,19 +1,3 @@
-"""
-Figuras de validacion CBS -- polarizacion lineal (Iwai et al. 1995).
-
-Genera:
-  A) Overlay co-polarizado (intensidad normalizada vs angulo) -> analogo Fig. 2(a).
-  B) Colapso del cono en variable reducida q = k l* theta.
-  C) Desglose de canales (co / cross / total) para un radio representativo.
-
-NOTA: se calcula theta_coherent desde l* (k = 2*pi*n_medium/lambda) y NO desde
-p.extra["theta_coherent"], que arrastra un factor 180/pi (bug en derived_quantities).
-
-SUPUESTO DE API: se usa la base 'linear' (analoga a 'circular' del snippet base).
-Si en results.utils.analysis el nombre/keys difieren, ajustar el import y las
-claves enhancement["co"]/["cross"] (co = paralela ∥, cross = perpendicular ⊥).
-"""
-
 from utils.loaders import load_sweep
 from utils.styles import apply
 from utils.analysis import cbs_profiles, linear
@@ -24,8 +8,8 @@ import matplotlib.pyplot as plt
 
 apply(context="paper", col="single")
 
-save_path = "/home/niaggar/Developer/luminis-mc/temporal_results"
-folder = "cbs_poly_validation_linear"
+save_path = "/Users/niaggar/Documents/Thesis/tests"
+folder = "test_slices_grid"
 
 # Constantes del estudio (host acuoso, linea de Iwai)
 N_MEDIUM = 1.33

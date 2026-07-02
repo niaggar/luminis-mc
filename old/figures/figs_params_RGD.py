@@ -1,4 +1,4 @@
-from results.utils.styles import apply
+from utils.styles import apply
 import numpy as np
 
 from luminis_mc import (

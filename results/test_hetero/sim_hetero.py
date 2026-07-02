@@ -281,7 +281,7 @@ def run_mixture_simulation(exp: Experiment):
 
     # --- run ---
     t0 = time.time()
-    run_simulation_parallel(config)
+    run_simulation_parallel(config)clear
     print("runtime_s:", time.time() - t0)
     print("hits:", det.hits)
 

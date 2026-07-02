@@ -551,6 +551,14 @@ which is a stale name; and NOT src/cbs.cpp, which is DEAD CODE — see §14).
   theta_pp_max caps the estimator's angular reach (defaults to theta_max if <0).
   The angular-bin trig (cos/sin of centers, per-θ solid-angle band) is
   precomputed in the ctor (and thus re-run by clone()).
+  set_phi_slices([φ...]) restricts the φ axis to an EXPLICIT list of exact φ
+  angles (estimator-only): N_phi becomes the slice count, cos_ph_det/sin_ph_det/
+  phi_values are rebuilt to the exact angles and the Stokes grids re-zeroed. The
+  hot loop is unchanged (it already iterates jp<N_phi over the trig caches), so
+  computing k slices instead of a full φ grid is ~N_phi/k cheaper. clone() re-
+  applies it (phi_explicit + phi_values) so per-worker clones keep the same φ-
+  column count that merge_from relies on. dphi stays as a nominal φ width and
+  cancels in eta.
 
   NEVER enable both modes on the same sensor instance — the angular
   distribution would be double-counted.
@@ -653,6 +661,15 @@ Sensors:
   FarFieldCBSSensor(theta_max, phi_max, len_t, d_theta, d_phi, d_t, estimator=False)
         NOTE: d_theta/d_phi/d_t are bin WIDTHS, not counts. theta_pp_max is a
         read/write attribute (estimator angular cap).
+        det.set_phi_slices([phi0, phi1, ...])   # estimator-only explicit-phi mode
+        Replaces the uniform phi grid with the given EXACT phi angles [rad] (sorted,
+        de-duplicated): N_phi becomes the slice count and the estimator computes only
+        those columns — an ~N_phi/n_slices speedup when only a few azimuthal cuts are
+        needed at high n_theta. Call before add_detector. dphi is kept only as a
+        nominal azimuthal width (cancels in eta = S0_coh/S0_incoh). Read-only
+        attributes phi_values (per-column angles) and phi_explicit expose the state.
+        Estimator-only: in DIRECT mode the phi->column binning assumes the uniform
+        grid, so an explicit grid there mis-bins (guarded, no crash).
   StatisticsSensor(z, absorb=False) + set_*_histogram_bins / set_time_resolution
   SensorsGroup(); det = group.add_detector(SensorObj)   # returns the internal handle
 

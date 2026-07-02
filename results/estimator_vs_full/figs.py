@@ -1,6 +1,6 @@
-from results.utils.loaders import load_sweep
-from results.utils.styles import apply
-from results.utils.analysis import cbs_profiles, circular
+from utils.loaders import load_sweep
+from utils.styles import apply
+from utils.analysis import cbs_profiles, circular
 
 import numpy as np
 import matplotlib.pyplot as plt

@@ -28,9 +28,9 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from results.utils.loaders import load_sweep
-from results.utils.styles import apply
-from results.utils.analysis import cbs_profiles, linear
+from utils.loaders import load_sweep
+from utils.styles import apply
+from utils.analysis import cbs_profiles, linear
 
 
 apply(context="paper", col="single")

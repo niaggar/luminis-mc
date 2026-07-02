@@ -197,6 +197,10 @@ class FarFieldCBSSensor(Sensor):
         """
         Far-field CBS sensor accumulating coherent and incoherent Stokes on a (theta, phi) grid
         """
+    def set_phi_slices(self, phi_angles: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
+        """
+        Estimator-only: compute only the given exact phi angles [rad] (one column each) instead of the uniform phi grid. Call before the run.
+        """
     @property
     def N_phi(self) -> int:
         ...
@@ -240,7 +244,13 @@ class FarFieldCBSSensor(Sensor):
     def dtheta(self) -> float:
         ...
     @property
+    def phi_explicit(self) -> bool:
+        ...
+    @property
     def phi_max(self) -> float:
+        ...
+    @property
+    def phi_values(self) -> list[float]:
         ...
     @property
     def t_max(self) -> float:
@@ -847,7 +857,7 @@ class RayleighPhaseFunction(PhaseFunction):
     def pdf(self, x: typing.SupportsFloat | typing.SupportsIndex) -> float:
         ...
 class Rng:
-    def __init__(self, seed: typing.SupportsInt | typing.SupportsIndex = 3820158083) -> None:
+    def __init__(self, seed: typing.SupportsInt | typing.SupportsIndex = 4288001989) -> None:
         """
         Initialize the RNG with an optional seed
         """
