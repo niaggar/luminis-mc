@@ -15,8 +15,8 @@ Los mapas guardados son 2D (theta, phi); aqui se promedian azimutalmente
 (sobre phi) para obtener el perfil 1D del cono CBS.
 """
 
-from results.utils.loaders import load_sweep
-from results.utils.styles import apply
+from utils.loaders import load_sweep
+from utils.styles import apply
 
 import numpy as np
 import matplotlib.pyplot as plt

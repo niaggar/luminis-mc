@@ -379,7 +379,12 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("S1_incoh", &FarFieldCBSSensor::S1_incoh)
       .def_readonly("S2_incoh", &FarFieldCBSSensor::S2_incoh)
       .def_readonly("S3_incoh", &FarFieldCBSSensor::S3_incoh)
-      .def_readwrite("theta_pp_max", &FarFieldCBSSensor::theta_pp_max);
+      .def_readwrite("theta_pp_max", &FarFieldCBSSensor::theta_pp_max)
+      .def_readonly("phi_values", &FarFieldCBSSensor::phi_values)
+      .def_readonly("phi_explicit", &FarFieldCBSSensor::phi_explicit)
+      .def("set_phi_slices", &FarFieldCBSSensor::set_phi_slices, py::arg("phi_angles"),
+           "Estimator-only: compute only the given exact phi angles [rad] (one column "
+           "each) instead of the uniform phi grid. Call before the run.");
 
   py::class_<StatisticsSensor, Sensor>(m, "StatisticsSensor")
       .def(py::init<double, bool>(),

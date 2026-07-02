@@ -466,8 +466,20 @@ namespace luminis::core
     std::vector<double> cos_th_det;     ///< cos((it+0.5)·dtheta) for each θ bin.
     std::vector<double> sin_th_det;     ///< sin((it+0.5)·dtheta) for each θ bin.
     std::vector<double> dOmega_theta;   ///< cos(it·dtheta) − cos((it+1)·dtheta) (θ-band solid angle, ×dφ).
-    std::vector<double> cos_ph_det;     ///< cos((jp+0.5)·dphi) for each φ bin.
-    std::vector<double> sin_ph_det;     ///< sin((jp+0.5)·dphi) for each φ bin.
+    std::vector<double> cos_ph_det;     ///< cos of each φ column center.
+    std::vector<double> sin_ph_det;     ///< sin of each φ column center.
+    /// @}
+
+    /// @name Explicit φ-slice mode
+    /// @brief By default the φ axis is a uniform grid of N_phi = ceil(phi_max/dphi)
+    ///        bins with centers (jp+0.5)·dphi. set_phi_slices() switches the sensor
+    ///        into an explicit-angle mode where the estimator computes ONLY the given
+    ///        φ angles (one column each) — a large speedup when only a few azimuthal
+    ///        cuts are needed at high θ resolution. Estimator-only: in direct mode the
+    ///        φ→column binning assumes the uniform grid.
+    /// @{
+    std::vector<double> phi_values;  ///< Center angle [rad] of each φ column (always populated).
+    bool phi_explicit{false};        ///< True once set_phi_slices() has reconfigured the φ axis.
     /// @}
 
     /// @name Angular normalization cache
@@ -509,6 +521,17 @@ namespace luminis::core
     FarFieldCBSSensor(double theta_max, double phi_max, double len_t, double d_theta, double d_phi, double d_t, bool estimator = false);
     std::unique_ptr<Sensor> clone() const override;
     void merge_from(const Sensor &other) override;
+
+    /// @brief Switch the estimator to an explicit list of exact φ angles.
+    /// @param phi_angles φ cuts [rad], each in [0, 2π]; sorted and de-duplicated.
+    /// @details Sets N_phi = number of unique angles, rebuilds the φ column caches
+    ///          (cos/sin/phi_values) to the exact angles and re-zeroes the Stokes
+    ///          accumulators. Call before the run (before add_detector). dphi is left
+    ///          unchanged and used only as a nominal azimuthal width in the estimator
+    ///          weight and solid-angle normalization; that constant factor cancels in
+    ///          η = S0_coh/S0_incoh. Estimator-only (see class docs).
+    /// @throws std::invalid_argument if the list is empty or any angle is outside [0, 2π].
+    void set_phi_slices(const std::vector<double> &phi_angles);
 
     /// @brief Process a backscattered photon, computing forward and reverse contributions.
     /// @details See the class-level documentation for the full algorithm description.

@@ -15,7 +15,7 @@ Ejecutar desde el directorio `plots/`:
     python figs_sampling_accuracy.py
 """
 
-from results.utils.styles import apply, COLORS
+from utils.styles import apply, COLORS
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema

@@ -90,6 +90,7 @@ SENSOR_SCHEMAS = {
         meta_attrs=(
             "N_theta", "N_phi", "N_t", "t_max",
             "theta_max", "phi_max", "dtheta", "dphi", "theta_pp_max",
+            "phi_values", "phi_explicit",
         ),
         data_attrs=(
             "S0_coh", "S1_coh", "S2_coh", "S3_coh",

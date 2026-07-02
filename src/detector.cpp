@@ -17,8 +17,10 @@
  * @see detector.hpp for class declarations and detailed API documentation.
  */
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
+#include <stdexcept>
 #include <luminis/core/detector.hpp>
 #include <luminis/core/photon.hpp>
 #include <luminis/core/medium.hpp>
@@ -894,12 +896,50 @@ namespace luminis::core
     }
     cos_ph_det.resize(N_phi);
     sin_ph_det.resize(N_phi);
+    phi_values.resize(N_phi);
     for (int jp = 0; jp < N_phi; ++jp)
     {
       const double ph_det = (jp + 0.5) * dphi;
       cos_ph_det[jp] = std::cos(ph_det);
       sin_ph_det[jp] = std::sin(ph_det);
+      phi_values[jp] = ph_det;
     }
+  }
+
+  void FarFieldCBSSensor::set_phi_slices(const std::vector<double> &phi_angles)
+  {
+    if (phi_angles.empty())
+      throw std::invalid_argument("set_phi_slices: phi_angles must be non-empty");
+
+    std::vector<double> angles = phi_angles;
+    for (double a : angles)
+      if (a < 0.0 || a > 2.0 * M_PI)
+        throw std::invalid_argument("set_phi_slices: every angle must be in [0, 2*pi]");
+    std::sort(angles.begin(), angles.end());
+    angles.erase(std::unique(angles.begin(), angles.end()), angles.end());
+
+    phi_explicit = true;
+    N_phi = static_cast<int>(angles.size());
+
+    cos_ph_det.resize(N_phi);
+    sin_ph_det.resize(N_phi);
+    phi_values.resize(N_phi);
+    for (int jp = 0; jp < N_phi; ++jp)
+    {
+      cos_ph_det[jp] = std::cos(angles[jp]);
+      sin_ph_det[jp] = std::sin(angles[jp]);
+      phi_values[jp] = angles[jp];
+    }
+
+    // Re-shape the Stokes accumulators to the new φ-column count (zeroed).
+    S0_coh.assign(N_t, Matrix(N_theta, N_phi));
+    S1_coh.assign(N_t, Matrix(N_theta, N_phi));
+    S2_coh.assign(N_t, Matrix(N_theta, N_phi));
+    S3_coh.assign(N_t, Matrix(N_theta, N_phi));
+    S0_incoh.assign(N_t, Matrix(N_theta, N_phi));
+    S1_incoh.assign(N_t, Matrix(N_theta, N_phi));
+    S2_incoh.assign(N_t, Matrix(N_theta, N_phi));
+    S3_incoh.assign(N_t, Matrix(N_theta, N_phi));
   }
 
   void FarFieldCBSSensor::merge_from(const Sensor &other)
@@ -947,6 +987,11 @@ namespace luminis::core
     det->filter_events_min = filter_events_min;
     det->filter_events_max = filter_events_max;
     det->theta_pp_max = theta_pp_max;
+    // Reproduce the explicit φ-slice grid (idempotent: phi_values is already
+    // sorted/unique). Must run so per-worker clones and add_detector's internal
+    // copy share the same φ-column count that merge_from() relies on.
+    if (phi_explicit)
+      det->set_phi_slices(phi_values);
     return det;
   }
 
