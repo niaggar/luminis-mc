@@ -20,7 +20,7 @@ set_log_level(LogLevel.info)
 # Salida
 # ===========================================================================
 EXP_NAME = "study_mixture_layer_MU_S_TOTAL_FIXED__PLIN"
-BASE_DIR = "/Users/niaggar/Documents/Thesis/tests"
+BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)

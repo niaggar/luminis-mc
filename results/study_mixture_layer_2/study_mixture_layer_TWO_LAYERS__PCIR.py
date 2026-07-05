@@ -19,7 +19,7 @@ set_log_level(LogLevel.info)
 # ===========================================================================
 # Salida
 # ===========================================================================
-EXP_NAME = "study_mixture_layer_MU_S_TOTAL_FIXED__PCIR"
+EXP_NAME = "study_mixture_layer_TWO_LAYERS__PCIR"
 BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)

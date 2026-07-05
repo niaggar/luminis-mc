@@ -19,7 +19,7 @@ set_log_level(LogLevel.info)
 # ===========================================================================
 # Salida
 # ===========================================================================
-EXP_NAME = "study_mixture_layer_MU_S_TOTAL_FIXED__PCIR"
+EXP_NAME = "study_mixture_layer_TWO_LAYERS__PLIN"
 BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
@@ -42,8 +42,9 @@ N_MEDIUM = 1.33
 WAVELENGTH = 0.514             # um
 MU_A_PERCENT = 0.0             # sin absorcion (gate de reciprocidad limpio)
 
-LASER_M = 1 / np.sqrt(2)
-LASER_N = -1j / np.sqrt(2)
+# Laser: polarizacion LINEAL a lo largo de m (X), incidencia normal.
+LASER_M = 1.0
+LASER_N = 0.0
 LASER_RADIUS_MFP = 4.0         # en unidades de l_s
 LASER_TYPE = LaserSource.Gaussian
 
