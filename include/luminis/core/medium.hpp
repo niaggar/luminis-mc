@@ -286,7 +286,6 @@ struct RGDMedium : public ScatteringMedium {
 struct MieMedium : public ScatteringMedium {
   double mean_free_path;          ///< Mean free path l = 1/μ_s [mm]
   double radius;                  ///< Particle radius [mm]
-  double wavelength;              ///< Vacuum wavelength of light [mm]
   std::complex<double> m;         ///< Relative refractive index m = n_particle / n_medium (real part only)
 
   DataTable S1_table; ///< Precomputed look-up table for the Mie amplitude function S1(θ)
