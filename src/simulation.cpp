@@ -180,7 +180,7 @@ namespace luminis::core
           Absorption *abs_ptr = config.absorption ? &thread_absorptions[t] : nullptr;
 
           // Photon velocity is uniform across all layers (shared host medium).
-          const double initial_velocity = config.sample->light_speed_in_medium();
+          const double initial_velocity = 1.0;
 
           while (true)
           {

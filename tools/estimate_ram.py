@@ -360,16 +360,16 @@ if __name__ == "__main__":
     # ---- EJEMPLO 1: CBS far-field con resolucion temporal, 14 hilos ----------
     spec = SimSpec(
         n_photons=10_000_000,
-        n_threads=15,
+        n_threads=44,
         track_reverse_paths=True,
         sensors=[
             # CBS angular con tiempo: theta_max, phi_max, d_theta, d_phi, len_t, dt
             FarFieldCBS(
-                theta_max=math.radians(10.0),    # cono CBS estrecho
+                theta_max=math.radians(1.0),    # cono CBS estrecho
                 phi_max=2 * math.pi,
-                d_theta=math.radians(10.0) / 300, # 300 bins en theta
-                d_phi=2 * math.pi / 1,         # 360 bins en phi
-                len_t=35.0, dt=1,              # Nt = 101
+                d_theta=math.radians(1.0) / 1000, # 300 bins en theta
+                d_phi=2 * math.pi / 36,         # 360 bins en phi
+                len_t=30.0, dt=30/1000,              # Nt = 101
             ),
             # Statistics(max_events=1000, n_bins_theta=300, n_t=101),
         ],
