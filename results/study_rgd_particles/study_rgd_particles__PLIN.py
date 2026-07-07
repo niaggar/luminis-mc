@@ -12,13 +12,15 @@ from luminis_mc import (
     set_log_level, LogLevel, LaserSource,
 )
 
+from utils.time import build_time_grid, depth_report
+
 set_log_level(LogLevel.info)
 
 # ===========================================================================
 # Salida
 # ===========================================================================
 EXP_NAME = "study_rgd_particles__PLIN"
-BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
+BASE_DIR = "/Users/niaggar/Documents/Thesis/tests"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
@@ -91,6 +93,11 @@ def set_albedo(medium, mu_a_percent, mfp):
     medium.set_mean_free_path(mfp)
 
 
+
+
+
+
+
 # ===========================================================================
 # Corrida
 # ===========================================================================
@@ -99,6 +106,9 @@ def run_cbs(exp, radius):
     dq = derived_quantities(especie, VOLUME_FRACTION)
     set_albedo(especie, MU_A_PERCENT, dq['mean_free_path'])
 
+    time_grid = build_time_grid(dq['transport_mean_free_path'], N_MEDIUM, n_bins=25, t_max_taustar=30, binning="geometric")
+    print(time_grid)
+
     sample = Sample(N_MEDIUM)
     sample.add_layer(especie, 0, float('inf'))
 
@@ -106,8 +116,8 @@ def run_cbs(exp, radius):
 
     d_theta = THETA_MAX / N_THETA
     d_phi = PHI_MAX / N_PHI
-    t_max = T_MAX_MULTI * dq['transport_mean_free_path']
-    dt = 0.0
+    t_max = time_grid["t_max_sim"]
+    dt = time_grid["dt_sim"]
 
     sens = SensorsGroup()
     det = sens.add_detector(
@@ -153,3 +163,5 @@ def run_cbs(exp, radius):
 for index, rad in enumerate(radius_values):
     name = f"radius_{rad:.2f}"
     sweep.run(index, name, lambda exp, rad=rad: run_cbs(exp, rad))
+
+

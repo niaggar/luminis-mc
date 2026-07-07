@@ -11,11 +11,11 @@ def load_run(run_dir: str | Path) -> ResultsLoader:
     """Return an open ResultsLoader for a single experiment run."""
     return ResultsLoader(BASE_RESULTS / run_dir)
 
-def load_sweep(folder_path: str) -> Dict[str, ResultsLoader]:
+def load_sweep(folder_path: str, base_path: Path = BASE_RESULTS) -> Dict[str, ResultsLoader]:
     """
     Load all runs from a sweep directory into a dict of ResultsLoader instances.
     """
-    sweep_path = BASE_RESULTS / folder_path
+    sweep_path = base_path / folder_path
     # Validate the input path
     if not sweep_path:
         raise ValueError("The sweep path cannot be empty.")
