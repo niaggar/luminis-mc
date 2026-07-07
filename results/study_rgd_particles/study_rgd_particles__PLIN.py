@@ -20,7 +20,7 @@ set_log_level(LogLevel.info)
 # Salida
 # ===========================================================================
 EXP_NAME = "study_rgd_particles__PLIN"
-BASE_DIR = "/Users/niaggar/Documents/Thesis/tests"
+BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
 sweep.snapshot_master_script(__main__.__file__)
@@ -58,14 +58,11 @@ N_PHI = 36
 PHI_MAX = 2 * np.pi
 THETA_MAX = np.deg2rad(1)
 
-T_MAX_MULTI = 0
-N_TIME_BINS = 0
-
 # ---------------------------------------------------------------------------
 # Muestreo
 # ---------------------------------------------------------------------------
-N_THREADS = 44
-N_PHOTONS = 100_000
+N_THREADS = 46
+N_PHOTONS = 50_000
 
 # ===========================================================================
 # Helpers
@@ -116,8 +113,8 @@ def run_cbs(exp, radius):
 
     d_theta = THETA_MAX / N_THETA
     d_phi = PHI_MAX / N_PHI
-    t_max = time_grid["t_max_sim"]
-    dt = time_grid["dt_sim"]
+    t_max = 0
+    dt = 0
 
     sens = SensorsGroup()
     det = sens.add_detector(

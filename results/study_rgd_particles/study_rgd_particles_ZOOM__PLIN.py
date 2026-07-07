@@ -12,6 +12,8 @@ from luminis_mc import (
     set_log_level, LogLevel, LaserSource,
 )
 
+from utils.time import build_time_grid, depth_report
+
 set_log_level(LogLevel.info)
 
 # ===========================================================================
@@ -56,14 +58,11 @@ N_PHI = 36
 PHI_MAX = 2 * np.pi
 THETA_MAX = np.deg2rad(0.4)
 
-T_MAX_MULTI = 0
-N_TIME_BINS = 0
-
 # ---------------------------------------------------------------------------
 # Muestreo
 # ---------------------------------------------------------------------------
-N_THREADS = 44
-N_PHOTONS = 100_000
+N_THREADS = 46
+N_PHOTONS = 50_000
 
 # ===========================================================================
 # Helpers
@@ -99,6 +98,9 @@ def run_cbs(exp, radius):
     dq = derived_quantities(especie, VOLUME_FRACTION)
     set_albedo(especie, MU_A_PERCENT, dq['mean_free_path'])
 
+    time_grid = build_time_grid(dq['transport_mean_free_path'], N_MEDIUM, n_bins=25, t_max_taustar=30, binning="geometric")
+    print(time_grid)
+
     sample = Sample(N_MEDIUM)
     sample.add_layer(especie, 0, float('inf'))
 
@@ -106,8 +108,8 @@ def run_cbs(exp, radius):
 
     d_theta = THETA_MAX / N_THETA
     d_phi = PHI_MAX / N_PHI
-    t_max = T_MAX_MULTI * dq['transport_mean_free_path']
-    dt = 0.0
+    t_max = 0
+    dt = 0
 
     sens = SensorsGroup()
     det = sens.add_detector(
