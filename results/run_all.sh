@@ -11,8 +11,10 @@ mkdir -p logs
 
 # Lista de scripts en el orden que quieres que corran
 scripts=(
-    "results.study_rgd_particles.study_rgd_particles__PCIR"
-    "results.study_rgd_particles.study_rgd_particles_TIMED__PLIN"
+    "results.study_mixture_layer_1.study_mixture_layer_MU_S_TOTAL_FIXED__PCIR"
+    "results.study_mixture_layer_1.study_mixture_layer_MU_S_TOTAL_FIXED__PLIN"
+    "results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS__PLIN"
+    "results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS_REV__PLIN"
 )
 
 echo "=== Inicio del batch: $(date) ===" | tee -a logs/batch_summary.log
