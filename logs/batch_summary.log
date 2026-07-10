@@ -1,0 +1,40 @@
+=== Inicio del batch: mar 07 jul 2026 18:08:38 -05 ===
+=== Python usado: /home/niaggar/Developer/luminis-mc/.venv/bin/python ===
+=== Iniciando results.study_rgd_particles.study_rgd_particles__PCIR (mar 07 jul 2026 18:08:38 -05) ===
+=== results.study_rgd_particles.study_rgd_particles__PCIR terminó OK (mar 07 jul 2026 19:52:16 -05) ===
+=== Iniciando results.study_rgd_particles.study_rgd_particles_TIMED__PLIN (mar 07 jul 2026 19:52:16 -05) ===
+=== results.study_rgd_particles.study_rgd_particles_TIMED__PLIN terminó OK (mar 07 jul 2026 20:24:14 -05) ===
+=== Batch completo: mar 07 jul 2026 20:24:14 -05 ===
+=== Inicio del batch: mar 07 jul 2026 21:13:39 -05 ===
+=== Python usado: /home/niaggar/Developer/luminis-mc/.venv/bin/python ===
+=== Iniciando results.study_rgd_particles.study_rgd_particles_TIMED__PLIN (mar 07 jul 2026 21:13:39 -05) ===
+=== results.study_rgd_particles.study_rgd_particles_TIMED__PLIN terminó OK (mar 07 jul 2026 22:33:45 -05) ===
+=== Batch completo: mar 07 jul 2026 22:33:45 -05 ===
+=== Inicio del batch: mié 08 jul 2026 07:35:24 -05 ===
+=== Python usado: /home/niaggar/Developer/luminis-mc/.venv/bin/python ===
+=== Iniciando results.study_mixture_layer_1.study_mixture_layer_MU_S_TOTAL_FIXED__PCIR (mié 08 jul 2026 07:35:24 -05) ===
+=== results.study_mixture_layer_1.study_mixture_layer_MU_S_TOTAL_FIXED__PCIR terminó OK (mié 08 jul 2026 10:44:42 -05) ===
+=== Iniciando results.study_mixture_layer_1.study_mixture_layer_MU_S_TOTAL_FIXED__PLIN (mié 08 jul 2026 10:44:42 -05) ===
+=== results.study_mixture_layer_1.study_mixture_layer_MU_S_TOTAL_FIXED__PLIN terminó OK (mié 08 jul 2026 13:52:25 -05) ===
+=== Iniciando results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS__PLIN (mié 08 jul 2026 13:52:25 -05) ===
+=== results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS__PLIN terminó OK (mié 08 jul 2026 14:40:34 -05) ===
+=== Iniciando results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS_REV__PLIN (mié 08 jul 2026 14:40:34 -05) ===
+=== results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS_REV__PLIN terminó OK (mié 08 jul 2026 14:57:03 -05) ===
+=== Batch completo: mié 08 jul 2026 14:57:03 -05 ===
+=== Inicio del batch: mié 08 jul 2026 15:47:14 -05 ===
+=== Python usado: /home/niaggar/Developer/luminis-mc/.venv/bin/python ===
+=== Iniciando results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS__PLIN (mié 08 jul 2026 15:47:14 -05) ===
+=== results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS__PLIN terminó OK (mié 08 jul 2026 18:11:02 -05) ===
+=== Iniciando results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS_REV__PLIN (mié 08 jul 2026 18:11:02 -05) ===
+=== results.study_mixture_layer_2.study_mixture_layer_TWO_LAYERS_REV__PLIN terminó OK (mié 08 jul 2026 18:58:00 -05) ===
+=== Batch completo: mié 08 jul 2026 18:58:00 -05 ===
+=== Inicio del batch: mié 08 jul 2026 22:40:54 -05 ===
+=== Python usado: /home/niaggar/Developer/luminis-mc/.venv/bin/python ===
+=== Iniciando results.study_estimator_vs_analog.study_estimator_vs_analog (mié 08 jul 2026 22:40:54 -05) ===
+=== results.study_estimator_vs_analog.study_estimator_vs_analog terminó OK (mié 08 jul 2026 23:08:17 -05) ===
+=== Batch completo: mié 08 jul 2026 23:08:17 -05 ===
+=== Inicio del batch: mié 08 jul 2026 23:19:43 -05 ===
+=== Python usado: /home/niaggar/Developer/luminis-mc/.venv/bin/python ===
+=== Iniciando results.study_estimator_vs_analog.study_estimator_vs_analog (mié 08 jul 2026 23:19:43 -05) ===
+=== results.study_estimator_vs_analog.study_estimator_vs_analog terminó OK (jue 09 jul 2026 04:37:48 -05) ===
+=== Batch completo: jue 09 jul 2026 04:37:48 -05 ===

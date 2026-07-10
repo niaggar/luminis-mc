@@ -1,0 +1,149 @@
+[10:44:42 I] Configuring simulation for 44 threads of 48 available hardware threads
+[10:44:44 I] All threads launched.
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1e+02 ph/s  |  ETA 15:43     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1e+02 ph/s  |  ETA 14:45     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1e+02 ph/s  |  ETA 13:38     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1e+02 ph/s  |  ETA 12:52     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 12:06     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:11     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:20     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:31     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 8:44     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 7:56     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1.1e+02 ph/s  |  ETA 7:07     Photons  [############--------]  60 000 / 100 000   60.0%  |  1.1e+02 ph/s  |  ETA 6:19     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1.1e+02 ph/s  |  ETA 5:30     Photons  [##############------]  70 000 / 100 000   70.0%  |  1.1e+02 ph/s  |  ETA 4:42     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1.1e+02 ph/s  |  ETA 3:56     Photons  [################----]  80 000 / 100 000   80.0%  |  1.1e+02 ph/s  |  ETA 3:09     Photons  [#################---]  85 000 / 100 000   85.0%  |  1.1e+02 ph/s  |  ETA 2:21     Photons  [##################--]  90 000 / 100 000   90.0%  |  1.1e+02 ph/s  |  ETA 1:34     Photons  [###################-]  95 000 / 100 000   95.0%  |  1.1e+02 ph/s  |  ETA 0:47     Photons  [####################]  100 000 / 100 000  100.0%  |  1e+02 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  1e+02 ph/s  |  ETA 0:00   [11:00:59 I] Parallel simulation finished
+[11:01:00 I] Configuring simulation for 44 threads of 48 available hardware threads
+[11:01:02 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1e+02 ph/s  |  ETA 15:29     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1.1e+02 ph/s  |  ETA 13:54     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1.1e+02 ph/s  |  ETA 13:29     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1.1e+02 ph/s  |  ETA 12:40     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 11:56     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:07     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:22     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:34     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 8:44     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 7:58     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:10     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:23     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:36     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 4:47     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 3:59     Photons  [################----]  80 000 / 100 000   80.0%  |  1e+02 ph/s  |  ETA 3:11     Photons  [#################---]  85 000 / 100 000   85.0%  |  1e+02 ph/s  |  ETA 2:23     Photons  [##################--]  90 000 / 100 000   90.0%  |  1e+02 ph/s  |  ETA 1:35     Photons  [###################-]  95 000 / 100 000   95.0%  |  1e+02 ph/s  |  ETA 0:47     Photons  [####################]  100 000 / 100 000  100.0%  |  1e+02 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  1e+02 ph/s  |  ETA 0:00   [11:17:28 I] Parallel simulation finished
+[11:17:29 I] Configuring simulation for 44 threads of 48 available hardware threads
+[11:17:31 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1e+02 ph/s  |  ETA 15:10     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1e+02 ph/s  |  ETA 14:32     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1e+02 ph/s  |  ETA 13:48     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1e+02 ph/s  |  ETA 13:01     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 12:14     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:28     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:34     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:49     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 8:58     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 8:07     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:18     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:31     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:42     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 4:53     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 4:04     Photons  [################----]  80 000 / 100 000   80.0%  |  1e+02 ph/s  |  ETA 3:15     Photons  [#################---]  85 000 / 100 000   85.0%  |  1e+02 ph/s  |  ETA 2:26     Photons  [##################--]  90 000 / 100 000   90.0%  |  1e+02 ph/s  |  ETA 1:37     Photons  [###################-]  95 000 / 100 000   95.0%  |  1e+02 ph/s  |  ETA 0:49     Photons  [####################]  100 000 / 100 000  100.0%  |  99 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  99 ph/s  |  ETA 0:00   [11:34:23 I] Parallel simulation finished
+[11:34:24 I] Configuring simulation for 44 threads of 48 available hardware threads
+[11:34:25 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1.1e+02 ph/s  |  ETA 14:48     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1.1e+02 ph/s  |  ETA 14:09     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1e+02 ph/s  |  ETA 13:29     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1e+02 ph/s  |  ETA 12:51     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 11:59     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:12     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:30     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:45     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 8:56     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 8:08     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:19     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:29     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:41     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 4:53     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 4:03     Photons  [################----]  80 000 / 100 000   80.0%  |  1e+02 ph/s  |  ETA 3:14     Photons  [#################---]  85 000 / 100 000   85.0%  |  1e+02 ph/s  |  ETA 2:25     Photons  [##################--]  90 000 / 100 000   90.0%  |  1e+02 ph/s  |  ETA 1:37     Photons  [###################-]  95 000 / 100 000   95.0%  |  1e+02 ph/s  |  ETA 0:48     Photons  [####################]  100 000 / 100 000  100.0%  |  1e+02 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  1e+02 ph/s  |  ETA 0:00   [11:51:07 I] Parallel simulation finished
+[11:51:07 I] Configuring simulation for 44 threads of 48 available hardware threads
+[11:51:09 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1.1e+02 ph/s  |  ETA 14:57     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1e+02 ph/s  |  ETA 14:37     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1e+02 ph/s  |  ETA 13:52     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1e+02 ph/s  |  ETA 13:09     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 12:23     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:31     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:43     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:54     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 9:03     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 8:12     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:23     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:32     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:45     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 4:55     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 4:05     Photons  [################----]  80 000 / 100 000   80.0%  |  1e+02 ph/s  |  ETA 3:16     Photons  [#################---]  85 000 / 100 000   85.0%  |  1e+02 ph/s  |  ETA 2:27     Photons  [##################--]  90 000 / 100 000   90.0%  |  1e+02 ph/s  |  ETA 1:38     Photons  [###################-]  95 000 / 100 000   95.0%  |  1e+02 ph/s  |  ETA 0:49     Photons  [####################]  100 000 / 100 000  100.0%  |  99 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  99 ph/s  |  ETA 0:00   [12:07:56 I] Parallel simulation finished
+[12:07:57 I] Configuring simulation for 44 threads of 48 available hardware threads
+[12:07:58 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1e+02 ph/s  |  ETA 15:45     Photons  [##------------------]  10 000 / 100 000   10.0%  |  99 ph/s  |  ETA 15:12     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1e+02 ph/s  |  ETA 14:05     Photons  [####----------------]  20 000 / 100 000   20.0%  |  99 ph/s  |  ETA 13:26     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 12:28     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:38     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:45     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:59     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 9:11     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 8:18     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:27     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:36     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:46     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 4:57     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 4:07     Photons  [################----]  80 000 / 100 000   80.0%  |  1e+02 ph/s  |  ETA 3:18     Photons  [#################---]  85 000 / 100 000   85.0%  |  1e+02 ph/s  |  ETA 2:28     Photons  [##################--]  90 000 / 100 000   90.0%  |  1e+02 ph/s  |  ETA 1:39     Photons  [###################-]  95 000 / 100 000   95.0%  |  1e+02 ph/s  |  ETA 0:49     Photons  [####################]  100 000 / 100 000  100.0%  |  98 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  98 ph/s  |  ETA 0:00   [12:24:54 I] Parallel simulation finished
+[12:24:55 I] Configuring simulation for 44 threads of 48 available hardware threads
+[12:24:56 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1e+02 ph/s  |  ETA 15:54     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1e+02 ph/s  |  ETA 14:50     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  99 ph/s  |  ETA 14:17     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1e+02 ph/s  |  ETA 13:22     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 12:30     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:39     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:48     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:56     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 9:08     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 8:18     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:28     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:38     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:47     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 4:58     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 4:09     Photons  [################----]  80 000 / 100 000   80.0%  |  1e+02 ph/s  |  ETA 3:19     Photons  [#################---]  85 000 / 100 000   85.0%  |  1e+02 ph/s  |  ETA 2:29     Photons  [##################--]  90 000 / 100 000   90.0%  |  1e+02 ph/s  |  ETA 1:39     Photons  [###################-]  95 000 / 100 000   95.0%  |  1e+02 ph/s  |  ETA 0:49     Photons  [####################]  100 000 / 100 000  100.0%  |  97 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  97 ph/s  |  ETA 0:00   [12:42:06 I] Parallel simulation finished
+[12:42:07 I] Configuring simulation for 44 threads of 48 available hardware threads
+[12:42:09 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  1.1e+02 ph/s  |  ETA 14:30     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1e+02 ph/s  |  ETA 14:30     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  1e+02 ph/s  |  ETA 13:58     Photons  [####----------------]  20 000 / 100 000   20.0%  |  1e+02 ph/s  |  ETA 13:09     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  1e+02 ph/s  |  ETA 12:23     Photons  [######--------------]  30 000 / 100 000   30.0%  |  1e+02 ph/s  |  ETA 11:32     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  1e+02 ph/s  |  ETA 10:40     Photons  [########------------]  40 000 / 100 000   40.0%  |  1e+02 ph/s  |  ETA 9:52     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  1e+02 ph/s  |  ETA 9:04     Photons  [##########----------]  50 000 / 100 000   50.0%  |  1e+02 ph/s  |  ETA 8:15     Photons  [###########---------]  55 000 / 100 000   55.0%  |  1e+02 ph/s  |  ETA 7:28     Photons  [############--------]  60 000 / 100 000   60.0%  |  1e+02 ph/s  |  ETA 6:40     Photons  [#############-------]  65 000 / 100 000   65.0%  |  1e+02 ph/s  |  ETA 5:49     Photons  [##############------]  70 000 / 100 000   70.0%  |  1e+02 ph/s  |  ETA 5:01     Photons  [###############-----]  75 000 / 100 000   75.0%  |  1e+02 ph/s  |  ETA 4:10     Photons  [################----]  80 000 / 100 000   80.0%  |  99 ph/s  |  ETA 3:21     Photons  [#################---]  85 000 / 100 000   85.0%  |  99 ph/s  |  ETA 2:31     Photons  [##################--]  90 000 / 100 000   90.0%  |  98 ph/s  |  ETA 1:41     Photons  [###################-]  95 000 / 100 000   95.0%  |  98 ph/s  |  ETA 0:50     Photons  [####################]  100 000 / 100 000  100.0%  |  96 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  95 ph/s  |  ETA 0:00   [12:59:36 I] Parallel simulation finished
+[12:59:36 I] Configuring simulation for 44 threads of 48 available hardware threads
+[12:59:38 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  97 ph/s  |  ETA 16:14     Photons  [##------------------]  10 000 / 100 000   10.0%  |  1e+02 ph/s  |  ETA 15:02     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  96 ph/s  |  ETA 14:45     Photons  [####----------------]  20 000 / 100 000   20.0%  |  97 ph/s  |  ETA 13:45     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  98 ph/s  |  ETA 12:48     Photons  [######--------------]  30 000 / 100 000   30.0%  |  97 ph/s  |  ETA 12:04     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  97 ph/s  |  ETA 11:09     Photons  [########------------]  40 000 / 100 000   40.0%  |  97 ph/s  |  ETA 10:21     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  97 ph/s  |  ETA 9:28     Photons  [##########----------]  50 000 / 100 000   50.0%  |  97 ph/s  |  ETA 8:34     Photons  [###########---------]  55 000 / 100 000   55.0%  |  97 ph/s  |  ETA 7:42     Photons  [############--------]  60 000 / 100 000   60.0%  |  98 ph/s  |  ETA 6:48     Photons  [#############-------]  65 000 / 100 000   65.0%  |  98 ph/s  |  ETA 5:58     Photons  [##############------]  70 000 / 100 000   70.0%  |  98 ph/s  |  ETA 5:05     Photons  [###############-----]  75 000 / 100 000   75.0%  |  98 ph/s  |  ETA 4:15     Photons  [################----]  80 000 / 100 000   80.0%  |  98 ph/s  |  ETA 3:24     Photons  [#################---]  85 000 / 100 000   85.0%  |  98 ph/s  |  ETA 2:33     Photons  [##################--]  90 000 / 100 000   90.0%  |  98 ph/s  |  ETA 1:42     Photons  [###################-]  95 000 / 100 000   95.0%  |  98 ph/s  |  ETA 0:51     Photons  [####################]  100 000 / 100 000  100.0%  |  96 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  96 ph/s  |  ETA 0:00   [13:17:02 I] Parallel simulation finished
+[13:17:02 I] Configuring simulation for 44 threads of 48 available hardware threads
+[13:17:04 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  96 ph/s  |  ETA 16:32     Photons  [##------------------]  10 000 / 100 000   10.0%  |  96 ph/s  |  ETA 15:40     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  96 ph/s  |  ETA 14:44     Photons  [####----------------]  20 000 / 100 000   20.0%  |  97 ph/s  |  ETA 13:46     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  97 ph/s  |  ETA 12:55     Photons  [######--------------]  30 000 / 100 000   30.0%  |  98 ph/s  |  ETA 11:57     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  98 ph/s  |  ETA 11:05     Photons  [########------------]  40 000 / 100 000   40.0%  |  98 ph/s  |  ETA 10:13     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  98 ph/s  |  ETA 9:21     Photons  [##########----------]  50 000 / 100 000   50.0%  |  98 ph/s  |  ETA 8:30     Photons  [###########---------]  55 000 / 100 000   55.0%  |  98 ph/s  |  ETA 7:40     Photons  [############--------]  60 000 / 100 000   60.0%  |  98 ph/s  |  ETA 6:49     Photons  [#############-------]  65 000 / 100 000   65.0%  |  98 ph/s  |  ETA 5:58     Photons  [##############------]  70 000 / 100 000   70.0%  |  98 ph/s  |  ETA 5:06     Photons  [###############-----]  75 000 / 100 000   75.0%  |  98 ph/s  |  ETA 4:14     Photons  [################----]  80 000 / 100 000   80.0%  |  98 ph/s  |  ETA 3:24     Photons  [#################---]  85 000 / 100 000   85.0%  |  98 ph/s  |  ETA 2:33     Photons  [##################--]  90 000 / 100 000   90.0%  |  98 ph/s  |  ETA 1:41     Photons  [###################-]  95 000 / 100 000   95.0%  |  98 ph/s  |  ETA 0:51     Photons  [####################]  100 000 / 100 000  100.0%  |  95 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  95 ph/s  |  ETA 0:00   [13:34:34 I] Parallel simulation finished
+[13:34:35 I] Configuring simulation for 44 threads of 48 available hardware threads
+[13:34:36 I] All threads launched.
+
+  Photons  [#-------------------]  5 000 / 100 000    5.0%  |  96 ph/s  |  ETA 16:26     Photons  [##------------------]  10 000 / 100 000   10.0%  |  95 ph/s  |  ETA 15:48     Photons  [###-----------------]  15 000 / 100 000   15.0%  |  96 ph/s  |  ETA 14:43     Photons  [####----------------]  20 000 / 100 000   20.0%  |  95 ph/s  |  ETA 13:58     Photons  [#####---------------]  25 000 / 100 000   25.0%  |  96 ph/s  |  ETA 13:02     Photons  [######--------------]  30 000 / 100 000   30.0%  |  96 ph/s  |  ETA 12:11     Photons  [#######-------------]  35 000 / 100 000   35.0%  |  96 ph/s  |  ETA 11:13     Photons  [########------------]  40 000 / 100 000   40.0%  |  96 ph/s  |  ETA 10:24     Photons  [#########-----------]  45 000 / 100 000   45.0%  |  96 ph/s  |  ETA 9:32     Photons  [##########----------]  50 000 / 100 000   50.0%  |  96 ph/s  |  ETA 8:40     Photons  [###########---------]  55 000 / 100 000   55.0%  |  96 ph/s  |  ETA 7:49     Photons  [############--------]  60 000 / 100 000   60.0%  |  96 ph/s  |  ETA 6:55     Photons  [#############-------]  65 000 / 100 000   65.0%  |  97 ph/s  |  ETA 6:02     Photons  [##############------]  70 000 / 100 000   70.0%  |  96 ph/s  |  ETA 5:11     Photons  [###############-----]  75 000 / 100 000   75.0%  |  96 ph/s  |  ETA 4:20     Photons  [################----]  80 000 / 100 000   80.0%  |  96 ph/s  |  ETA 3:27     Photons  [#################---]  85 000 / 100 000   85.0%  |  96 ph/s  |  ETA 2:36     Photons  [##################--]  90 000 / 100 000   90.0%  |  96 ph/s  |  ETA 1:44     Photons  [###################-]  95 000 / 100 000   95.0%  |  96 ph/s  |  ETA 0:52     Photons  [####################]  100 000 / 100 000  100.0%  |  94 ph/s  |  ETA 0:00     Photons  [####################]  100 000 / 100 000  100.0%  |  94 ph/s  |  ETA 0:00   [13:52:25 I] Parallel simulation finished
+==== Setup compartido ====
+l* esp.1 (ancla): 23.0399 um   g1=0.2468
+l* esp.2         : 117.9289 um   g2=0.0531
+mu_s_total (fijo): 5.7626e-02 1/um
+radio de haz     : 92.16 um  (= 4.0 l*)
+GRID: {'dt_fs': 102.21423401490283, 't_max_fs': 3066.427020447085, 'n_bins': 30, 'dt_sim': 23.039892073620244, 't_max_sim': 691.1967622086073, 'tau_star_fs': 102.21423401490283, 'l_star_ref': 23.039892073620244}
+
+
+=== Corrida: fraction_0.00 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0000_fraction_0.00
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0000_fraction_0.00/results.h5
+
+x=0.00  share mu_s: sp1=0.000  sp2=1.000  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 977.3480522632599 | hits: 10001890
+
+
+=== Corrida: fraction_0.10 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0001_fraction_0.10
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0001_fraction_0.10/results.h5
+
+x=0.10  share mu_s: sp1=0.100  sp2=0.900  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 988.5992798805237 | hits: 10362318
+
+
+=== Corrida: fraction_0.20 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0002_fraction_0.20
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0002_fraction_0.20/results.h5
+
+x=0.20  share mu_s: sp1=0.200  sp2=0.800  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1014.2917673587799 | hits: 10616330
+
+
+=== Corrida: fraction_0.30 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0003_fraction_0.30
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0003_fraction_0.30/results.h5
+
+x=0.30  share mu_s: sp1=0.300  sp2=0.700  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1003.1707456111908 | hits: 10534846
+
+
+=== Corrida: fraction_0.40 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0004_fraction_0.40
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0004_fraction_0.40/results.h5
+
+x=0.40  share mu_s: sp1=0.400  sp2=0.600  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1008.9697997570038 | hits: 10641049
+
+
+=== Corrida: fraction_0.50 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0005_fraction_0.50
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0005_fraction_0.50/results.h5
+
+x=0.50  share mu_s: sp1=0.500  sp2=0.500  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1017.4870812892914 | hits: 10777525
+
+
+=== Corrida: fraction_0.60 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0006_fraction_0.60
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0006_fraction_0.60/results.h5
+
+x=0.60  share mu_s: sp1=0.600  sp2=0.400  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1031.9082837104797 | hits: 10840941
+
+
+=== Corrida: fraction_0.70 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0007_fraction_0.70
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0007_fraction_0.70/results.h5
+
+x=0.70  share mu_s: sp1=0.700  sp2=0.300  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1049.0780653953552 | hits: 10971677
+
+
+=== Corrida: fraction_0.80 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0008_fraction_0.80
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0008_fraction_0.80/results.h5
+
+x=0.80  share mu_s: sp1=0.800  sp2=0.200  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1045.3525681495667 | hits: 11054248
+
+
+=== Corrida: fraction_0.90 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0009_fraction_0.90
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0009_fraction_0.90/results.h5
+
+x=0.90  share mu_s: sp1=0.900  sp2=0.100  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1052.1346352100372 | hits: 11194570
+
+
+=== Corrida: fraction_1.00 ===
+Experiment: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0010_fraction_1.00
+  HDF5: /home/niaggar/Developer/luminis-mc/temporal_results/study_mixture_layer__PLIN/runs/0010_fraction_1.00/results.h5
+
+x=1.00  share mu_s: sp1=1.000  sp2=0.000  mu_s_total=5.7626e-02
+mfp_total (l_s capa): 17.3533 um   theta_c1=2.670 mrad   theta_c2=0.522 mrad
+runtime_s: 1070.234384059906 | hits: 11467620
+

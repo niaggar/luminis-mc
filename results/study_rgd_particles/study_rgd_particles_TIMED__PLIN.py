@@ -19,7 +19,7 @@ set_log_level(LogLevel.info)
 # ===========================================================================
 # Salida
 # ===========================================================================
-EXP_NAME = "study_rgd_particles_TIMED__PLIN"
+EXP_NAME = "study_rgd_particles_TIMED500__PLIN"
 BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
@@ -62,7 +62,7 @@ THETA_MAX = np.deg2rad(1)
 # Muestreo
 # ---------------------------------------------------------------------------
 N_THREADS = 46
-N_PHOTONS = 200_000
+N_PHOTONS = 500_000
 
 # ===========================================================================
 # Helpers

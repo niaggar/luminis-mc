@@ -19,7 +19,7 @@ set_log_level(LogLevel.info)
 # ===========================================================================
 # Salida
 # ===========================================================================
-EXP_NAME = "study_two_layers__PLIN"
+EXP_NAME = "study_two_layers_300__PLIN"
 BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
@@ -89,8 +89,8 @@ TIME_TMAX_TAUSTAR = 40           # M: ventana en tau* del ancla (max l*)
 # ---------------------------------------------------------------------------
 # Muestreo
 # ---------------------------------------------------------------------------
-N_PHOTONS = 100_000
-N_THREADS = 44
+N_PHOTONS = 300_000
+N_THREADS = 46
 
 C0 = 0.299792458                 # um/fs
 

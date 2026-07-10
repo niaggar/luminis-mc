@@ -44,8 +44,8 @@ WAVELENGTH = 0.514                 # um
 MU_A_PERCENT = 0.0                 # sin absorcion (gate de reciprocidad limpio)
 
 # Laser: polarizacion LINEAL a lo largo de m (X), incidencia normal.
-LASER_M = 1.0
-LASER_N = 0.0
+LASER_M = 1.0 / np.sqrt(2)
+LASER_N = 1j / np.sqrt(2)
 LASER_RADIUS_MFP = 4.0             # en unidades de l*
 LASER_TYPE = LaserSource.Gaussian
 
@@ -57,10 +57,10 @@ PHASEF_NDIV = 10_000
 # ---------------------------------------------------------------------------
 # Grilla angular -- IDENTICA en ambos modos (requisito de F16)
 # ---------------------------------------------------------------------------
-N_THETA = 100                      # 1000 sobre-resuelve el cono e infla el
-N_PHI = 36                         # ruido por bin en el pico
+N_THETA = 200                      # 1000 sobre-resuelve el cono e infla el
+N_PHI = 4                         # ruido por bin en el pico
 PHI_MAX = 2 * np.pi
-THETA_MAX = np.deg2rad(1)
+THETA_MAX = np.deg2rad(1.5)
 
 T_MAX_MULTI = 0
 N_TIME_BINS = 0
@@ -68,10 +68,10 @@ N_TIME_BINS = 0
 # ---------------------------------------------------------------------------
 # Muestreo: escaleras log-uniformes (media decada) + replicas independientes
 # ---------------------------------------------------------------------------
-N_THREADS = 44
+N_THREADS = 46
 SEED_BASE = 20260708
 
-N_REPLICAS = 1
+N_REPLICAS = 12
 
 photons_estimator = [1_000, 3_000, 10_000, 30_000, 100_000, 300_000]
 photons_analog = [1_000_000, 3_000_000, 10_000_000, 30_000_000, 100_000_000]
@@ -142,7 +142,7 @@ def run_cbs(exp, radius, n_photons, rep, estimator: bool):
     config.track_reverse_paths = True
     config.pin_threads_to_cores = True   # Linux: affinity real, timing estable
     config.n_threads = N_THREADS
-    config.show_progress = False         # menos ruido con muchas corridas
+    config.show_progress = True         # menos ruido con muchas corridas
 
     t0 = time.time()
     run_simulation_parallel(config)
