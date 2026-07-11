@@ -182,7 +182,7 @@ def run_cbs(exp, radius, rad_index, rep):
     _keep_alive = (sample, especie); del _keep_alive
 
 
-N_REPLICAS = 1
+N_REPLICAS = 5
 for index, rad in enumerate(radius_values):
     for rep in range(N_REPLICAS):
         name = f"radius_{rad:.3f}__rep{rep}"
