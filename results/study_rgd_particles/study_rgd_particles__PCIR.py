@@ -27,7 +27,7 @@ sweep.snapshot_master_script(__main__.__file__)
 sweep.log_readme(
     "CBS homogeneous radius sweep -- single RGD species per run, polarizacion "
     "CIRCULAR, estimador next-event. Radios [0.020, 0.035, 0.055, "
-    "0.075, 0.175] um, f=0.10, n_p=1.59, n_med=1.33, lambda=0.514 um, sin "
+    "0.075, 0.100, 0.175] um, f=0.10, n_p=1.59, n_med=1.33, lambda=0.514 um, sin "
     "absorcion. Haz gaussiano FIJO w=2500 um (regimen de onda plana, w/l* de "
     "~4.5 a ~110 segun radio). Doble ventana angular en unidades reducidas "
     "q=k*l*_teorico*theta: fina q in [0, 7.5] (500 bins, cono), cola q in "
@@ -38,7 +38,7 @@ sweep.log_readme(
 # ===========================================================================
 # Parametros fisicos
 # ===========================================================================
-radius_values = [0.020, 0.035, 0.055, 0.075, 0.175]
+radius_values = [0.020, 0.035, 0.055, 0.075, 0.100, 0.175]
 
 
 VOLUME_FRACTION = 0.10
@@ -68,7 +68,7 @@ PHI_MAX = 2 * np.pi
 # Muestreo
 # ---------------------------------------------------------------------------
 N_THREADS = 46
-N_PHOTONS = 50_000
+N_PHOTONS = 100_000
 N_THETA_1 = 500
 N_THETA_2 = 200
 Q_FINE, Q_TAIL = 7.5, 40.0
