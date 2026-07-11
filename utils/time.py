@@ -1,7 +1,7 @@
 
 C0 = 0.299792458   # um/fs
 
-def build_time_grid(l_star, n_medium, n_bins=100, t_max_taustar=30, binning="geometric", dt_floor_fs=30.0):
+def build_time_grid(l_star, n_medium, n_bins=100, t_max_taustar=30, dt_floor_fs=30.0):
     """Rejilla temporal parametrizada por FISICA (tau*), no por fs absolutos.
 
     l_star        : puede ser un float (una especie) o lista (toma la mas lenta).
@@ -19,10 +19,7 @@ def build_time_grid(l_star, n_medium, n_bins=100, t_max_taustar=30, binning="geo
         print(f"[aviso] dt={dt_fs:.1f} fs < piso {dt_floor_fs} fs "
               f"(no medible con gate SHG; baja n_bins).")
 
-    if binning == "optical":
-        dt_sim, t_max_sim = dt_fs * C0, t_max_fs * C0
-    else:
-        dt_sim, t_max_sim = dt_fs * C0 / n_medium, t_max_fs * C0 / n_medium
+    dt_sim, t_max_sim = dt_fs * C0 / n_medium, t_max_fs * C0 / n_medium
 
     return {"dt_fs": dt_fs, "t_max_fs": t_max_fs, "n_bins": n_bins,
             "dt_sim": dt_sim, "t_max_sim": t_max_sim,
