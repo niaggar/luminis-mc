@@ -19,7 +19,7 @@ set_log_level(LogLevel.info)
 # ===========================================================================
 # Salida
 # ===========================================================================
-EXP_NAME = "study_homog_timeresolved__PLIN__beam2500"
+EXP_NAME = "study_homog_timeresolved__PCIR__beam2500"
 BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
@@ -37,9 +37,9 @@ N_MEDIUM = 1.33
 WAVELENGTH = 0.514             # um
 MU_A_PERCENT = 0.0             # sin absorcion (gate de reciprocidad limpio)
 
-# Laser: polarizacion LINEAL a lo largo de m (X), incidencia normal.
-LASER_M = 1.0
-LASER_N = 0.0
+# Laser: polarizacion CIRCULAR (m=1/sqrt(2), n=i/sqrt(2)), incidencia normal.
+LASER_M = 1 / np.sqrt(2)
+LASER_N = 1j / np.sqrt(2)
 LASER_RADIUS = 2500           # um  (regimen de onda plana)
 LASER_TYPE = LaserSource.Gaussian
 POLARIZATION = "linear" if (int(LASER_M), int(LASER_N)) == (1, 0) else "circular"
