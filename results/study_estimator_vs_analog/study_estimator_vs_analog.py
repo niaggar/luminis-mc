@@ -88,7 +88,7 @@ DT = 0.0
 # ---------------------------------------------------------------------------
 N_THREADS = 46
 SEED_BASE = 20260708
-N_REPLICAS = 5
+N_REPLICAS = 1
 
 photons_estimator = [1_000, 10_000, 30_000, 100_000, 300_000]
 photons_analog = [1_000_000, 10_000_000, 50_000_000, 100_000_000, 500_000_000]
@@ -145,7 +145,7 @@ def make_sensors(theta_1, theta_2, estimator):
 SPECIES, DQ, THETA = {}, {}, {}
 
 print("==== Setup (estimator vs analog, integrado) ====")
-print(f"  polarizacion DERIVADA: {POLARIZATION}   (m={LASER_M:.4f}, n={LASER_N})")
+print(f"  polarizacion DERIVADA: {POLARIZATION}")
 print("  r[um] |  l*[um] | theta_1[deg] | theta_2[deg] |  w[um]  | w/l*")
 for rad in radius_values:
     esp = build_species(rad)

@@ -11,8 +11,6 @@ mkdir -p logs
 
 # Lista de scripts en el orden que quieres que corran
 scripts=(
-    "results.study_rgd_particles.study_rgd_particles_TIMED__PCIR"
-    "results.study_rgd_vs_mie.study_mie_same_Ls__PCIR"
     "results.study_estimator_vs_analog.study_estimator_vs_analog"
     "results.study_estimator_vs_analog.study_estimator_vs_analog_mix"
 )

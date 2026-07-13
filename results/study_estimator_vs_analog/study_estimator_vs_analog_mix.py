@@ -107,9 +107,9 @@ DT = 0.0
 #   N_REPLICAS: banda para poder afirmar "coinciden DENTRO de error" (varianza
 #   empirica entre replicas; es la unica valida con el estimador next-event).
 # ---------------------------------------------------------------------------
-N_ESTIMATOR = 200_000
+N_ESTIMATOR = 300_000
 N_ANALOG = 1_000_000_000
-N_REPLICAS = 5
+N_REPLICAS = 1
 N_THREADS = 46
 SEED_BASE = 20260714             # distinto de las demas tandas
 
