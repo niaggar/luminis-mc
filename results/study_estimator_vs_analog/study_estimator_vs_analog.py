@@ -159,7 +159,7 @@ for rad in radius_values:
     SPECIES[rad], DQ[rad], THETA[rad] = esp, dq, (theta_1, theta_2)
 
     print(f"  {rad:5.3f} | {l_star:7.2f} | {np.rad2deg(theta_1):12.4f} | "
-          f"{np.rad2deg(theta_2):12.4f} | {w:7.1f} | {LASER_RADIUS:.1f}")
+          f"{np.rad2deg(theta_2):12.4f} | {LASER_RADIUS:.1f}")
 
 
 # ===========================================================================
