@@ -61,8 +61,11 @@ def print_info_particle(radius, volume_fraction, n_particle, d_theta):
     print("-" * 30)
 
 
-radius_values = [0.020, 0.035, 0.055, 0.075, 0.175]
-d_thetas = [0.5/1000, 0.5/500, 1/500, 1/500, 1/500]
-for radius, d_theta in zip(radius_values, d_thetas):
-    print_info_particle(radius=radius, volume_fraction=0.10, n_particle=1.59, d_theta=d_theta)
+# radius_values = [0.020, 0.035, 0.055, 0.075, 0.175]
+# d_thetas = [0.5/1000, 0.5/500, 1/500, 1/500, 1/500]
+# for radius, d_theta in zip(radius_values, d_thetas):
+#     print_info_particle(radius=radius, volume_fraction=0.10, n_particle=1.59, d_theta=d_theta)
 
+
+
+print_info_particle(radius=0.055, volume_fraction=0.50, n_particle=1.59, d_theta=1/500)

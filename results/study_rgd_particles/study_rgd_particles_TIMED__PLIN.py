@@ -42,7 +42,7 @@ LASER_M = 1.0
 LASER_N = 0.0
 LASER_RADIUS = 2500           # um  (regimen de onda plana)
 LASER_TYPE = LaserSource.Gaussian
-POLARIZATION = "linear" if (int(LASER_M), int(LASER_N)) == (1, 0) else "circular"
+POLARIZATION = "linear"
 
 # Funcion de fase
 PHASEF_THETA_MIN = 0.0
