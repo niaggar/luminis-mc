@@ -29,7 +29,7 @@ sweep.snapshot_master_script(__main__.__file__)
 # Parametros fisicos  (identicos a §5.1: mismas curvas maestras homogeneas,
 # ahora RESUELTAS EN TIEMPO -> sirven de referencia para mezcla/estratificado)
 # ===========================================================================
-radius_values = [0.020, 0.035, 0.055, 0.075, 0.100, 0.175]
+radius_values = np.linspace(0.020, 0.175, 20)
 
 VOLUME_FRACTION = 0.10
 N_PARTICLE = 1.59
@@ -83,7 +83,7 @@ TIME_TMAX_TAUSTAR = 40
 #   batch-splitting (varianza empirica entre replicas, ahora por bin (theta,t)).
 # ---------------------------------------------------------------------------
 N_THREADS = 46
-N_PHOTONS = 300_000
+N_PHOTONS = 100_000
 N_REPLICAS = 5
 SEED_BASE = 20260713          # distinto de homogeneo-integrado (...10),
                               # mezcla (...11) y estratificado (...12)
@@ -165,11 +165,11 @@ def run_cbs(exp, radius, rad_index, rep):
     dt = grid["dt_sim"]
 
     sens = SensorsGroup()
-    det_1 = sens.add_detector(FarFieldCBSSensor(theta_1, PHI_MAX, t_max, d_theta_1, d_phi, dt, True))
+    det_1 = sens.add_detector(FarFieldCBSSensor(theta_1, PHI_MAX, 0, d_theta_1, d_phi, 0, True))
     det_1.set_theta_limit(0, theta_1)
     det_1.set_phi_slices([0, np.pi/4, np.pi/2])
 
-    det_2 = sens.add_detector(FarFieldCBSSensor(theta_2, PHI_MAX, t_max, d_theta_2, d_phi, dt, True))
+    det_2 = sens.add_detector(FarFieldCBSSensor(theta_2, PHI_MAX, 0, d_theta_2, d_phi, 0, True))
     det_2.set_theta_limit(theta_1 * 0.9, theta_2)          # solape para stitching
     det_2.set_phi_slices([0, np.pi/4, np.pi/2])
 
