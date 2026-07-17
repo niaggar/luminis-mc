@@ -1,49 +1,38 @@
 # plots/style.py
-import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-# --- Sizes (tweak once, used everywhere) ---
-# IEEE/Optics Express single column: ~3.5 in, double: ~7.0 in
-# Thesis (A4, 1.5cm margins): ~5.9 in full width
-SINGLE_COL = 3.5   # inches
-DOUBLE_COL = 7.0
-THESIS_FULL = 5.9
+TEXTWIDTH_IN = 6.33      # <-- el valor real de \the\textwidth / 72.27
+DOC_FONTSIZE = 12        # 12pt del \documentclass
+COL = ["#0173b2", "#de8f05", "#029e73", "#d55e00", "#cc78bc", "#56463e"]
 
-def apply(context="paper", col="single"):
+def apply(width_frac=1.0, aspect=1/1.618, fontsize=DOC_FONTSIZE):
     """
-    context: "paper" | "thesis"
-    col:     "single" | "double" | "full"
+    width_frac: fracción de \textwidth que ocupará la figura (1.0, 0.5, ...)
+    aspect:     alto/ancho
+    fontsize:   igual al tamaño del documento
+    Devuelve (w, h) por si quieres ajustar a mano.
     """
-    width = {"single": SINGLE_COL, "double": DOUBLE_COL, "full": THESIS_FULL}[col]
-    height = width / 1.5   # golden ratio-ish, override per figure
-
+    w = TEXTWIDTH_IN * width_frac
+    h = w * aspect
     mpl.rcParams.update({
-        # Font
-        "font.family":       "serif",
-        "font.serif":        ["Computer Modern Roman"],  # matches LaTeX
-        "text.usetex":       True,
-        "font.size":         9 if context == "paper" else 11,
-        "axes.titlesize":    9 if context == "paper" else 11,
-        "axes.labelsize":    9 if context == "paper" else 11,
-        "xtick.labelsize":   8 if context == "paper" else 10,
-        "ytick.labelsize":   8 if context == "paper" else 10,
-        "legend.fontsize":   8 if context == "paper" else 10,
-
-        # Lines and axes
-        "axes.linewidth":    0.8,
-        "lines.linewidth":   1.2,
-        "lines.markersize":  4,
-
-        # Figure
-        "figure.figsize":    (width, height),
-        "figure.dpi":        150,   # screen preview
-        "savefig.dpi":       300,   # final output
-        "savefig.bbox":      "tight",
-        "savefig.pad_inches": 0.05,
-
+        "text.usetex":     True,
+        "font.family":     "serif",
+        "font.serif":      ["Computer Modern Roman"],
+        "axes.grid":       False,
+        # TODOS los tamaños == documento
+        "font.size":       fontsize,
+        "axes.titlesize":  fontsize,
+        "axes.labelsize":  fontsize,
+        "xtick.labelsize": fontsize,
+        "ytick.labelsize": fontsize,
+        "legend.fontsize": fontsize,
+        "axes.linewidth":  0.8,
+        "lines.linewidth": 1.2,
+        "lines.markersize": 4,
+        "figure.figsize":  (w, h),
+        "figure.dpi":      150,
+        "savefig.dpi":     300,
+        # constrained_layout en vez de tight_layout / bbox="tight"
+        "figure.constrained_layout.use": True,
     })
-
-# Color palette (colorblind-safe)
-COLORS = ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9", "#D55E00"]
-CMAP_DIV  = "RdBu_r"   # for Mueller matrix elements
-CMAP_SEQ  = "viridis"  # for fluence / absorption maps
+    return w, h
