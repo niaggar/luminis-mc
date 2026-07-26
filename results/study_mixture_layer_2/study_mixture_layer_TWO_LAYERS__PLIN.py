@@ -44,7 +44,7 @@ MU_A_PERCENT = 0.0               # sin absorcion (gate de reciprocidad limpio)
 
 # espesor de TOP en unidades de l*_top. Densificado en el rango intermedio
 # (1-5) donde vive la firma de interfaz; 5,10 son control semi-infinito.
-thickness_multipliers = [0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 7.0, 10.0]
+thickness_multipliers = [0.00001, 0.1, 0.2, 0.5, 1.0, 5.0, 7.0, 10.0]
 
 # ---------------------------------------------------------------------------
 # Polarizacion: LINEAL (m=1, n=0). Etiqueta derivada del laser -> no diverge.
@@ -52,7 +52,7 @@ thickness_multipliers = [0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 7.0, 10.0]
 LASER_M = 1.0
 LASER_N = 0.0
 LASER_TYPE = LaserSource.Gaussian
-POLARIZATION = "linear" if (int(LASER_M), int(LASER_N)) == (1, 0) else "circular"
+POLARIZATION = "linear"
 
 # ---------------------------------------------------------------------------
 # Haz FIJO en um (aparato fijo = fidelidad experimental), consistente con las
@@ -75,7 +75,7 @@ PHASEF_NDIV = 10_000
 #   interfaz vive en el rango delgado-intermedio (cono ancho, bien resuelto).
 #   N_THETA_1 alto aqui porque el time-resolved reparte hits en (theta x t).
 # ---------------------------------------------------------------------------
-N_THETA_1 = 400                  # ventana fina (cono); mas que en §5.3 por el 3D
+N_THETA_1 = 300                  # ventana fina (cono); mas que en §5.3 por el 3D
 N_THETA_2 = 100                  # ventana cola (fondo/baseline)
 Q_FINE, Q_TAIL = 7.5, 40.0
 N_PHI = 36
@@ -96,13 +96,9 @@ TIME_NBINS = 100                  # resolucion temporal para ver el interior
 TIME_TMAX_TAUSTAR = 40           # M: ventana en tau* del ancla (max l*)
 
 # ---------------------------------------------------------------------------
-# Muestreo
-#   300k (mas que §5.3): el sensor 3D (theta x t) reparte hits -> los bins
-#   temporales tardios necesitan mas fotones para no diluirse.
-# ---------------------------------------------------------------------------
-N_PHOTONS = 300_000
-N_THREADS = 46
-N_REPLICAS = 5
+N_PHOTONS = 200_000
+N_THREADS = 15
+N_REPLICAS = 1
 SEED_BASE_STRAT = 20260712       # distinto de homogeneo (…10) y mezcla (…11)
 
 C0 = 0.299792458                 # um/fs
@@ -140,11 +136,11 @@ def make_sensors(theta_1, theta_2):
     sens = SensorsGroup()
     det_1 = sens.add_detector(FarFieldCBSSensor(theta_1, PHI_MAX, t_max, d_theta_1, d_phi, dt, True))
     det_1.set_theta_limit(0, theta_1)
-    det_1.set_phi_slices([0, np.pi / 4, np.pi / 2])
+    det_1.set_phi_slices([0])
 
     det_2 = sens.add_detector(FarFieldCBSSensor(theta_2, PHI_MAX, t_max, d_theta_2, d_phi, dt, True))
     det_2.set_theta_limit(theta_1 * 0.9, theta_2)          # solape para stitching
-    det_2.set_phi_slices([0, np.pi / 4, np.pi / 2])
+    det_2.set_phi_slices([0])
 
     stats = sens.add_detector(StatisticsSensor(z=0, absorb=True))
     stats.set_theta_limit(0, theta_2)
@@ -280,6 +276,56 @@ def run_two_layers(exp: Experiment, z_interface: float, mult_index: int, rep: in
     _keep_alive = (sample,)
     del _keep_alive
 
+def run_one_layer(exp: Experiment, rep: int, specie: RGDMedium):
+    """Una sola capa homogenea semi-infinita (control). Corre CBS y persiste."""
+
+    sample = Sample(N_MEDIUM)
+    sample.add_layer(specie, 0.0, float("inf"))
+
+    laser = Laser(LASER_M, LASER_N, WAVELENGTH, LASER_RADIUS, LASER_TYPE)
+    sens, det_1, det_2, stats, d_theta_1, d_theta_2, d_phi = make_sensors(THETA_1, THETA_2)
+    config = base_config(sample, laser, sens, SEED_BASE_STRAT + 10 + rep)
+
+    extra = {
+        "dq_top": DQ_TOP,
+        "dq_bot": DQ_BOT,
+        "radius_top": RADIUS_TOP,
+        "radius_bot": RADIUS_BOT,
+        "z_interface": None,
+        "l_star_top": L_STAR_TOP,
+        "l_star_bot": L_STAR_BOT,
+        "l_star_time_anchor": L_STAR_TIME_ANCHOR,
+        "l_star_angle_anchor": L_STAR_ANGLE_ANCHOR,
+        "M_top": M_top,
+        "mult_reach": MULT_REACH,
+        "mult_local": None,
+        "laser_radius_um": LASER_RADIUS,
+        "theta_1": THETA_1,
+        "theta_2": THETA_2,
+        "d_theta_1": d_theta_1,
+        "d_theta_2": d_theta_2,
+        "d_phi": d_phi,
+        "n_theta_1": N_THETA_1,
+        "n_theta_2": N_THETA_2,
+        "n_phi": N_PHI,
+        "q_fine": Q_FINE,
+        "q_tail": Q_TAIL,
+        "t_max": GRID["t_max_sim"],
+        "d_time": GRID["dt_sim"],
+        "time_grid": GRID,
+        "time_anchor": "max_lstar (top)",
+        "angle_anchor": "min_lstar (bot)",
+        "polarization": POLARIZATION,
+        "seed": config.seed,
+        "replica": rep,
+        "layer_kind": "stratified_one_layer",
+        "order": None
+    }
+    exp.save_params(config, extra=extra)
+
+    t0 = time.time()
+    run_simulation_parallel(config)
+    print("runtime_s:", time.time() - t0, "| hits:", det_1.hits + det_2.hits)
 
 # ===========================================================================
 # README (f-string: no se desactualiza en lo que importa)
@@ -317,3 +363,16 @@ for index, z_interface in enumerate(Z_INTERFACES):
         print(f"\n\n=== Corrida: {name} ===")
         sweep.run(run_counter, name, lambda exp, z=z_interface, i=index, rep=rep: run_two_layers(exp, z, i, rep))
         run_counter += 1
+
+
+# Sinlge layer (control) para comparar con el barrido de dos capas
+for rep in range(N_REPLICAS):
+    name = f"single_layer_top__rep{rep}"
+    print(f"\n\n=== Corrida: {name} ===")
+    sweep.run(run_counter, name, lambda exp, rep=rep: run_one_layer(exp, rep, SPECIES_TOP))
+    run_counter += 1
+
+    name = f"single_layer_bot__rep{rep}"
+    print(f"\n\n=== Corrida: {name} ===")
+    sweep.run(run_counter, name, lambda exp, rep=rep: run_one_layer(exp, rep, SPECIES_BOT))
+    run_counter += 1

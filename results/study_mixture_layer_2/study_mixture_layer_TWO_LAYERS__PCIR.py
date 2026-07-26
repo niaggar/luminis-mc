@@ -19,7 +19,7 @@ set_log_level(LogLevel.info)
 # ===========================================================================
 # Salida
 # ===========================================================================
-EXP_NAME = "study_two_layers__PLIN__beam2500"
+EXP_NAME = "study_two_layers__PCIR__beam2500"
 BASE_DIR = "/home/niaggar/Developer/luminis-mc/temporal_results"
 
 sweep = SweepManager(EXP_NAME, BASE_DIR, timestamped=False)
@@ -49,10 +49,10 @@ thickness_multipliers = [0.00001, 0.1, 0.2, 0.5, 1.0, 5.0, 7.0, 10.0]
 # ---------------------------------------------------------------------------
 # Polarizacion: LINEAL (m=1, n=0). Etiqueta derivada del laser -> no diverge.
 # ---------------------------------------------------------------------------
-LASER_M = 1.0
-LASER_N = 0.0
+LASER_M = 1 / np.sqrt(2)
+LASER_N = 1j / np.sqrt(2)
 LASER_TYPE = LaserSource.Gaussian
-POLARIZATION = "linear"
+POLARIZATION = "circular"
 
 # ---------------------------------------------------------------------------
 # Haz FIJO en um (aparato fijo = fidelidad experimental), consistente con las
@@ -203,7 +203,7 @@ print(f"ventana temporal: {GRID['t_max_fs']:.0f} fs = {M_top:.1f} tau*_top  ->  
       f"z_probe = {z_probe:.1f} um = {MULT_REACH:.2f} l*_top")
 print(f"GRID: dt={GRID['dt_fs']:.2f} fs  t_max={GRID['t_max_fs']:.0f} fs  tau*={GRID['tau_star_fs']:.2f} fs")
 
-L_STAR_TOP_NORMAL = L_STAR_BOT
+L_STAR_TOP_NORMAL = L_STAR_TOP
 Z_INTERFACES = [m * L_STAR_TOP_NORMAL for m in thickness_multipliers]
 
 print("  z[um] | mult_top_local | M_top nec. | alcanzable?")
