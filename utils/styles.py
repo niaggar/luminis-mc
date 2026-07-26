@@ -16,8 +16,10 @@ def apply(width_frac=1.0, aspect=1/1.618, fontsize=DOC_FONTSIZE):
     h = w * aspect
     mpl.rcParams.update({
         "text.usetex":     True,
+        "pgf.rcfonts": False,
+        "text.latex.preamble": r"\usepackage{lmodern}",
         "font.family":     "serif",
-        "font.serif":      ["Computer Modern Roman"],
+        "font.serif":      ['Computer Modern Roman', 'CMU Serif'],
         "axes.grid":       False,
         # TODOS los tamaños == documento
         "font.size":       fontsize,

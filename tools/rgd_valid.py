@@ -68,4 +68,6 @@ def print_info_particle(radius, volume_fraction, n_particle, d_theta):
 
 
 
-print_info_particle(radius=0.055, volume_fraction=0.50, n_particle=1.59, d_theta=1/500)
+print_info_particle(radius=0.035, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
+print_info_particle(radius=0.075, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
+print_info_particle(radius=0.175, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)

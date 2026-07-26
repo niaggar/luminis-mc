@@ -1,459 +1,441 @@
 """
-cbs_fit.py — Ajuste de perfiles CBS (Coherent BackScattering)
+cbs_fit.py — Ajuste de perfiles de retrodispersión coherente (CBS)
+==================================================================
 
-Modelos implementados (Müller & Delande, 2016):
-  - "diff"  : Ec.(134) — perfil difusivo simple
-  - "bound" : Ec.(138) — difusivo con condición de borde (z₀ = 2/3)
-  - "deco"  : Ec.(146) — difusivo con decoherencia fenomenológica
+Implementa el procedimiento de particle sizing de:
 
-El camino libre medio se extrae directamente del ancho del perfil:
-    FWHM_q ≈ 0.73   (q = kl·θ, unidades reducidas)
-    l = kl / k = kl · λ / (2π)
+  T. Iwai, K. Ishii, T. Asakura, "Particle sizing based on enhanced
+  backscatterings of light from dense disordered media",
+  Proc. SPIE 3729, 293-297 (1999).
 
-Uso básico
-----------
-    from cbs_fit import fit_cbs, plot_cbs_fit
+Dos funciones modelo para la parte coherente I_C(theta):
 
-    result = fit_cbs(theta_mrad, enhancement, wavelength_nm=532)
-    print(result)
+  (Ec. 1)  Lorentziana empírica     I_C(th) = 1 / (1 + |th|/P2)
+           (Ec. 2)                  l* = lambda_med / (4 pi P2)  <=>  P2 = 1/(2 k l*)
 
-    # integrado en un subplot existente:
-    plot_cbs_fit(ax, theta_mrad, enhancement, wavelength_nm=532)
+  (Ec. 3)  Perfil de Akkermans et al. [PRL 56, 1471 (1986)]:
+           I_C(th) = 3/(7 (1+x)^2) * [ 1 + (1 - e^{-4x/3}) / x ],  x = P1 |th|
+           (Ec. 4)                  l* = lambda_med P1 / (2 pi)  <=>  P1 = k l*
+
+Ambas están normalizadas a I_C(0) = 1 (para la Ec. 3: lim_{x->0}
+(1-e^{-4x/3})/x = 4/3 y (3/7)(1+4/3) = 1).
+
+El observable de la simulación es el factor de realce
+    eta(theta) = S0_coh / S0_incoh,
+que incluye el fondo difuso. El modelo ajustado es por tanto
+
+    eta_model(theta) = B + A * I_C(theta),
+
+con B ~ 1 (fondo) y A <= 1 (reducción del ápice por dispersión simple y
+canal de polarización). Por defecto B se fija en 1, que es exacto por
+construcción del estimador (eta -> 1 en las alas); puede liberarse.
+
+Notas de rigor:
+  * P1 * theta debe ser adimensional: P1 = k l*, con k = 2 pi n_host / lambda_0
+    el número de onda EN EL MEDIO. Por eso el ajuste recibe `k` explícito.
+  * La Ec. (1) del paper está impresa sin cuadrado en el denominador
+    ("1 + theta/P2"); se implementa tal cual (`model="lorentz_iwai"`) y,
+    como control, la Lorentziana estándar con cuadrado (`model="lorentz_sq"`).
+  * El perfil de Akkermans tiene un cúspide triangular en theta = 0; con
+    bins angulares finitos el dato es el PROMEDIO del modelo sobre el bin.
+    `bin_average=True` promedia el modelo con cuadratura de Gauss-Legendre.
+  * El ajuste usa Levenberg-Marquardt (scipy method='lm'), como en el paper
+    (Numerical Recipes). Pesos: sigma del ensamble si se provee.
+
+Uso mínimo (con tus objetos):
+
+    theta, q, m, s = profile_stats(sweep_data_lineal, g_, 0, "co")
+    res = fit_cbs_profile(theta, m, sigma=s, model="akkermans", k=K_MED)
+    print(res.summary())
+    # res.ell_star, res.ell_star_err, res.A, res.chi2_red, res.eval(theta)
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Callable, Optional
+
 import numpy as np
-from scipy.optimize import minimize_scalar, minimize
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-from dataclasses import dataclass
-from typing import Literal
+from scipy.optimize import curve_fit
+
+__all__ = [
+    "akkermans_shape",
+    "lorentz_iwai_shape",
+    "lorentz_sq_shape",
+    "fit_cbs_profile",
+    "fit_sweep",
+    "CBSFitResult",
+]
+
+# ----------------------------------------------------------------------------
+# Formas normalizadas I_C(theta) con I_C(0) = 1
+# ----------------------------------------------------------------------------
+
+def akkermans_shape(theta: np.ndarray, P1: float) -> np.ndarray:
+    """Perfil de Akkermans-Wolf-Maynard, Ec. (3) de Iwai et al. (1999).
+
+    x = P1 * |theta| = k l* |theta|.  Usa z0 = 2 l*/3 (aprox. de difusión,
+    de ahí el 4/3 = 2 z0/l* en la exponencial).  Serie de Taylor cerca de
+    x=0 para evitar 0/0:  (1 - e^{-4x/3})/x = 4/3 - (8/9) x + O(x^2).
+    """
+    x = P1 * np.abs(np.asarray(theta, dtype=float))
+    out = np.empty_like(x)
+    small = x < 1e-8
+    xs = x[~small]
+    out[~small] = 3.0 / (7.0 * (1.0 + xs) ** 2) * (1.0 + (1.0 - np.exp(-4.0 * xs / 3.0)) / xs)
+    xt = x[small]
+    out[small] = 3.0 / (7.0 * (1.0 + xt) ** 2) * (1.0 + 4.0 / 3.0 - (8.0 / 9.0) * xt)
+    return out
 
 
-# ─────────────────────────────────────────────
-#  Modelos CBS (variable reducida q = kl·θ_rad)
-# ─────────────────────────────────────────────
+def lorentz_iwai_shape(theta: np.ndarray, P2: float) -> np.ndarray:
+    """Ec. (1) de Iwai et al. (1999) tal como está impresa: 1/(1 + |theta|/P2).
 
-def _model_diff(q: np.ndarray) -> np.ndarray:
-    """Ec.(134): I_C/I_L = 1 / (1 + |q|)²"""
-    return 1.0 / (1.0 + np.abs(q)) ** 2
-
-
-def _model_bound(q: np.ndarray) -> np.ndarray:
-    """Ec.(138): difusivo con condición de borde (z₀ = 2/3)."""
-    z0 = 2.0 / 3.0
-    aq = np.abs(q)
-    base = 1.0 / (1.0 + aq) ** 2
-    # límite q→0: bc → (1 + 2z₀)
-    bc = np.where(aq < 1e-10,
-                  1.0 + 2.0 * z0,
-                  1.0 + (1.0 - np.exp(-2.0 * z0 * aq)) / aq)
-    return base / (1.0 + 2.0 * z0) * bc
+    Es empírica (los autores lo advierten: "not based on the theoretical
+    background"); su ala ~ 1/theta reproduce el decaimiento de largo alcance
+    del cono mejor que una Lorentziana con cuadrado.
+    """
+    return 1.0 / (1.0 + np.abs(np.asarray(theta, dtype=float)) / P2)
 
 
-def _model_deco(q: np.ndarray, eps: float) -> np.ndarray:
-    """Ec.(146): difusivo con decoherencia — eps = l/Lφ."""
-    return 1.0 / (1.0 + np.sqrt(q ** 2 + eps ** 2)) ** 2
+def lorentz_sq_shape(theta: np.ndarray, P2: float) -> np.ndarray:
+    """Lorentziana estándar 1/(1 + (theta/P2)^2), como variante de control."""
+    t = np.asarray(theta, dtype=float) / P2
+    return 1.0 / (1.0 + t * t)
 
 
-_MODELS = {
-    "diff":  ("Ec.(134) difusivo",           lambda q, _: _model_diff(q)),
-    "bound": ("Ec.(138) cond. de borde",     lambda q, _: _model_bound(q)),
-    "deco":  ("Ec.(146) con decoherencia",   _model_deco),
+_SHAPES: dict[str, Callable[[np.ndarray, float], np.ndarray]] = {
+    "akkermans": akkermans_shape,
+    "lorentz_iwai": lorentz_iwai_shape,
+    "lorentz_sq": lorentz_sq_shape,
 }
 
-_EQ_LABELS = {
-    "diff":  r"$\frac{I_C}{I_L} = \frac{1}{(1+kl|\theta|)^2}$",
-    "bound": r"bound_eq",
-    "deco":  r"$\frac{I_C}{I_L} = \frac{1}{\left[1+\sqrt{(kl\theta)^2+(l/L_\varphi)^2}\right]^2}$",
-}
+# Relación P -> l*  (l* en las mismas unidades que 1/k y que theta^-1 * long.)
+#   akkermans:    l* = P1 / k          (Ec. 4 con lambda_med = 2 pi / k)
+#   lorentz_*:    l* = 1 / (2 k P2)    (Ec. 2 con lambda_med = 2 pi / k)
+def _ell_star_from_param(model: str, P: float, P_err: float, k: float):
+    if model == "akkermans":
+        return P / k, P_err / k
+    # Lorentzianas: l* = 1/(2 k P2); propagación lineal: dl* = dP2/(2 k P2^2)
+    return 1.0 / (2.0 * k * P), P_err / (2.0 * k * P * P)
 
 
-# ─────────────────────────────────────────────
-#  Resultado del ajuste
-# ─────────────────────────────────────────────
+# ----------------------------------------------------------------------------
+# Resultado
+# ----------------------------------------------------------------------------
 
 @dataclass
 class CBSFitResult:
-    model:        str          # "diff" | "bound" | "deco"
-    kl:           float        # parámetro adimensional kl
-    l_um:         float        # camino libre medio [µm]
-    l_mm:         float        # camino libre medio [mm]
-    A:            float        # amplitud CBS
-    B:            float        # fondo incoherente
-    enhancement:  float        # I_C(0)/I_L = A·f(0)/B  (pico/fondo)
-    fwhm_mrad:    float        # FWHM del perfil en mrad
-    fwhm_q:       float        # FWHM en unidades reducidas (≈ 0.73)
-    chi2_per_n:   float        # χ²/N del ajuste
-    eps:          float        # l/Lφ  (0 si modelo != "deco")
-    Lphi_um:      float        # longitud de coherencia [µm]  (inf si eps=0)
-    wavelength_nm: float
-    n_points:     int
+    model: str
+    A: float
+    A_err: float
+    P: float                 # P1 (akkermans) o P2 (lorentzianas), en rad^-1 / rad
+    P_err: float
+    B: float                 # fondo (1.0 si se fijó)
+    B_err: float
+    k: Optional[float]       # número de onda usado (None si no se dio)
+    ell_star: Optional[float]
+    ell_star_err: Optional[float]
+    chi2_red: float
+    ndof: int
+    theta_range: tuple
+    label: str = ""
+    pcov: np.ndarray = field(default=None, repr=False)
 
-    def __str__(self):
-        name, _ = _MODELS[self.model]
+    def eval(self, theta: np.ndarray) -> np.ndarray:
+        """Evalúa el modelo ajustado eta(theta)."""
+        return self.B + self.A * _SHAPES[self.model](theta, self.P)
+
+    @property
+    def fwhm(self) -> float:
+        """Ancho a media altura del pico coherente (numérico, en rad)."""
+        f = lambda t: _SHAPES[self.model](t, self.P) - 0.5
+        lo, hi = 0.0, 1.0 / self.P if self.model == "akkermans" else self.P
+        while f(hi) > 0:
+            hi *= 2.0
+        for _ in range(80):  # bisección
+            mid = 0.5 * (lo + hi)
+            (lo, hi) = (mid, hi) if f(mid) > 0 else (lo, mid)
+        return 2.0 * lo
+
+    def summary(self) -> str:
         lines = [
-            f"── CBS Fit Result ─────────────────────────",
-            f"  Modelo    : {name}",
-            f"  λ         : {self.wavelength_nm:.1f} nm",
-            f"  kl        : {self.kl:.2f}",
-            f"  l         : {self.l_um:.3f} µm  ({self.l_mm:.4f} mm)",
-            f"  A (CBS)   : {self.A:.4f}",
-            f"  B (fondo) : {self.B:.4f}",
-            f"  Pico/fondo: {self.enhancement:.4f}",
-            f"  FWHM      : {self.fwhm_mrad:.4f} mrad",
-            f"  Δq FWHM   : {self.fwhm_q:.3f} (unidades reducidas)",
-            f"  χ²/N      : {self.chi2_per_n:.3e}  (N={self.n_points})",
+            f"[{self.label or self.model}]  modelo = {self.model}",
+            f"  A  = {self.A:.4f} ± {self.A_err:.4f}   (apice eta(0) = {self.B + self.A:.4f})",
+            f"  P  = {self.P:.6g} ± {self.P_err:.2g}  [1/rad]" if self.model == "akkermans"
+            else f"  P  = {self.P:.6g} ± {self.P_err:.2g}  [rad]",
+            f"  B  = {self.B:.4f} ± {self.B_err:.4f}",
+            f"  FWHM = {self.fwhm*1e3:.3f} mrad",
+            f"  chi2_red = {self.chi2_red:.3f}  (ndof = {self.ndof})",
         ]
-        if self.model == "deco":
-            lph = f"{self.Lphi_um:.2f} µm" if np.isfinite(self.Lphi_um) else "∞"
-            lines += [
-                f"  l/Lφ      : {self.eps:.4f}",
-                f"  Lφ        : {lph}",
-            ]
-        lines.append("─" * 44)
+        if self.ell_star is not None:
+            lines.append(f"  l* = {self.ell_star:.6g} ± {self.ell_star_err:.2g}  [unid. de 1/k]")
         return "\n".join(lines)
 
 
-# ─────────────────────────────────────────────
-#  Motor de ajuste
-# ─────────────────────────────────────────────
+# ----------------------------------------------------------------------------
+# Ajuste
+# ----------------------------------------------------------------------------
 
-def _linfit_AB(f_vals: np.ndarray, y: np.ndarray):
-    """Mínimos cuadrados lineales: y ≈ A·f + B.  Devuelve (A, B, residual²)."""
-    n = len(y)
-    sf2 = f_vals @ f_vals
-    sf  = f_vals.sum()
-    sfy = f_vals @ y
-    sy  = y.sum()
-    det = sf2 * n - sf * sf
-    if abs(det) < 1e-30:
-        return None
-    A = (n * sfy - sf * sy) / det
-    B = (sf2 * sy - sf * sfy) / det
-    if A <= 0 or B < 0:
-        return None
-    res = np.sum((y - (A * f_vals + B)) ** 2)
-    return A, B, res
+def _bin_averaged(shape, theta, P, dtheta, ngl=5):
+    """Promedia el modelo sobre cada bin [theta - d/2, theta + d/2] (G-Legendre).
 
-
-def fit_cbs(
-    theta_mrad:     np.ndarray,
-    enhancement:    np.ndarray,
-    wavelength_nm:  float = 532.0,
-    model:          Literal["diff", "bound", "deco"] = "diff",
-    center_mrad:    float | None = None,
-    kl_bounds:      tuple[float, float] = (1.0, 5e5),
-) -> CBSFitResult:
+    Necesario porque el cúspide de Akkermans en theta=0 hace que el valor
+    puntual en el centro del bin sobreestime el promedio que mide el sensor.
     """
-    Ajusta un perfil CBS a los modelos de Müller & Delande (2016).
+    xg, wg = np.polynomial.legendre.leggauss(ngl)   # nodos en [-1, 1]
+    th = theta[:, None] + 0.5 * dtheta * xg[None, :]
+    vals = shape(th, P)
+    return 0.5 * (vals @ wg)
+
+
+def fit_cbs_profile(
+    theta: np.ndarray,
+    eta: np.ndarray,
+    sigma: Optional[np.ndarray] = None,
+    model: str = "akkermans",
+    k: Optional[float] = None,
+    theta_max: Optional[float] = None,
+    fit_baseline: bool = False,
+    bin_average: bool = True,
+    label: str = "",
+) -> CBSFitResult:
+    """Ajusta eta(theta) = B + A * I_C(theta; P) por Levenberg-Marquardt.
 
     Parámetros
     ----------
-    theta_mrad    : array de ángulos [mrad], no necesita estar centrado.
-    enhancement   : array de intensidad / fondo (I_C/I_L), misma longitud.
-    wavelength_nm : longitud de onda del láser [nm].
-    model         : "diff" | "bound" | "deco".
-    center_mrad   : centro θ=0 en mrad; si None se usa el argmax.
-    kl_bounds     : (kl_min, kl_max) para la búsqueda.
-
-    Devuelve
-    --------
-    CBSFitResult con kl, l [µm/mm], A, B, enhancement, FWHM, χ², etc.
+    theta : ángulos de retrodispersión en radianes (>= 0; si vienen con
+        signo se usa |theta| — los modelos son pares).
+    eta : factor de realce medido (media del ensamble).
+    sigma : desviación estándar del ensamble (pesos 1/sigma^2,
+        absolute_sigma=True). Si None, ajuste sin pesos.
+    model : "akkermans" (Ec. 3), "lorentz_iwai" (Ec. 1 tal como está
+        impresa) o "lorentz_sq" (Lorentziana con cuadrado, control).
+    k : número de onda en el medio, k = 2 pi n_host / lambda_0, en las
+        unidades inversas de las de l* deseadas. Si se da, se reporta
+        l* con su error (Ecs. 2 y 4).
+    theta_max : recorte del rango de ajuste (rad). Útil para excluir alas
+        donde el modelo semi-infinito escalar deja de ser válido.
+    fit_baseline : si True, B es libre; si False, B = 1 (exacto por
+        construcción de eta en el estimador).
+    bin_average : promediar el modelo sobre el ancho de bin (recomendado).
     """
-    theta = np.asarray(theta_mrad, dtype=float)
-    y     = np.asarray(enhancement, dtype=float)
+    if model not in _SHAPES:
+        raise ValueError(f"model debe ser uno de {list(_SHAPES)}")
+    shape = _SHAPES[model]
 
-    if len(theta) < 5:
-        raise ValueError("Se necesitan al menos 5 puntos para el ajuste.")
-    if len(theta) != len(y):
-        raise ValueError("theta_mrad e enhancement deben tener la misma longitud.")
+    theta = np.abs(np.asarray(theta, dtype=float))
+    eta = np.asarray(eta, dtype=float)
+    order = np.argsort(theta)
+    theta, eta = theta[order], eta[order]
+    if sigma is not None:
+        sigma = np.asarray(sigma, dtype=float)[order]
 
-    # Centrar en θ=0
-    if center_mrad is None:
-        center_mrad = float(theta[np.argmax(y)])
-    theta_c = (theta - center_mrad) * 1e-3   # → radianes, centrado
+    mask = np.isfinite(theta) & np.isfinite(eta)
+    if theta_max is not None:
+        mask &= theta <= theta_max
+    theta, eta = theta[mask], eta[mask]
+    if sigma is not None:
+        sigma = sigma[mask]
+        # sigma = 0 (p.ej. bin sin varianza) rompe los pesos: usar la mediana
+        pos = sigma > 0
+        if not pos.all():
+            fill = np.median(sigma[pos]) if pos.any() else 1.0
+            sigma = np.where(pos, sigma, fill)
 
-    lam_m = wavelength_nm * 1e-9
-    k     = 2.0 * np.pi / lam_m
+    if theta.size < 4:
+        raise ValueError("Muy pocos puntos para ajustar (>= 4 requeridos).")
 
-    model_fn = _MODELS[model][1]
+    dtheta = np.median(np.diff(np.unique(theta))) if bin_average else 0.0
 
-    # ── Grilla gruesa logarítmica en kl ──────────────────────────────────────
-    kl_min, kl_max = kl_bounds
-    N_coarse = 500
-    kl_grid  = np.exp(np.linspace(np.log(kl_min), np.log(kl_max), N_coarse))
+    # --- Valores iniciales físicamente motivados -------------------------
+    B0 = 1.0
+    A0 = max(eta[np.argmin(theta)] - B0, 0.05)
+    # HWHM empírico: primer theta donde eta - B0 cae a A0/2
+    half = eta - B0 <= 0.5 * A0
+    th_h = theta[half][0] if half.any() and theta[half][0] > 0 else theta[max(1, theta.size // 4)]
+    if model == "akkermans":
+        P0 = 0.34 / th_h          # I_C(x)=0.5 en x ~ 0.34  =>  P1 ~ 0.34/HWHM
+    else:
+        P0 = th_h                 # HWHM ~ P2 en ambas lorentzianas
 
-    # Para "deco" también barremos eps = l/Lφ
-    eps_grid = (np.array([0.0, 0.005, 0.01, 0.02, 0.05, 0.08, 0.12,
-                           0.18, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.5])
-                if model == "deco" else np.array([0.0]))
+    def model_eta(th, A, P, B=1.0):
+        if bin_average and dtheta > 0:
+            core = _bin_averaged(shape, th, P, dtheta)
+        else:
+            core = shape(th, P)
+        return B + A * core
 
-    best_kl, best_eps = kl_grid[0], 0.0
-    best_A,  best_B   = 1.0, 0.0
-    best_res          = np.inf
+    if fit_baseline:
+        f = lambda th, A, P, B: model_eta(th, A, P, B)
+        p0 = [A0, P0, B0]
+    else:
+        f = lambda th, A, P: model_eta(th, A, P, 1.0)
+        p0 = [A0, P0]
 
-    for eps in eps_grid:
-        for kl in kl_grid:
-            q    = kl * theta_c
-            fval = model_fn(q, eps)
-            ab   = _linfit_AB(fval, y)
-            if ab and ab[2] < best_res:
-                best_res = ab[2]
-                best_kl, best_eps = kl, eps
-                best_A, best_B = ab[0], ab[1]
-
-    # ── Refinamiento fino con scipy ──────────────────────────────────────────
-    def cost_kl(log_kl, eps):
-        kl   = np.exp(log_kl)
-        fval = model_fn(kl * theta_c, eps)
-        ab   = _linfit_AB(fval, y)
-        return ab[2] if ab else 1e30
-
-    opt = minimize_scalar(
-        cost_kl,
-        bounds=(np.log(best_kl / 3.0), np.log(best_kl * 3.0)),
-        method="bounded",
-        args=(best_eps,),
-        options={"xatol": 1e-6},
+    popt, pcov = curve_fit(
+        f, theta, eta, p0=p0,
+        sigma=sigma, absolute_sigma=sigma is not None,
+        method="lm", maxfev=20000,
     )
-    best_kl = np.exp(opt.x)
+    perr = np.sqrt(np.diag(pcov))
 
-    if model == "deco":
-        def cost_2d(params):
-            log_kl, eps = params
-            fval = model_fn(np.exp(log_kl) * theta_c, max(eps, 0.0))
-            ab   = _linfit_AB(fval, y)
-            return ab[2] if ab else 1e30
+    A, P = popt[0], abs(popt[1])           # el modelo es par en P -> signo espurio
+    A_err, P_err = perr[0], perr[1]
+    if fit_baseline:
+        B, B_err = popt[2], perr[2]
+    else:
+        B, B_err = 1.0, 0.0
 
-        res2 = minimize(
-            cost_2d,
-            x0=[np.log(best_kl), best_eps],
-            method="Nelder-Mead",
-            options={"xatol": 1e-6, "fatol": 1e-10, "maxiter": 4000},
-        )
-        best_kl  = np.exp(res2.x[0])
-        best_eps = max(res2.x[1], 0.0)
+    resid = eta - f(theta, *popt)
+    if sigma is not None:
+        resid = resid / sigma
+    ndof = theta.size - len(popt)
+    chi2_red = float(resid @ resid) / ndof
 
-    # ── Resultado final ───────────────────────────────────────────────────────
-    q_final  = best_kl * theta_c
-    f_final  = model_fn(q_final, best_eps)
-    ab_final = _linfit_AB(f_final, y)
-    if ab_final is None:
-        raise RuntimeError("El ajuste no convergió. Comprueba los datos.")
-    best_A, best_B, best_res = ab_final
-
-    l_m       = best_kl / k
-    l_um      = l_m * 1e6
-    f0        = float(model_fn(np.array([0.0]), best_eps)[0])
-    enh       = (best_A * f0 + best_B) / best_B if best_B > 0 else float("nan")
-    fwhm_q    = 0.73                           # Müller & Delande (2016)
-    fwhm_mrad = fwhm_q / best_kl * 1e3        # rad → mrad
-    Lphi_um   = (l_um / best_eps) if best_eps > 1e-6 else float("inf")
+    if k is not None:
+        ell, ell_err = _ell_star_from_param(model, P, P_err, k)
+    else:
+        ell = ell_err = None
 
     return CBSFitResult(
-        model         = model,
-        kl            = best_kl,
-        l_um          = l_um,
-        l_mm          = l_um / 1e3,
-        A             = best_A,
-        B             = best_B,
-        enhancement   = enh,
-        fwhm_mrad     = fwhm_mrad,
-        fwhm_q        = fwhm_q,
-        chi2_per_n    = best_res / len(y),
-        eps           = best_eps,
-        Lphi_um       = Lphi_um,
-        wavelength_nm = wavelength_nm,
-        n_points      = len(y),
+        model=model, A=A, A_err=A_err, P=P, P_err=P_err, B=B, B_err=B_err,
+        k=k, ell_star=ell, ell_star_err=ell_err,
+        chi2_red=chi2_red, ndof=ndof,
+        theta_range=(float(theta.min()), float(theta.max())),
+        label=label, pcov=pcov,
     )
 
 
-# ─────────────────────────────────────────────
-#  Visualización
-# ─────────────────────────────────────────────
+# ----------------------------------------------------------------------------
+# Barrido sobre familias (radios) y canales, siguiendo tu bucle de ploteo
+# ----------------------------------------------------------------------------
 
-def plot_cbs_fit(
-    ax:             plt.Axes,
-    theta_mrad:     np.ndarray,
-    enhancement:    np.ndarray,
-    result:         CBSFitResult | None = None,
-    wavelength_nm:  float = 532.0,
-    model:          Literal["diff", "bound", "deco"] = "diff",
-    center_mrad:    float | None = None,
-    data_kw:        dict | None = None,
-    fit_kw:         dict | None = None,
-    show_fwhm:      bool = True,
-    show_eq:        bool = True,
-    label_prefix:   str = "",
-) -> CBSFitResult:
+def fit_sweep(
+    sweep_data, grouped_data, profile_stats, k,
+    basis,
+    channels=("co", "cross"), phi=0,
+    models=("akkermans", "lorentz_iwai"),
+    **fit_kwargs,
+):
+    """Ajusta todos los perfiles del barrido y devuelve una tabla de resultados.
+
+    Replica tu acceso a datos:  theta, q, m, s = profile_stats(sweep, g, phi, ch)
+    Devuelve un pandas.DataFrame con una fila por (grupo, canal, modelo).
     """
-    Dibuja los datos CBS + curva ajustada en un Axes existente.
+    import pandas as pd
 
-    Si `result` es None, realiza el ajuste internamente.
-    Devuelve el CBSFitResult para que puedas usar kl, l, etc.
-
-    Ejemplo
-    -------
-        fig, ax = plt.subplots()
-        r = plot_cbs_fit(ax, theta_mrad, mean_info, wavelength_nm=532)
-        print(r)
-    """
-    if result is None:
-        result = fit_cbs(
-            theta_mrad, enhancement,
-            wavelength_nm=wavelength_nm,
-            model=model,
-            center_mrad=center_mrad,
-        )
-
-    theta  = np.asarray(theta_mrad, dtype=float)
-    y      = np.asarray(enhancement, dtype=float)
-    center = (center_mrad if center_mrad is not None
-              else float(theta[np.argmax(y)]))
-
-    # Datos
-    _dk = dict(fmt=".", ms=3, alpha=0.55, color="steelblue", zorder=2)
-    if data_kw:
-        _dk.update(data_kw)
-    ax.errorbar(theta, y, **_dk,
-                label=f"{label_prefix}datos" if label_prefix else "_nolegend_")
-
-    # Curva ajustada (alta resolución)
-    theta_fine  = np.linspace(theta.min(), theta.max(), 1000)
-    theta_c_rad = (theta_fine - center) * 1e-3
-    q_fine      = result.kl * theta_c_rad
-    model_fn    = _MODELS[result.model][1]
-    y_fit       = result.A * model_fn(q_fine, result.eps) + result.B
-
-    _fk = dict(color="tomato", lw=1.6, zorder=3)
-    if fit_kw:
-        _fk.update(fit_kw)
-    fit_label = (f"{label_prefix}fit — "
-                 f"$l={result.l_um:.1f}\\,\\mu$m, $kl={result.kl:.0f}$")
-    ax.plot(theta_fine, y_fit, **_fk, label=fit_label)
-
-    # Línea del FWHM
-    if show_fwhm:
-        half_width = result.fwhm_mrad / 2.0
-        y_half     = result.B + result.A * float(
-            model_fn(np.array([result.kl * half_width * 1e-3]), result.eps)[0])
-        ax.axhline(y_half, color="gray", lw=0.7, ls="--", alpha=0.6)
-        ax.annotate(
-            f"FWHM = {result.fwhm_mrad:.3f} mrad",
-            xy=(center + half_width, y_half),
-            xytext=(0, 6), textcoords="offset points",
-            fontsize=7, color="gray", ha="left",
-        )
-        ax.axvspan(center - half_width, center + half_width,
-                   alpha=0.06, color="tomato", zorder=0)
-
-    # Ecuación en el gráfico
-    if show_eq:
-        ax.text(
-            0.97, 0.95, _EQ_LABELS[result.model],
-            transform=ax.transAxes, fontsize=7,
-            ha="right", va="top",
-            color=plt.rcParams.get("text.color", "black"),
-            alpha=0.7,
-        )
-
-    return result
+    rows = []
+    results = {}
+    for g in grouped_data:
+        for ch in channels:
+            theta, q, m, s = profile_stats(sweep_data, g, phi, ch, basis=basis)
+            for mod in models:
+                res = fit_cbs_profile(
+                    theta, m, sigma=s, model=mod, k=k,
+                    label=f"{g.name}/{ch}", **fit_kwargs,
+                )
+                results[(g.name, ch, mod)] = res
+                rows.append({
+                    "group": g.name, "channel": ch, "model": mod,
+                    "A": res.A, "A_err": res.A_err,
+                    "P": res.P, "P_err": res.P_err,
+                    "eta0": res.B + res.A,
+                    "FWHM_mrad": res.fwhm * 1e3,
+                    "ell_star": res.ell_star, "ell_star_err": res.ell_star_err,
+                    "chi2_red": res.chi2_red,
+                })
+    return pd.DataFrame(rows), results
 
 
-# ─────────────────────────────────────────────
-#  Helper: figura de resumen de barrido
-# ─────────────────────────────────────────────
-
-def plot_sweep_cbs(
-    axes_data:      list[tuple[plt.Axes, np.ndarray, np.ndarray, dict]],
-    wavelength_nm:  float = 532.0,
-    model:          Literal["diff", "bound", "deco"] = "diff",
-    suptitle:       str = "",
-) -> list[CBSFitResult]:
-    """
-    Ajusta y grafica múltiples perfiles CBS en una lista de Axes.
-
-    axes_data : lista de (ax, theta_mrad, enhancement, kw_extra)
-        kw_extra puede tener: label_prefix, color, center_mrad, etc.
-
-    Ejemplo
-    -------
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
-        results = plot_sweep_cbs([
-            (axes[0], theta, enh_a070, dict(label_prefix="a=0.07 ")),
-            (axes[1], theta, enh_a085, dict(label_prefix="a=0.085 ")),
-            (axes[2], theta, enh_a100, dict(label_prefix="a=0.10 ")),
-        ], wavelength_nm=532)
-    """
-    results = []
-    for ax, theta, enh, kw in axes_data:
-        prefix    = kw.pop("label_prefix", "")
-        center    = kw.pop("center_mrad", None)
-        color     = kw.pop("color", None)
-        data_kw   = dict(color=color) if color else {}
-        fit_kw    = dict(color=color) if color else {}
-        r = plot_cbs_fit(
-            ax, theta, enh,
-            wavelength_nm=wavelength_nm,
-            model=model,
-            center_mrad=center,
-            label_prefix=prefix,
-            data_kw=data_kw or None,
-            fit_kw=fit_kw or None,
-        )
-        results.append(r)
-        ax.legend(fontsize=7)
-        ax.set_xlabel("Scattering angle (mrad)")
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-    if suptitle:
-        plt.suptitle(suptitle, fontsize=11)
-
-    return results
 
 
-# ─────────────────────────────────────────────
-#  Demo / test rápido
-# ─────────────────────────────────────────────
 
-if __name__ == "__main__":
 
-    rng = np.random.default_rng(42)
-    lam_nm = 532.0
-    k      = 2 * np.pi / (lam_nm * 1e-9)
-    kl_true = 250.0
 
-    theta_mrad = np.linspace(-40, 40, 201)
-    theta_rad  = theta_mrad * 1e-3
-    q_true     = kl_true * theta_rad
-    y_clean    = 1.0 / (1.0 + np.abs(q_true)) ** 2 + 1.0
-    y_noisy    = y_clean + rng.normal(0, 0.025, size=y_clean.shape)
 
-    # ── Fit ──────────────────────────────────────────────────────────────────
-    result = fit_cbs(theta_mrad, y_noisy, wavelength_nm=lam_nm, model="diff")
-    print(result)
 
-    # ── Plot ─────────────────────────────────────────────────────────────────
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+#TESTS
 
-    for ax, m in zip(axes, ["diff", "bound", "deco"]):
-        r = plot_cbs_fit(
-            ax, theta_mrad, y_noisy,
-            wavelength_nm=lam_nm,
-            model=m,
-            show_fwhm=True,
-            show_eq=True,
-        )
-        name = _MODELS[m][0]
-        ax.set_title(f"{name}\n$kl={r.kl:.1f}$,  $l={r.l_um:.2f}\\,\\mu$m",
-                     fontsize=9)
-        ax.set_xlabel("Scattering angle (mrad)")
-        ax.legend(fontsize=7)
 
-    axes[0].set_ylabel(r"$I_\mathrm{co}$ enhancement")
-    plt.tight_layout()
-    plt.savefig("cbs_fit_demo.png", dpi=150)
-    plt.show()
-    print(f"\nTrue kl = {kl_true:.1f},  fitted kl = {result.kl:.2f}")
-    print(f"True l  = {kl_true/k*1e6:.3f} µm,  fitted l = {result.l_um:.3f} µm")
+# 1
+
+# N_HOST = 1.33
+# LAMBDA0 = 514.5e-9                      # [m] — usa las unidades de tu simulación
+# K_MED = 2 * np.pi * N_HOST / LAMBDA0    # k en el medio; l* saldrá en metros
+
+# # Tabla completa del barrido (una fila por radio × canal × modelo)
+# df, fits = fit_sweep(sweep_data_lineal, grouped_data, profile_stats, k=K_MED)
+# print(df.to_string(float_format=lambda x: f"{x:.4g}"))
+
+# # Superponer un ajuste en tu figura:
+# for c, g_ in zip(COL, grouped_data):
+#     theta, q, m, s = profile_stats(sweep_data_lineal, g_, 0, "co")
+#     res = fits[(g_.name, "co", "akkermans")]
+#     th_fine = np.linspace(0, theta.max(), 400)
+#     q_fine = np.interp(th_fine, theta, q)          # mismo mapeo theta -> q de tus datos
+#     ax1.plot(np.r_[-q_fine[::-1], q_fine],
+#              np.r_[res.eval(th_fine)[::-1], res.eval(th_fine)],
+#              color=c, ls=":", lw=0.8)
+
+
+
+
+
+
+
+
+# 2
+
+# RADIOS = ["$35$ nm", "$75$ nm", "$175$ nm"]   # <-- elige aquí los tres radios
+# CANAL = "co"
+
+# N_HOST = 1.33
+# LAMBDA0 = 514.5e-9                      # [m] — usa las unidades de tu simulación
+# K_MED = 2 * np.pi * N_HOST / LAMBDA0    # k en el medio; l* saldrá en metros
+
+# # Tabla completa del barrido (una fila por radio × canal × modelo)
+# df, fits = fit_sweep(sweep_data_lineal, grouped_data, profile_stats, k=K_MED)
+# print(df.to_string(float_format=lambda x: f"{x:.4g}"))
+
+# # Superponer un ajuste en tu figura:
+# for c, g_ in zip(COL, grouped_data):
+#     theta, q, m, s = profile_stats(sweep_data_lineal, g_, 0, "co")
+#     res = fits[(g_.name, "co", "akkermans")]
+#     th_fine = np.linspace(0, theta.max(), 400)
+#     q_fine = np.interp(th_fine, theta, q)          # mismo mapeo theta -> q de tus datos
+#     ax1.plot(np.r_[-q_fine[::-1], q_fine],
+#              np.r_[res.eval(th_fine)[::-1], res.eval(th_fine)],
+#              color=c, ls=":", lw=0.8)
+
+# print([g.name for g in grouped_data])
+
+# fig, axes = plt.subplots(1, 3, figsize=(TEXTWIDTH_IN, 0.4*TEXTWIDTH_IN), sharey=True)
+
+# for ax, name in zip(axes, RADIOS):
+#     g_ = next(g for g in grouped_data if g.name == name)
+
+#     theta, q, m, s = profile_stats(sweep_data_lineal, g_, 0, CANAL)
+#     qs, ms, ss = mirror(q, m, s)
+#     ax.plot(qs, ms, lw=0.8, label="MC")
+#     ax.fill_between(qs, ms - ss, ms + ss, alpha=0.2, lw=0)
+
+#     res = fits[(name, CANAL, "akkermans")]
+#     th_fine = np.linspace(0, theta.max(), 400)
+#     q_fine = np.interp(th_fine, theta, q)
+#     eta_fine = res.eval(th_fine)
+#     ax.plot(np.r_[-q_fine[::-1], q_fine], np.r_[eta_fine[::-1], eta_fine],
+#             "k--", lw=0.8, label="Akkermans")
+
+#     ax.set_title(name, loc="left")
+#     ax.set_xlabel(r"$q$")
+#     ax.set_xlim(-10, 10)
+#     ax.text(0.03, 0.95,
+#             rf"$\ell^*={res.ell_star*1e6:.1f}\pm{res.ell_star_err*1e6:.1f}\,\mu$m"
+#             "\n"
+#             rf"$A={res.A:.2f}$,  $\chi^2_\nu={res.chi2_red:.1f}$",
+#             transform=ax.transAxes, va="top", fontsize=7)
+
+# axes[0].set_ylabel(r"$\eta$")
+# axes[0].legend(frameon=False, fontsize=7, loc="upper right")
+# fig.savefig(FIGDIR / "cbs_fit_tres_radios.pdf")
