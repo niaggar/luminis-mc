@@ -1,7 +1,7 @@
 import numpy as np
 
 from luminis_mc import (
-    RGDMedium, RayleighDebyeEMCPhaseFunction, MiePhaseFunction
+    RGDMedium, MieMedium, RayleighDebyeEMCPhaseFunction, MiePhaseFunction, derived_quantities
 )
 
 import numpy as np
@@ -39,12 +39,14 @@ def print_info_particle(radius, volume_fraction, n_particle, d_theta):
     phase = RayleighDebyeEMCPhaseFunction(wavelength, radius, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
     medium = RGDMedium(phase, radius, n_particle, n_medium, wavelength)
 
-    size_parameter = k_medium * radius
-    anisotropy_factor = phase.get_anisotropy_factor()[0]
-    scattering_efficiency = medium.phase_function.scattering_efficiency()
-    mean_free_path = (4.0 * radius) / (3.0 * volume_fraction * scattering_efficiency)
-    transport_mean_free_path = mean_free_path / (1 - anisotropy_factor)
-    theta_max_cbs = 1 / (k_medium * transport_mean_free_path)
+    dq = derived_quantities(medium, volume_fraction)
+
+    size_parameter = dq["size_parameter"]
+    anisotropy_factor = dq["anisotropy_g"]
+    scattering_efficiency = dq["scattering_efficiency"]
+    mean_free_path = dq["mean_free_path"]
+    transport_mean_free_path = dq["transport_mean_free_path"]
+    theta_max_cbs = dq["theta_coherent"]
     condition_1 = np.abs(n_particle / n_medium - 1)
     condition_2 = size_parameter * condition_1
 
@@ -68,6 +70,38 @@ def print_info_particle(radius, volume_fraction, n_particle, d_theta):
 
 
 
-print_info_particle(radius=0.035, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
-print_info_particle(radius=0.075, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
-print_info_particle(radius=0.175, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
+def print_same_mus(rad1, rad2, volume_fraction, n_particle):
+    phase1 = RayleighDebyeEMCPhaseFunction(wavelength, rad1, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
+    medium1 = RGDMedium(phase1, rad1, n_particle, n_medium, wavelength)
+
+    phase2 = MiePhaseFunction(wavelength, rad2, n_particle, n_medium, phasef_ndiv, phasef_theta_min, phasef_theta_max)
+    medium2 = MieMedium(phase2, rad2, n_particle, n_medium, wavelength)
+
+    dq1 = derived_quantities(medium1, volume_fraction)
+    dq2 = derived_quantities(medium2, volume_fraction)
+
+
+    reference_mus = 1 / dq1["mean_free_path"]
+    relative_difference_g = (1 - dq2["anisotropy_g"]) / (1 - dq1["anisotropy_g"])
+    volume_fraction2 = (4*rad2*reference_mus) / (3 * dq2["scattering_efficiency"])
+
+    dq2 = derived_quantities(medium2, volume_fraction2)
+
+    print(f"Radius 1: {rad1:.3f} µm -> g1: {dq1['anisotropy_g']:.3f}, mus1: {1/dq1['mean_free_path']:.3f} µm^-1")
+    print(f"Radius 2: {rad2:.3f} µm -> g2: {dq2['anisotropy_g']:.3f}, mus2: {1/dq2['mean_free_path']:.3f} µm^-1")
+    print(f"Relative difference in (1-g): {relative_difference_g:.3f}")
+    print(f"Volume fraction for radius 2 to match mus1: {volume_fraction2:.3f}")
+    print(f"Mean fre paths ls1: {dq1['mean_free_path']:.3f} µm, ls2: {dq2['mean_free_path']:.3f} µm")
+    print(f"Transport mean free paths lts1: {dq1['transport_mean_free_path']:.3f} µm, lts2: {dq2['transport_mean_free_path']:.3f} µm")
+    print(f"Max CBS angles theta_cbs1: {np.degrees(dq1['theta_coherent']):.4f} deg, theta_cbs2: {np.degrees(dq2['theta_coherent']):.4f} deg")
+    print("-" * 30)
+
+
+
+print_same_mus(rad1=0.035, rad2=0.100, volume_fraction=0.10, n_particle=1.59)
+
+
+# print_info_particle(radius=0.035, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
+# print_info_particle(radius=0.075, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
+# print_info_particle(radius=0.100, volume_fraction=0.10, n_particle=1.59, d_theta=1/500)
+
