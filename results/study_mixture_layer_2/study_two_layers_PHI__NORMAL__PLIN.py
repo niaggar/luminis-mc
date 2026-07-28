@@ -73,8 +73,8 @@ VOLUME_FRACTION_SMALL = 0.10     # FIJA en las dos familias (referencia)
 #   de la ventana fina: 300 bins lo sub-resolverian, de ahi 1000 bins. Los
 #   fotones suben en proporcion para no vaciar los bins (theta x t).
 FAMILY = "fixed_phi"
-N_THETA_1 = 1000
-N_PHOTONS = 600_000
+N_THETA_1 = 400
+N_PHOTONS = 400_000
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

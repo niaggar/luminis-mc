@@ -70,8 +70,8 @@ VOLUME_FRACTION_SMALL = 0.10     # FIJA en las dos familias (referencia)
 #   dos capas; el UNICO contraste es la anisotropia g -> l*_large/l*_small ~ 1.8.
 #   Contraste moderado => 300 bins bastan para resolver el cono estrecho.
 FAMILY = "matched_mus"
-N_THETA_1 = 300
-N_PHOTONS = 200_000
+N_THETA_1 = 400
+N_PHOTONS = 400_000
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
