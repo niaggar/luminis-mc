@@ -1252,14 +1252,14 @@ namespace luminis::core
         return;
 
       const double w_sqrt = std::sqrt(photon.weight);
-      const std::complex<double> Em = photon.polarization.m * info.phase * w_sqrt;
-      const std::complex<double> En = photon.polarization.n * info.phase * w_sqrt;
-      const std::complex<double> E_det_x = (Em * P(0, 0) + En * P(1, 0)) * -1.0;
-      const std::complex<double> E_det_y = (Em * P(0, 1) + En * P(1, 1));
+      const CVec2 Ef{photon.polarization.m * info.phase * w_sqrt, photon.polarization.n * info.phase * w_sqrt};
+
+      std::complex<double> Efx, Efy;
+      project_to_lab(Ef, P, Efx, Efy);
 
       // Single scatter = su propio reverso: deposita |E_f|^2 idéntico en coh e inc
       // (fondo sin realce). Er = 0 → accumulate_stokes hace coh = inc.
-      accumulate_stokes(it, jp, t_idx, E_det_x, E_det_y, 0.0, 0.0);
+      accumulate_stokes(it, jp, t_idx, Efx, Efy, 0.0, 0.0);
       hits += 1;
       return;
     }
